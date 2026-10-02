@@ -1,0 +1,22 @@
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+build/
+dist/
+*.egg-info/
+
+# Local configuration and secrets
+config.toml
+.env
+
+# Frontend
+node_modules/
+frontend/**/dist/
+src/nestris_ltm/web/static/
+
+# Editors
+.vscode/
+.idea/

@@ -1,0 +1,34 @@
+# NestrisLTM configuration. Copy to %APPDATA%\NestrisLTM\config.toml.
+# Every key is optional; the values shown are the defaults.
+# Environment variables override this file: NESTRIS_LTM__DATABASE__PASSWORD=...
+
+# data_dir = "C:/Users/<you>/AppData/Roaming/NestrisLTM"   # logs and local state
+
+[database]
+host = "127.0.0.1"
+port = 5432
+user = "postgres"
+password = ""
+name = "nestrisltm"          # created automatically if missing
+pool_size = 10
+connect_timeout_s = 5.0
+
+[mqtt]
+enabled = true
+host = "127.0.0.1"
+port = 1883
+# username = "nestris-ltm"
+# password = ""
+topic_prefix = "retroverse/nestris"
+client_id = "nestris-ltm-host"
+keepalive_s = 30
+reconnect_max_s = 30.0
+
+[http]
+host = "0.0.0.0"             # reachable from OBS/kiosk PCs in the LAN
+port = 7990
+
+[log]
+level = "INFO"               # DEBUG, INFO, WARNING, ERROR
+to_file = true               # <data_dir>/logs/nestris-ltm.log (rotating)
+buffer_size = 2000           # records kept for the diagnostics view
