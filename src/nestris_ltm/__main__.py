@@ -38,6 +38,10 @@ def _parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command")
     sub.add_parser("migrate", help="create/upgrade the database schema and exit")
     sub.add_parser("config-path", help="print the config file location and exit")
+    admin = sub.add_parser(
+        "set-admin-password", help="create an admin account or reset its password (asks for it)"
+    )
+    admin.add_argument("username")
     sim = sub.add_parser("simulate", help="replay NGF recordings as MQTT stations")
     sim.add_argument("files", nargs="+", type=Path, help=".ngf / .ngf.gz recordings")
     sim.add_argument(
@@ -70,6 +74,42 @@ def _run_headless(settings: Settings) -> None:
 
     runtime = Runtime(settings)
     run_async(runtime.serve())
+
+
+async def _set_admin_password(settings: Settings, username: str, password: str) -> bool:
+    """Returns True if the account was created, False if its password was reset."""
+    from sqlalchemy import func, select
+
+    from nestris_ltm.db.bootstrap import bootstrap
+    from nestris_ltm.db.models import AdminUser
+    from nestris_ltm.db.session import create_engine, create_session_factory
+    from nestris_ltm.services import audit
+    from nestris_ltm.services.auth import hash_password
+
+    engine = create_engine(settings.database)
+    try:
+        await bootstrap(settings.database, engine)
+        async with create_session_factory(engine)() as session, session.begin():
+            user = await session.scalar(
+                select(AdminUser).where(func.lower(AdminUser.username) == username.lower())
+            )
+            created = user is None
+            if user is None:
+                user = AdminUser(username=username, password_hash=hash_password(password))
+                session.add(user)
+                await session.flush()
+            else:
+                user.password_hash = hash_password(password)
+            await audit.record(
+                session,
+                actor="cli",
+                action="create" if created else "password",
+                entity="admin",
+                entity_id=user.id,
+            )
+        return created
+    finally:
+        await engine.dispose()
 
 
 async def _simulate(settings: Settings, args: argparse.Namespace) -> None:
@@ -106,6 +146,20 @@ def main(argv: list[str] | None = None) -> int:
     log.info(
         "starting", version=__version__, config=str(args.config), config_found=args.config.is_file()
     )
+
+    if args.command == "set-admin-password":
+        import getpass
+
+        password = getpass.getpass(f"New password for {args.username}: ")
+        if len(password) < 8:
+            print("The password must have at least 8 characters.", file=sys.stderr)
+            return 2
+        if getpass.getpass("Repeat: ") != password:
+            print("The passwords do not match.", file=sys.stderr)
+            return 2
+        created = run_async(_set_admin_password(settings, args.username, password))
+        print("Admin account created." if created else "Password changed.")
+        return 0
 
     if args.command == "simulate":
         run_async(_simulate(settings, args))

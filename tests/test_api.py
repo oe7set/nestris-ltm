@@ -1,0 +1,261 @@
+"""Admin REST API against a real database (auth, players, games, events, audit)."""
+
+from __future__ import annotations
+
+from collections.abc import AsyncIterator
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+
+import httpx
+import pytest
+
+from nestris_ltm.api.app import create_app
+from nestris_ltm.config import DatabaseSettings, load_settings
+from nestris_ltm.runtime import Runtime
+from tests.payload_samples import GAME_END, GAME_START, dumps
+
+pytestmark = pytest.mark.db
+PREFIX = "retroverse/nestris"
+
+
+@pytest.fixture
+async def runtime(tmp_path: Path, fresh_db_settings: DatabaseSettings) -> AsyncIterator[Runtime]:
+    rt = Runtime(
+        load_settings(tmp_path / "none.toml", database=fresh_db_settings, data_dir=tmp_path)
+    )
+    await rt.db.run_bootstrap()
+    try:
+        yield rt
+    finally:
+        await rt.db.dispose()
+
+
+def _client(rt: Runtime, *, remote: bool = False) -> httpx.AsyncClient:
+    client_addr = ("192.168.1.50", 5000) if remote else ("127.0.0.1", 5000)
+    transport = httpx.ASGITransport(app=create_app(rt), client=client_addr)
+    return httpx.AsyncClient(transport=transport, base_url="http://test")
+
+
+@pytest.fixture
+async def admin(runtime: Runtime) -> AsyncIterator[httpx.AsyncClient]:
+    """A client logged in as the first admin (created through setup)."""
+    async with _client(runtime) as client:
+        r = await client.post("/api/auth/setup", json={"username": "crew", "password": "secret-pw"})
+        assert r.status_code == 201, r.text
+        yield client
+
+
+async def _ingest_game(rt: Runtime, **changes: object) -> None:
+    await rt.ingest.handle_message(
+        f"{PREFIX}/station-1/event/game_start", dumps(GAME_START, **changes).encode(), PREFIX
+    )
+    await rt.ingest.handle_message(
+        f"{PREFIX}/station-1/event/game_end", dumps(GAME_END, **changes).encode(), PREFIX
+    )
+    await rt.ingest.drain()
+
+
+# ---------------------------------------------------------------- auth
+
+
+async def test_setup_login_and_protection(runtime: Runtime) -> None:
+    async with _client(runtime, remote=True) as remote:
+        me = (await remote.get("/api/auth/me")).json()
+        assert me["needs_setup"] is True and me["can_setup"] is False
+        # Setup is only allowed on the host.
+        r = await remote.post(
+            "/api/auth/setup", json={"username": "intruder", "password": "12345678"}
+        )
+        assert r.status_code == 403
+        assert (await remote.get("/api/players")).status_code == 401
+        assert (await remote.get("/api/diagnostics")).status_code == 401
+
+    async with _client(runtime) as local:
+        r = await local.post("/api/auth/setup", json={"username": "crew", "password": "secret-pw"})
+        assert r.status_code == 201
+        assert (await local.get("/api/players")).status_code == 200  # cookie set by setup
+        r = await local.post("/api/auth/setup", json={"username": "two", "password": "secret-pw"})
+        assert r.status_code == 409
+
+    async with _client(runtime, remote=True) as remote:
+        r = await remote.post("/api/auth/login", json={"username": "crew", "password": "wrong"})
+        assert r.status_code == 401
+        r = await remote.post("/api/auth/login", json={"username": "CREW", "password": "secret-pw"})
+        assert r.status_code == 200
+        assert (await remote.get("/api/auth/me")).json()["authenticated"] is True
+        assert (await remote.get("/api/players")).status_code == 200
+        await remote.post("/api/auth/logout")
+        remote.cookies.clear()
+        assert (await remote.get("/api/players")).status_code == 401
+
+
+async def test_shell_token_and_api_tokens(runtime: Runtime, admin: httpx.AsyncClient) -> None:
+    async with _client(runtime, remote=True) as remote:
+        headers = {"X-NestrisLTM-Shell-Token": runtime.shell_token}
+        assert (await remote.get("/api/players", headers=headers)).status_code == 200
+        bad = {"X-NestrisLTM-Shell-Token": "nope"}
+        assert (await remote.get("/api/players", headers=bad)).status_code == 401
+
+    r = await admin.post("/api/tokens", json={"name": "kiosk", "scopes": ["players:write"]})
+    assert r.status_code == 201
+    token = r.json()["token"]
+    async with _client(runtime, remote=True) as remote:
+        auth = {"Authorization": f"Bearer {token}"}
+        assert (await remote.get("/api/players", headers=auth)).status_code == 403  # not admin
+    r = await admin.post("/api/tokens", json={"name": "x", "scopes": ["bogus"]})
+    assert r.status_code == 422
+
+
+async def test_login_throttle(runtime: Runtime, admin: httpx.AsyncClient) -> None:
+    async with _client(runtime, remote=True) as remote:
+        codes = [
+            (
+                await remote.post("/api/auth/login", json={"username": "crew", "password": "x"})
+            ).status_code
+            for _ in range(7)
+        ]
+    assert codes[:5] == [401] * 5 and codes[-1] == 429
+
+
+# ---------------------------------------------------------------- players
+
+
+async def test_player_crud_merge_cards(runtime: Runtime, admin: httpx.AsyncClient) -> None:
+    r = await admin.post("/api/players", json={"nickname": "  Max   Power ", "city": "Wattens"})
+    assert r.status_code == 201
+    max_id = r.json()["id"]
+    assert r.json()["nickname"] == "Max Power"
+    assert (await admin.post("/api/players", json={"nickname": "max power"})).status_code == 409
+
+    r = await admin.patch(f"/api/players/{max_id}", json={"first_name": "Max"})
+    assert r.json()["first_name"] == "Max"
+
+    # A card typo auto-created "Max Powr" through the ingest; merge it.
+    await _ingest_game(runtime, player={"uid": "CAFE01", "name": "Max Powr"})
+    players = (await admin.get("/api/players", params={"q": "powr"})).json()["items"]
+    assert len(players) == 1 and players[0]["auto_created"]
+    typo_id = players[0]["id"]
+    r = await admin.post(f"/api/players/{typo_id}/merge", json={"into_id": max_id})
+    assert r.json() == {"ok": True, "games": 1, "cards": 1}
+
+    detail = (await admin.get(f"/api/players/{max_id}")).json()
+    assert detail["games_total"] == 1 and detail["best_score"] == 216560
+    assert [c["uid"] for c in detail["cards"]] == ["CAFE01"]
+    assert (await admin.get("/api/players", params={"q": "powr"})).json()["total"] == 0
+
+    assert (
+        await admin.post(f"/api/players/{max_id}/cards", json={"uid": "beef02"})
+    ).status_code == 201
+    assert (await admin.delete(f"/api/players/{max_id}/cards/BEEF02")).status_code == 200
+    assert (await admin.delete(f"/api/players/{max_id}/cards/BEEF02")).status_code == 404
+
+    assert (await admin.delete(f"/api/players/{max_id}")).status_code == 200
+    assert (await admin.get("/api/players")).json()["total"] == 0
+    assert (await admin.post(f"/api/players/{max_id}/restore")).status_code == 200
+
+
+# ---------------------------------------------------------------- games + events
+
+
+async def test_games_edit_hide_and_event_window(runtime: Runtime, admin: httpx.AsyncClient) -> None:
+    now = datetime.now(UTC)
+    r = await admin.post(
+        "/api/events",
+        json={"name": "Retroverse 2026", "starts_at": (now - timedelta(days=1)).isoformat()},
+    )
+    assert r.status_code == 201 and r.json()["is_active"] is True  # first event auto-activates
+    event_id = r.json()["id"]
+    assert r.json()["slug"] == "retroverse-2026"
+
+    # One game inside the window, one long before it.
+    await _ingest_game(
+        runtime,
+        game_id="station-1-new",
+        started_at=now.isoformat(),
+        ended_at=(now + timedelta(minutes=5)).isoformat(),
+    )
+    await _ingest_game(runtime, game_id="station-1-old")  # 2026-09-24, before the window
+
+    in_event = (await admin.get("/api/games")).json()
+    assert in_event["total"] == 1 and in_event["event"]["id"] == event_id
+    assert (await admin.get("/api/games", params={"all_time": True})).json()["total"] == 2
+    game_id = in_event["items"][0]["id"]
+
+    r = await admin.patch(f"/api/games/{game_id}", json={"score": 100000, "notes": "OCR misread"})
+    assert r.status_code == 200 and r.json()["is_edited"] is True
+    # A re-delivered game_end must not undo the correction.
+    await _ingest_game(
+        runtime,
+        game_id="station-1-new",
+        started_at=now.isoformat(),
+        ended_at=(now + timedelta(minutes=5)).isoformat(),
+    )
+    assert (await admin.get(f"/api/games/{game_id}")).json()["score"] == 100000
+
+    assert (
+        await admin.put(f"/api/games/{game_id}/hidden/{event_id}", json={"reason": "test"})
+    ).status_code == 200
+    assert (await admin.get("/api/games", params={"hidden": True})).json()["total"] == 1
+    assert (await admin.get("/api/games", params={"hidden": False})).json()["total"] == 0
+    detail = (await admin.get(f"/api/games/{game_id}")).json()
+    assert detail["hidden"] is True and detail["hidden_in"][0]["reason"] == "test"
+    await admin.delete(f"/api/games/{game_id}/hidden/{event_id}")
+
+    # Manual entry.
+    player = (await admin.post("/api/players", json={"nickname": "Walk-in"})).json()
+    r = await admin.post(
+        "/api/games", json={"player_id": player["id"], "score": 55555, "start_level": 18}
+    )
+    assert r.status_code == 201 and r.json()["source"] == "manual"
+    assert (
+        await admin.post("/api/games", json={"player_id": 99999, "score": 1})
+    ).status_code == 422
+    assert (await admin.get("/api/games", params={"sort": "score"})).json()["items"][0][
+        "score"
+    ] == 100000
+
+    # Second event: activate, the first one becomes inactive.
+    r = await admin.post(
+        "/api/events", json={"name": "Next", "starts_at": (now + timedelta(days=30)).isoformat()}
+    )
+    assert r.json()["is_active"] is False
+    assert (await admin.post(f"/api/events/{r.json()['id']}/activate")).status_code == 200
+    listed = {e["name"]: e["is_active"] for e in (await admin.get("/api/events")).json()}
+    assert listed == {"Retroverse 2026": False, "Next": True}
+    assert (await admin.delete(f"/api/events/{r.json()['id']}")).status_code == 409  # active
+
+    bad = {
+        "name": "X",
+        "starts_at": now.isoformat(),
+        "ends_at": (now - timedelta(hours=1)).isoformat(),
+    }
+    assert (await admin.post("/api/events", json=bad)).status_code == 422
+
+
+async def test_audit_log_and_page_registry(runtime: Runtime, admin: httpx.AsyncClient) -> None:
+    player = (await admin.post("/api/players", json={"nickname": "Audited"})).json()
+    await admin.patch(f"/api/players/{player['id']}", json={"nickname": "Audited2"})
+    log = (await admin.get("/api/audit", params={"entity": "player"})).json()["items"]
+    assert [e["action"] for e in log] == ["update", "create"]
+    assert log[0]["actor"] == "crew"
+    assert log[0]["before"] == {"nickname": "Audited"} and log[0]["after"] == {
+        "nickname": "Audited2"
+    }
+
+    meta = (await admin.get("/api/meta/pages")).json()
+    assert meta["base_urls"][0].startswith("http://127.0.0.1:")
+    ids = {p["id"] for p in meta["pages"]}
+    assert {"dashboard", "players", "games", "events", "pages", "tray-quit"} <= ids
+
+
+async def test_stations_listing_and_delete(runtime: Runtime, admin: httpx.AsyncClient) -> None:
+    await _ingest_game(runtime)
+    stations = (await admin.get("/api/stations")).json()
+    assert stations[0]["id"] == "station-1" and stations[0]["games"] == 1
+    assert (
+        await admin.patch("/api/stations/station-1", json={"name": "Bühne links"})
+    ).status_code == 200
+    assert (await admin.delete("/api/stations/station-1")).status_code == 200
+    assert (await admin.get("/api/stations")).json() == []
+    games = (await admin.get("/api/games", params={"all_time": True})).json()
+    assert games["total"] == 1 and games["items"][0]["station_id"] is None

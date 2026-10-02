@@ -1,0 +1,119 @@
+# ruff: noqa: E501  (descriptions read better unwrapped)
+"""Registry of every page, view and endpoint NestrisLTM offers.
+
+The admin UI's overview page renders this list, so a new page only has to
+be registered here to show up there (with its URL, purpose and status).
+"""
+
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass
+from typing import Any, Literal
+
+Group = Literal["admin", "display", "overlay", "diagnostics", "api", "tray"]
+Status = Literal["available", "planned"]
+
+
+@dataclass(frozen=True, slots=True)
+class PageInfo:
+    id: str
+    group: Group
+    path: str  # URL path, or a tray menu label for group "tray"
+    title_de: str
+    title_en: str
+    description_de: str
+    description_en: str
+    public: bool = False  # reachable without login (OBS, kiosk screens)
+    status: Status = "available"
+    phase: int | None = None  # roadmap phase for planned entries
+
+    def as_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+PAGES: tuple[PageInfo, ...] = (
+    # ------------------------------------------------------------ admin UI
+    PageInfo("dashboard", "admin", "/#/", "Dashboard", "Dashboard",
+             "Live-Status: Datenbank, Broker, Stationen, laufende Spiele, Log.",
+             "Live status: database, broker, stations, running games, log."),
+    PageInfo("players", "admin", "/#/players", "Spieler", "Players",
+             "Spieler suchen, anlegen, bearbeiten, zusammenführen, Karten verwalten, pro Event ausblenden.",
+             "Search, create, edit and merge players, manage cards, hide per event."),
+    PageInfo("games", "admin", "/#/games", "Spiele", "Games",
+             "Alle Spiele mit Filtern (Event, Station, nicht zugeordnet, Cheat, ungültig), bearbeiten, anlegen, ausblenden.",
+             "All games with filters (event, station, unassigned, cheat, invalid); edit, create, hide."),
+    PageInfo("events", "admin", "/#/events", "Events", "Events",
+             "Events mit Zeitfenster anlegen und aktivieren; nur Spiele im Fenster des aktiven Events zählen.",
+             "Create and activate events; only games inside the active event's window count."),
+    PageInfo("stations", "admin", "/#/stations", "Stationen", "Stations",
+             "Alle Capture-Stationen mit Live-Zustand, umbenennen, pro Event ausblenden, entfernen.",
+             "All capture stations with live state; rename, hide per event, remove."),
+    PageInfo("audit", "admin", "/#/audit", "Protokoll", "Audit log",
+             "Wer hat wann was geändert (vorher/nachher).",
+             "Who changed what and when (before/after)."),
+    PageInfo("settings", "admin", "/#/settings", "Einstellungen", "Settings",
+             "Admin-Konten, Passwörter und API-Tokens (z. B. für die Anmeldung).",
+             "Admin accounts, passwords and API tokens (e.g. for the registration kiosk)."),
+    PageInfo("pages", "admin", "/#/pages", "Übersicht", "Overview",
+             "Diese Seite: alle Seiten, Anzeigen, Overlays und Schnittstellen.",
+             "This page: every page, display, overlay and interface."),
+    PageInfo("tournament", "admin", "/#/tournament", "Turnier", "Tournament",
+             "Turnierbaum steuern: Größe, FIX/UNSEED, Sieger setzen, Spieler aus dem Baum nehmen.",
+             "Control the bracket: size, fix/unseed, set winners, remove players from the bracket.",
+             status="planned", phase=5),
+    PageInfo("scenes", "admin", "/#/scenes", "Szenen", "Scenes",
+             "OBS-Szenen anlegen: Layout, Stationen je Slot, Modus, Runden steuern.",
+             "Create OBS scenes: layout, stations per slot, mode, round control.",
+             status="planned", phase=6),
+    # ------------------------------------------------------------ public displays
+    PageInfo("kiosk", "display", "/view/highscore", "Highscore + Turnierbaum", "Highscore + bracket",
+             "Vollbild-Anzeige für Bildschirme vor Ort (Ersatz für TournamentHigscore).",
+             "Full-screen display for on-site screens (replaces TournamentHigscore).",
+             public=True, status="planned", phase=5),
+    # ------------------------------------------------------------ OBS overlays
+    PageInfo("overlay-scene", "overlay", "/o/<szene>", "Overlay je Szene", "Overlay per scene",
+             "Feste OBS-Browserquelle je Szene; Layout und Stationen werden im Admin gewählt.",
+             "Fixed OBS browser source per scene; layout and stations are chosen in the admin UI.",
+             public=True, status="planned", phase=6),
+    # ------------------------------------------------------------ diagnostics
+    PageInfo("status", "diagnostics", "/status", "Statusseite", "Status page",
+             "Einfache Statusseite für Diagnosen, auch ohne gebaute Admin-Oberfläche.",
+             "Plain status page for troubleshooting, works without the admin UI build."),
+    PageInfo("health", "diagnostics", "/api/health", "Health", "Health",
+             "Läuft der Server, ist die Datenbank verbunden (JSON).",
+             "Is the server up, is the database connected (JSON)."),
+    PageInfo("diagnostics", "diagnostics", "/api/diagnostics", "Diagnose (JSON)", "Diagnostics (JSON)",
+             "Broker, Datenbank, Zähler, Warteschlange und alle Stationen als JSON.",
+             "Broker, database, counters, spool and all stations as JSON."),
+    PageInfo("logs", "diagnostics", "/api/diagnostics/logs", "Log (JSON)", "Log (JSON)",
+             "Letzte Log-Einträge; ?after_id=&level= zum Filtern.",
+             "Recent log records; filter with ?after_id=&level=."),
+    # ------------------------------------------------------------ interfaces
+    PageInfo("ws-live", "api", "/ws/live", "WebSocket Live-Feed", "WebSocket live feed",
+             "Snapshot aller Stationen, danach station-, live- und game_event-Nachrichten.",
+             "Snapshot of all stations, then station, live and game_event messages.",
+             public=True),
+    PageInfo("api-docs", "api", "/docs", "API-Dokumentation", "API documentation",
+             "Alle REST-Schnittstellen interaktiv (OpenAPI).",
+             "Every REST endpoint, interactive (OpenAPI)."),
+    PageInfo("api-players", "api", "/api/v1/players", "Anmelde-API", "Registration API",
+             "Schnittstelle für RetroverseAnmledung (Spieler anlegen, mit Token).",
+             "Interface for the registration kiosk (create players, token required).",
+             status="planned", phase=8),
+    # ------------------------------------------------------------ tray menu
+    PageInfo("tray-open", "tray", "Öffnen", "Öffnen", "Open",
+             "Holt das Fenster nach vorne (auch: Doppelklick aufs Tray-Symbol).",
+             "Brings the window to the front (also: double-click the tray icon)."),
+    PageInfo("tray-browser", "tray", "Im Browser öffnen", "Im Browser öffnen", "Open in browser",
+             "Öffnet die Oberfläche im Standard-Browser.", "Opens the UI in the default browser."),
+    PageInfo("tray-diagnostics", "tray", "Diagnose (JSON)", "Diagnose (JSON)", "Diagnostics (JSON)",
+             "Öffnet die Diagnose-Daten im Browser.", "Opens the diagnostics data in the browser."),
+    PageInfo("tray-logs", "tray", "Log-Ordner öffnen", "Log-Ordner öffnen", "Open log folder",
+             "Öffnet den Ordner mit den Logdateien.", "Opens the folder with the log files."),
+    PageInfo("tray-autostart", "tray", "Mit Windows starten", "Mit Windows starten", "Start with Windows",
+             "Startet NestrisLTM bei der Windows-Anmeldung minimiert im Tray.",
+             "Starts NestrisLTM minimized to the tray when you sign in to Windows."),
+    PageInfo("tray-quit", "tray", "Beenden", "Beenden", "Quit",
+             "Beendet NestrisLTM sauber (Fenster schließen lässt es weiterlaufen).",
+             "Quits NestrisLTM cleanly (closing the window keeps it running)."),
+)  # fmt: skip

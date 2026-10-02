@@ -104,6 +104,10 @@ class LiveHub:
             state = self._stations[station_id] = StationState(id=station_id)
         return state
 
+    def forget(self, station_id: str) -> None:
+        if self._stations.pop(station_id, None) is not None:
+            self.publish({"type": "station_removed", "station": station_id})
+
     def stations(self) -> list[StationState]:
         return sorted(self._stations.values(), key=lambda s: s.id)
 

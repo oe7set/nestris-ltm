@@ -108,6 +108,12 @@ function renderStations(stations) {
 async function refresh() {
   try {
     const r = await fetch("/api/diagnostics", { cache: "no-store" });
+    if (r.status === 401 || r.status === 403) {
+      dot($("db-dot"), "warn");
+      $("db").textContent = "Anmeldung nötig";
+      $("db-sub").textContent = "Bitte zuerst in der Verwaltung (/) anmelden.";
+      return;
+    }
     const d = await r.json();
     $("version").textContent = "v" + d.version;
     $("uptime").textContent = "läuft seit " + Math.floor(d.uptime_s / 60) + " min";

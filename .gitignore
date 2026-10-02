@@ -15,7 +15,8 @@ config.toml
 # Frontend
 node_modules/
 frontend/**/dist/
-src/nestris_ltm/web/static/
+# Built admin UI / overlays (pnpm build in frontend/)
+src/nestris_ltm/web/
 
 # Editors
 .vscode/
