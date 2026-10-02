@@ -86,7 +86,7 @@ scene, so every layout shows identical values.
    simulator. ✅
 3. **Qt shell**: tray, window, close-to-tray, single instance, autostart. ✅
 4. **Admin SPA**: login, dashboard/diagnostics, players, games, events,
-   hiding, audit.
+   stations, hiding, audit, settings (admins, API tokens), overview page. ✅
 5. **Highscore and tournament**: port of TournamentHigscore logic and views.
 6. **Overlays**: UI components, scenes, rounds, layouts.
 7. **Recordings and replay**: NGF upload endpoint, `nestris-station`

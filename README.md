@@ -14,8 +14,9 @@ Retroverse Classic Tetris tournament. It runs on the host PC and:
 
 It replaces the old `NestrisLTM/` desktop app and `TournamentHigscore/`.
 
-> Status: phase 3 (tray app with embedded window, autostart, single
-> instance) on top of the MQTT ingest. The admin UI follows in phase 4. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full
+> Status: phase 4 (admin UI: players, games, events, stations, audit log,
+> settings, overview of all pages). See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+> for the design and the roadmap. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full
 > design and the roadmap.
 
 ## Requirements
@@ -23,6 +24,7 @@ It replaces the old `NestrisLTM/` desktop app and `TournamentHigscore/`.
 - Windows 10/11 (Linux works for the headless core)
 - Python 3.13 and [uv](https://docs.astral.sh/uv/)
 - PostgreSQL 14+ (local service on the host)
+- Node.js 22+ and pnpm (only to build the admin UI from source)
 - Mosquitto MQTT broker (Windows service). Use
   [packaging/mosquitto/mosquitto.conf](packaging/mosquitto/mosquitto.conf):
   `persistence true` keeps queued results across broker restarts.
@@ -34,9 +36,21 @@ uv sync
 uv run nestris-ltm config-path        # where the config file is expected
 copy config.example.toml "$env:APPDATA\NestrisLTM\config.toml"   # then edit it
 uv run nestris-ltm migrate            # create the database and schema
+cd frontend; pnpm install; pnpm build; cd ..   # admin UI -> src/nestris_ltm/web/admin
 uv run nestris-ltm                    # tray app with window (status page for now)
 uv run nestris-ltm --headless         # core only, no GUI; http://localhost:7990/
 ```
+
+## First start and sign-in
+
+On the first start the window asks for the first admin account (only
+possible on the host PC itself). Other devices sign in with it at
+`http://<host-ip>:7990/`. Further accounts and API tokens are managed under
+*Einstellungen*. Forgotten password:
+`uv run nestris-ltm set-admin-password <name>` on the host.
+
+Without a frontend build `/` shows a plain status page; `/status` always
+does.
 
 ## The desktop app
 
@@ -109,5 +123,7 @@ uv run pytest -m db                    # database integration tests (create thro
 $env:NESTRIS_LTM_TEST_MQTT = "127.0.0.1:1883"
 uv run pytest tests/test_mqtt_e2e.py   # simulator -> broker -> ingest -> database
 uv run ruff check . ; uv run ruff format --check . ; uv run mypy
+cd frontend; pnpm check; pnpm test       # svelte-check + vitest
+pnpm dev:admin                           # admin UI with hot reload on :5173 (proxies to :7990)
 uv run alembic revision --autogenerate -m "describe change"   # new migration
 ```

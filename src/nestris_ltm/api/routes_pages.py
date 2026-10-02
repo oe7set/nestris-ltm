@@ -45,12 +45,41 @@ async def status_page() -> HTMLResponse:
     return HTMLResponse(_page("status.html"), headers=NO_STORE)
 
 
+def _primary_address() -> str | None:
+    """The address of the interface used for outgoing traffic (no packet is sent)."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("192.0.2.1", 9))  # TEST-NET-1, never routed for real
+            return str(s.getsockname()[0])
+    except OSError:
+        return None
+
+
+def _rank(ip: str) -> int:
+    """Lower is better: LAN ranges first, link-local (169.254.x) last."""
+    if ip.startswith("192.168."):
+        return 1
+    if ip.startswith("10."):
+        return 2
+    if ip.startswith("172."):
+        return 3  # often Hyper-V/WSL/Docker virtual adapters
+    if ip.startswith("169.254."):
+        return 9
+    return 5
+
+
 def lan_addresses() -> list[str]:
     try:
         infos = socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET)
     except OSError:
-        return []
-    return sorted({str(i[4][0]) for i in infos if not str(i[4][0]).startswith("127.")})
+        infos = []
+    found = {str(i[4][0]) for i in infos} - {""}
+    primary = _primary_address()
+    if primary:
+        found.add(primary)
+    found = {ip for ip in found if not ip.startswith("127.")}
+    ordered = sorted(found, key=lambda ip: (ip != primary, _rank(ip), ip))
+    return ordered
 
 
 @router.get("/api/meta/pages", tags=["meta"])

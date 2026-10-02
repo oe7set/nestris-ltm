@@ -26,6 +26,8 @@ uv run nestris-ltm --headless                  # core only, http://localhost:799
 uv run nestris-ltm migrate                     # create DB + migrate, then exit
 uv run nestris-ltm simulate ..\*.ngf --stations station-1,station-2 --names "A,B" --speed 4
 uv run alembic revision --autogenerate -m "..."  # new migration (reads app config)
+cd frontend; pnpm install; pnpm build          # admin UI -> src/nestris_ltm/web/admin (git-ignored)
+pnpm check; pnpm test; pnpm dev:admin          # svelte-check, vitest, Vite dev server on :5173
 ```
 
 ## Conventions
@@ -54,3 +56,9 @@ uv run alembic revision --autogenerate -m "..."  # new migration (reads app conf
   `Runtime.request_shutdown()` (thread-safe).
 - The single-instance pipe name includes the HTTP port, so tests and a dev
   instance on another port never touch a running production instance.
+- Admin UI: Svelte 5 (runes) + TypeScript in `frontend/apps/admin`, hash routing
+  (`lib/routes.ts`), all strings in `lib/i18n.svelte.ts` (de + en, same keys).
+  Initial page loads use `onMount`, not `$effect`.
+- Every admin route depends on `AdminDep`; every write records an audit entry
+  (`services/audit.py`). New pages/views are registered in `pages.py` so the
+  overview page lists them.

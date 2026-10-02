@@ -149,6 +149,25 @@ async def test_invalid_live_payload_counts_parse_error(db: DatabaseManager, tmp_
     assert service.stats.parse_errors == 1
 
 
+async def test_new_game_closes_unfinished_game_on_same_station(
+    db: DatabaseManager, tmp_path: Path
+) -> None:
+    service = _service(db, tmp_path)
+    await _send(service, "event/game_start", dumps(GAME_START))
+    later = dumps(GAME_START, game_id="station-1-later", started_at="2026-09-24T09:30:00.000Z")
+    await _send(service, "event/game_start", later)
+    other_station = dumps(GAME_START, game_id="station-2-x", station="station-2")
+    await _send(service, "event/game_start", other_station, station="station-2")
+    await service.drain()
+    async with db.session() as s:
+        rows = dict((await s.execute(select(Game.external_id, Game.status))).all())
+    assert rows == {
+        GAME_ID: "abandoned",
+        "station-1-later": "live",
+        "station-2-x": "live",
+    }
+
+
 async def test_abandon_stale_games(db: DatabaseManager) -> None:
     async with db.session() as s, s.begin():
         await games.record_game_start(

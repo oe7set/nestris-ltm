@@ -1,0 +1,273 @@
+:root {
+  --bg: #0b1020;
+  --panel: #121a2e;
+  --panel-2: #172038;
+  --line: #23304d;
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --accent: #f5b800;
+  --accent-ink: #1a1300;
+  --link: #7dd3fc;
+  --ok: #22c55e;
+  --warn: #f59e0b;
+  --bad: #ef4444;
+  --radius: 10px;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.45 "Segoe UI", system-ui, sans-serif;
+}
+
+a {
+  color: var(--link);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+h1 {
+  font-size: 22px;
+  margin: 0 0 16px;
+}
+h2 {
+  font-size: 15px;
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+
+.grid {
+  display: grid;
+  gap: 12px;
+}
+.cards {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.spacer {
+  flex: 1;
+}
+.muted {
+  color: var(--muted);
+}
+.small {
+  font-size: 12px;
+}
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.mono {
+  font-family: Consolas, "Cascadia Mono", monospace;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.table-wrap {
+  overflow-x: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+th,
+td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+th {
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 12px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+tbody tr:last-child td {
+  border-bottom: none;
+}
+tr.clickable {
+  cursor: pointer;
+}
+tr.clickable:hover td {
+  background: var(--panel-2);
+}
+td.empty {
+  color: var(--muted);
+  text-align: center;
+  padding: 20px;
+}
+
+button,
+.button {
+  font: inherit;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+button:hover:not(:disabled) {
+  border-color: #3a4a70;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+button.primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+button.danger {
+  color: #fecaca;
+  border-color: #7f1d1d;
+  background: #2a1215;
+}
+button.link {
+  background: none;
+  border: none;
+  color: var(--link);
+  padding: 0;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  color: var(--text);
+  background: #0e1528;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 10px;
+  min-width: 0;
+}
+input:focus,
+select:focus,
+textarea:focus,
+button:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 1px;
+}
+textarea {
+  width: 100%;
+  min-height: 70px;
+  resize: vertical;
+}
+input[type="checkbox"] {
+  accent-color: var(--accent);
+}
+
+label.field {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+label.field input,
+label.field select,
+label.field textarea {
+  font-size: 14px;
+}
+label.check {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  cursor: pointer;
+}
+
+.form-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+
+.badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.badge.ok {
+  color: #bbf7d0;
+  border-color: #14532d;
+}
+.badge.warn {
+  color: #fde68a;
+  border-color: #78350f;
+}
+.badge.bad {
+  color: #fecaca;
+  border-color: #7f1d1d;
+}
+.badge.accent {
+  color: var(--accent);
+  border-color: #6b5200;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--muted);
+  display: inline-block;
+  flex: none;
+}
+.dot.ok {
+  background: var(--ok);
+}
+.dot.warn {
+  background: var(--warn);
+}
+.dot.bad {
+  background: var(--bad);
+}
+
+.error-box {
+  border: 1px solid #7f1d1d;
+  background: #2a1215;
+  color: #fecaca;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.hint {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0 0 12px;
+}

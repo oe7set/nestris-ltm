@@ -5,14 +5,14 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import AwareDatetime, BaseModel, Field, model_validator
 from sqlalchemy import and_, delete, exists, func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from nestris_ltm.api.auth import AdminDep
-from nestris_ltm.api.deps import SessionDep
+from nestris_ltm.api.deps import SessionDep, get_runtime
 from nestris_ltm.db.models import (
     Event,
     EventHiddenGame,
@@ -101,8 +101,19 @@ async def _player_exists(session: AsyncSession, player_id: int) -> None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "player does not exist")
 
 
+def _live_values(request: Request) -> dict[str, dict[str, Any]]:
+    """Current score/lines/level of running games, keyed by station game id."""
+    out: dict[str, dict[str, Any]] = {}
+    for station in get_runtime(request).hub.stations():
+        live = station.live
+        if live is not None and live.game_id:
+            out[live.game_id] = {"score": live.score, "lines": live.lines, "level": live.level}
+    return out
+
+
 @router.get("")
 async def list_games(
+    request: Request,
     _: AdminDep,
     session: SessionDep,
     event_id: int | None = Query(None, description="default: the active event"),
@@ -161,8 +172,17 @@ async def list_games(
                 )
             )
         )
+    live = _live_values(request)
     return {
-        "items": [_row(g, nick, g.id in hidden_ids) for g, nick in rows],
+        "items": [
+            _row(
+                g,
+                nick,
+                g.id in hidden_ids,
+                {"live": live.get(g.external_id or "") if g.status == "live" else None},
+            )
+            for g, nick in rows
+        ],
         "total": total or 0,
         "limit": limit,
         "offset": offset,

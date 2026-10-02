@@ -56,6 +56,18 @@ async def record_game_start(session: AsyncSession, payload: GameStartPayload) ->
         )
         .on_conflict_do_nothing(index_elements=[Game.external_id])
     )
+    # A station runs one game at a time: earlier games still marked live
+    # never got their game_end (power cut, crash) and are closed now.
+    await session.execute(
+        update(Game)
+        .where(
+            Game.station_id == payload.station,
+            Game.status == "live",
+            Game.external_id != payload.game_id,
+            Game.started_at < payload.started_at,
+        )
+        .values(status="abandoned", updated_at=func.now())
+    )
     return await _game_id(session, payload.game_id)
 
 
