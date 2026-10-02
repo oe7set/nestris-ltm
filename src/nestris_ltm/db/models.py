@@ -126,6 +126,19 @@ class Player(TimestampMixin, Base):
     deleted_at: Mapped[datetime | None]
 
 
+class PlayerCard(Base):
+    """An RFID card UID learned for a player. A player may own several cards."""
+
+    __tablename__ = "player_cards"
+
+    uid: Mapped[str] = mapped_column(String(32), primary_key=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id", ondelete="CASCADE"), index=True)
+    # Name written on the card when it was first seen.
+    card_name: Mapped[str | None] = mapped_column(String(64))
+    first_seen_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    last_seen_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
 # ---------------------------------------------------------------- stations
 
 

@@ -18,10 +18,12 @@ uv sync
 uv run pytest                                  # unit tests (db tests skip without a server)
 $env:NESTRIS_LTM_TEST_DATABASE_URL = "postgresql+asyncpg://postgres:<pw>@127.0.0.1:5432/postgres"
 uv run pytest -m db                            # integration tests, create throwaway DBs
+$env:NESTRIS_LTM_TEST_MQTT = "127.0.0.1:1883"; uv run pytest tests/test_mqtt_e2e.py
 uv run pytest tests/test_config.py::test_unknown_key_is_rejected
 uv run ruff check . ; uv run ruff format . ; uv run mypy
 uv run nestris-ltm --headless                  # core only, http://localhost:7990
 uv run nestris-ltm migrate                     # create DB + migrate, then exit
+uv run nestris-ltm simulate ..\*.ngf --stations station-1,station-2 --names "A,B" --speed 4
 uv run alembic revision --autogenerate -m "..."  # new migration (reads app config)
 ```
 
@@ -42,3 +44,7 @@ uv run alembic revision --autogenerate -m "..."  # new migration (reads app conf
   the background); routes use `SessionDep`, which answers 503 until ready.
 - Settings: `config.py` (TOML at `%APPDATA%\NestrisLTM\config.toml`, env
   `NESTRIS_LTM__SECTION__KEY`). Unknown keys are errors.
+- On Windows the asyncio loop must be a `SelectorEventLoop` (paho/aiomqtt);
+  always start the core through `runtime.run_async`.
+- Station events (`event/*`) go through the durable spool (`ingest/spool.py`)
+  before the database; only the spool worker writes game rows.

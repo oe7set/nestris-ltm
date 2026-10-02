@@ -7,17 +7,31 @@ Each test session creates and drops its own throwaway databases.
 
 from __future__ import annotations
 
+import asyncio
 import os
+import sys
 import uuid
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 
 import asyncpg
 import pytest
 from sqlalchemy.engine import make_url
 
 from nestris_ltm.config import DatabaseSettings, Settings
+from nestris_ltm.db.manager import DatabaseManager
 
 TEST_DB_URL = os.environ.get("NESTRIS_LTM_TEST_DATABASE_URL")
+# host:port of a broker for the MQTT end-to-end tests.
+TEST_MQTT = os.environ.get("NESTRIS_LTM_TEST_MQTT")
+
+
+def pytest_asyncio_loop_factories(
+    config: pytest.Config, item: pytest.Item
+) -> dict[str, Callable[[], asyncio.AbstractEventLoop]] | None:
+    # Same loop type as production (see runtime.run_async): paho needs a selector loop.
+    if sys.platform == "win32":
+        return {"selector": asyncio.SelectorEventLoop}
+    return None
 
 
 @pytest.fixture(autouse=True)
@@ -66,3 +80,14 @@ async def fresh_db_settings() -> AsyncIterator[DatabaseSettings]:
         yield settings
     finally:
         await drop_database(settings)
+
+
+@pytest.fixture
+async def db(fresh_db_settings: DatabaseSettings) -> AsyncIterator[DatabaseManager]:
+    """A migrated, ready DatabaseManager on a throwaway database."""
+    manager = DatabaseManager(fresh_db_settings)
+    await manager.run_bootstrap()
+    try:
+        yield manager
+    finally:
+        await manager.dispose()

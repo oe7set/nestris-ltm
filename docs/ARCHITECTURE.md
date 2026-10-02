@@ -44,7 +44,7 @@ Qt shell: tray icon, window = QWebEngineView(admin), autostart, single instance
 | Time window | `events` table; exactly one active event scopes highscore, bracket, overlays |
 | Hiding | Per event: player everywhere, player from bracket only, single games, whole stations |
 | Cheats / invalid | Everything counts; flagged in the UI (badge + filter) |
-| RFID | Player resolved by the name on the card (case-insensitive); unknown names auto-create a player flagged `auto_created`; no card → game "unassigned" |
+| RFID | Known card uid → its player (several cards per player, `player_cards`); else name on the card (case-insensitive), learning the uid; unknown names auto-create a player flagged `auto_created`; no card / blank unknown card → game "unassigned" |
 | Versus | Scenes with station slots and a fixed OBS URL per scene; rounds freeze finished scores |
 | Tetris diff | lead ÷ (1200 × (level + 1)) of the trailing player |
 | Bracket | Single elimination 2–64 with byes and third place (ported from TournamentHigscore) |
@@ -55,7 +55,7 @@ Qt shell: tray icon, window = QWebEngineView(admin), autostart, single instance
 
 ## Schema overview
 
-`events`, `players`, `stations`, `games` (+ `game_frames`, `game_recordings`,
+`events`, `players` (+ `player_cards`), `stations`, `games` (+ `game_frames`, `game_recordings`,
 `game_cheats`), `event_player_flags`, `event_hidden_stations`,
 `event_hidden_games`, `tournaments`, `scenes` (+ `scene_slots`,
 `scene_rounds`, `scene_round_entries`), `admin_users`, `api_tokens`,
@@ -81,8 +81,9 @@ scene, so every layout shows identical values.
 ## Roadmap
 
 1. **Skeleton**: config, logging, DB bootstrap + schema, FastAPI, CLI, tests. ✅
-2. **Ingest**: MQTT client, handlers, dedupe, frame buffer, LiveHub,
-   diagnostics API, NGF-replay station simulator.
+2. **Ingest**: MQTT client, durable event spool, idempotent upserts, frame
+   buffer, LiveHub, diagnostics API + `/ws/live`, NGF codec, station
+   simulator. ✅
 3. **Qt shell**: tray, window, close-to-tray, single instance, autostart.
 4. **Admin SPA**: login, dashboard/diagnostics, players, games, events,
    hiding, audit.
