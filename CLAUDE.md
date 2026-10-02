@@ -21,6 +21,7 @@ uv run pytest -m db                            # integration tests, create throw
 $env:NESTRIS_LTM_TEST_MQTT = "127.0.0.1:1883"; uv run pytest tests/test_mqtt_e2e.py
 uv run pytest tests/test_config.py::test_unknown_key_is_rejected
 uv run ruff check . ; uv run ruff format . ; uv run mypy
+uv run nestris-ltm                             # tray app + window
 uv run nestris-ltm --headless                  # core only, http://localhost:7990
 uv run nestris-ltm migrate                     # create DB + migrate, then exit
 uv run nestris-ltm simulate ..\*.ngf --stations station-1,station-2 --names "A,B" --speed 4
@@ -48,3 +49,8 @@ uv run alembic revision --autogenerate -m "..."  # new migration (reads app conf
   always start the core through `runtime.run_async`.
 - Station events (`event/*`) go through the durable spool (`ingest/spool.py`)
   before the database; only the spool worker writes game rows.
+- `shell/` is the only place that imports Qt. The core never depends on it;
+  the shell talks to the core through `Runtime` attributes (read-only) and
+  `Runtime.request_shutdown()` (thread-safe).
+- The single-instance pipe name includes the HTTP port, so tests and a dev
+  instance on another port never touch a running production instance.

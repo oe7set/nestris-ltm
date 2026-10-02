@@ -1,6 +1,6 @@
 """Batches live frames per game and writes them to ``game_frames``.
 
-Live frames arrive at up to ~10 Hz per station. Writing each one would
+Live frames arrive at up to 60 Hz per station (one per NES frame). Writing each one would
 cost a round trip per message, so frames are collected in memory and
 flushed about once per second. Frames can arrive before the game row exists
 (``live`` carries the game id before ``event/game_start`` is processed);
@@ -28,7 +28,9 @@ from nestris_ltm.ingest.payloads import LivePayload
 log = structlog.get_logger(__name__)
 
 MAX_WAIT_FOR_GAME_S = 120.0
-MAX_PENDING_PER_GAME = 3000  # ~5 minutes at 10 Hz
+MAX_PENDING_PER_GAME = 60 * 60 * 15  # 15 minutes at 60 Hz (database outage buffer)
+# Rows per INSERT; keeps the bind parameter count far below PostgreSQL's limit.
+INSERT_CHUNK = 2000
 GAME_CACHE_SIZE = 64
 
 
@@ -58,10 +60,12 @@ class FrameBuffer:
         if payload.game_id is None:
             return
         pending = self._pending.setdefault(payload.game_id, _Pending())
-        if len(pending.frames) >= MAX_PENDING_PER_GAME:
-            pending.frames.pop(0)
-            self.frames_dropped += 1
         pending.frames.append(payload)
+        if len(pending.frames) > MAX_PENDING_PER_GAME:
+            # Drop the oldest frames in one go (a list pop(0) per frame is O(n)).
+            excess = len(pending.frames) - MAX_PENDING_PER_GAME
+            del pending.frames[:excess]
+            self.frames_dropped += excess
 
     @property
     def pending_count(self) -> int:
@@ -140,7 +144,9 @@ class FrameBuffer:
                         }
                     )
                     ref.next_seq += 1
-                await session.execute(insert(GameFrame).values(rows).on_conflict_do_nothing())
+                for i in range(0, len(rows), INSERT_CHUNK):
+                    chunk = rows[i : i + INSERT_CHUNK]
+                    await session.execute(insert(GameFrame).values(chunk).on_conflict_do_nothing())
                 written += len(rows)
             await session.commit()
         return written

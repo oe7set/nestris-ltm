@@ -15,6 +15,7 @@ dependencies = [
     "structlog>=24.4",
     "aiomqtt>=2.3",
     "argon2-cffi>=23.1",
+    "pyside6>=6.8",
 ]
 
 [project.scripts]

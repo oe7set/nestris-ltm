@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 from nestris_ltm.ingest.payloads import LivePayload, PlayerPayload, StatusPayload
 from nestris_ltm.live.hub import LiveHub
 from tests.payload_samples import LIVE, OFFLINE, PLAYER, STATUS, dumps
@@ -20,6 +22,8 @@ def test_state_and_notifications() -> None:
     assert [sub.queue.get_nowait()["type"] for _ in range(3)] == ["station", "station", "live"]
 
     hub.update_status("station-1", StatusPayload.model_validate_json(dumps(OFFLINE)))
+    assert hub.snapshot()[0]["online"] is True  # live data just arrived
+    hub.station("station-1").live_at = datetime.now(UTC) - timedelta(minutes=1)
     assert hub.snapshot()[0]["online"] is False
 
 
@@ -32,3 +36,11 @@ def test_slow_subscriber_drops_instead_of_blocking() -> None:
     assert sub.dropped == 10
     hub.unsubscribe(sub)
     assert hub.subscriber_count == 0
+
+
+def test_recent_live_data_counts_as_online() -> None:
+    hub = LiveHub()
+    hub.update_status("station-1", StatusPayload.model_validate_json(dumps(OFFLINE)))
+    assert hub.snapshot()[0]["online"] is False
+    hub.update_live("station-1", LivePayload.model_validate_json(dumps(LIVE)))
+    assert hub.snapshot()[0]["online"] is True

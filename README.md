@@ -14,8 +14,8 @@ Retroverse Classic Tetris tournament. It runs on the host PC and:
 
 It replaces the old `NestrisLTM/` desktop app and `TournamentHigscore/`.
 
-> Status: phase 2 (MQTT ingest, live state, diagnostics API, station
-> simulator). See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full
+> Status: phase 3 (tray app with embedded window, autostart, single
+> instance) on top of the MQTT ingest. The admin UI follows in phase 4. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full
 > design and the roadmap.
 
 ## Requirements
@@ -34,8 +34,24 @@ uv sync
 uv run nestris-ltm config-path        # where the config file is expected
 copy config.example.toml "$env:APPDATA\NestrisLTM\config.toml"   # then edit it
 uv run nestris-ltm migrate            # create the database and schema
-uv run nestris-ltm --headless         # run the core; http://localhost:7990/api/health
+uv run nestris-ltm                    # tray app with window (status page for now)
+uv run nestris-ltm --headless         # core only, no GUI; http://localhost:7990/
 ```
+
+## The desktop app
+
+- Starts the core (HTTP server, MQTT ingest, workers) on a background
+  thread and shows it in a window (embedded browser). Other PCs, e.g. OBS
+  or kiosk screens, use `http://<host-ip>:7990/`.
+- **Closing the window keeps NestrisLTM running in the tray.** Quit with
+  *Beenden* in the tray menu; this flushes buffered frames first.
+- The tray icon shows the state: green = database and broker connected,
+  orange = one of them missing, red = the core could not start (e.g. port
+  in use). Its tooltip lists the details.
+- *Mit Windows starten* in the tray menu registers the app in
+  `HKCU\...\CurrentVersion\Run`; it then starts minimized to the tray.
+- Starting it a second time only brings the running window to the front
+  (`--minimized` starts hidden in the tray).
 
 The database named in the config is created automatically if it does not
 exist, and all pending migrations run on every start.
@@ -67,7 +83,7 @@ uv run nestris-ltm simulate ..\0QR5AJ2RRDPNMZK5FT53K.ngf ..\YXHGT4GXCYMCTDW912MN
 - All writes are idempotent upserts keyed on the station's `game_id`, so
   re-delivered or out-of-order events are harmless. Games edited in the admin
   UI are never overwritten by a re-delivery.
-- Live frames (≤ 10 Hz) are batched into `game_frames` once per second.
+- Live frames (up to 60 Hz) are batched into `game_frames` once per second.
 - Players are resolved from the RFID card: a known card uid maps to its
   player (a player may own several cards), otherwise the name on the card is
   matched case-insensitively; unknown names create a player flagged

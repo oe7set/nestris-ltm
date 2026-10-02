@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NestrisLTM Status</title>
+<!-- Interim start page until the admin UI (phase 4) replaces it. -->
+<style>
+  :root {
+    --bg: #0b1020; --panel: #121a2e; --line: #23304d; --text: #e2e8f0; --muted: #94a3b8;
+    --ok: #22c55e; --warn: #f59e0b; --bad: #ef4444; --gold: #f5b800;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.45 "Segoe UI", system-ui, sans-serif; }
+  header { display: flex; align-items: baseline; gap: 12px; padding: 16px 20px;
+           border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0; font-size: 20px; color: var(--gold); letter-spacing: .5px; }
+  header span { color: var(--muted); }
+  main { padding: 16px 20px; display: grid; gap: 16px; }
+  .cards { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .card h2 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); }
+  .big { font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.ok { background: var(--ok); } .dot.warn { background: var(--warn); } .dot.bad { background: var(--bad); }
+  .sub { color: var(--muted); font-size: 12px; word-break: break-word; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel);
+          border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; }
+  td.num { font-variant-numeric: tabular-nums; text-align: right; }
+  .empty { color: var(--muted); padding: 14px; }
+  pre { margin: 0; max-height: 280px; overflow: auto; background: #070b16; border: 1px solid var(--line);
+        border-radius: 10px; padding: 10px; font: 12px/1.4 Consolas, monospace; color: #cbd5e1; }
+  .lvl-WARNING { color: var(--warn); } .lvl-ERROR, .lvl-CRITICAL { color: var(--bad); }
+  h3 { margin: 4px 0 0; font-size: 14px; color: var(--muted); font-weight: 500; }
+  .scroll { overflow-x: auto; }
+</style>
+</head>
+<body>
+<header><h1>NestrisLTM</h1><span id="version"></span><span id="uptime"></span></header>
+<main>
+  <section class="cards">
+    <div class="card"><h2>Datenbank</h2><div class="big"><span class="dot" id="db-dot"></span><span id="db"></span></div><div class="sub" id="db-sub"></div></div>
+    <div class="card"><h2>MQTT-Broker</h2><div class="big"><span class="dot" id="mq-dot"></span><span id="mq"></span></div><div class="sub" id="mq-sub"></div></div>
+    <div class="card"><h2>Ergebnisse</h2><div class="big" id="events"></div><div class="sub" id="events-sub"></div></div>
+    <div class="card"><h2>Live-Frames</h2><div class="big" id="frames"></div><div class="sub" id="frames-sub"></div></div>
+  </section>
+
+  <h3>Stationen</h3>
+  <div class="scroll"><table>
+    <thead><tr><th>Station</th><th>Status</th><th>Capture</th><th>RFID</th><th>Spieler</th><th>Spielzustand</th>
+      <th class="num">Score</th><th class="num">Lines</th><th class="num">Level</th><th class="num">FPS</th></tr></thead>
+    <tbody id="stations"></tbody>
+  </table></div>
+
+  <h3>Log</h3>
+  <pre id="log"></pre>
+</main>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const fmt = (n) => (n === null || n === undefined) ? "–" : Number(n).toLocaleString("de-AT");
+let lastLogId = 0;
+
+function dot(el, state) { el.className = "dot " + state; }
+
+function cell(text, cls) {
+  const td = document.createElement("td");
+  td.textContent = text;
+  if (cls) td.className = cls;
+  return td;
+}
+
+function renderStations(stations) {
+  const body = $("stations");
+  body.replaceChildren();
+  if (!stations.length) {
+    const tr = document.createElement("tr");
+    const td = cell("Noch keine Station gemeldet.", "empty");
+    td.colSpan = 10;
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
+  for (const s of stations) {
+    const tr = document.createElement("tr");
+    const status = document.createElement("td");
+    const d = document.createElement("span");
+    d.className = "dot " + (s.online && !s.stale ? "ok" : s.online ? "warn" : "bad");
+    d.style.display = "inline-block";
+    d.style.marginRight = "6px";
+    status.append(d, document.createTextNode(s.online ? (s.stale ? "keine Meldung" : "online") : "offline"));
+    const st = s.status || {};
+    const live = s.live || {};
+    tr.append(
+      cell(s.name ? `${s.name} (${s.id})` : s.id), status, cell(st.capture || "–"), cell(st.rfid || "–"),
+      cell(s.player_nickname || (s.card && s.card.name) || (s.card_present ? "leere Karte" : "–")),
+      cell(live.game_state || st.game_state || "–"),
+      cell(fmt(live.score), "num"), cell(fmt(live.lines), "num"), cell(fmt(live.level), "num"),
+      cell(st.fps ? st.fps.toFixed(1) : "–", "num"),
+    );
+    body.append(tr);
+  }
+}
+
+async function refresh() {
+  try {
+    const r = await fetch("/api/diagnostics", { cache: "no-store" });
+    const d = await r.json();
+    $("version").textContent = "v" + d.version;
+    $("uptime").textContent = "läuft seit " + Math.floor(d.uptime_s / 60) + " min";
+    dot($("db-dot"), d.database.ready ? "ok" : "bad");
+    $("db").textContent = d.database.ready ? "verbunden" : "nicht verbunden";
+    $("db-sub").textContent = d.database.error || `${d.database.name} @ ${d.database.host}`;
+    const m = d.mqtt;
+    dot($("mq-dot"), !m.enabled ? "" : m.connected ? "ok" : "bad");
+    $("mq").textContent = !m.enabled ? "deaktiviert" : m.connected ? "verbunden" : "nicht verbunden";
+    $("mq-sub").textContent = m.last_error || `${m.broker} · ${m.topic_prefix}/# · ${fmt(m.messages)} Nachrichten`;
+    const i = d.ingest;
+    $("events").textContent = fmt(i.events_stored) + " gespeichert";
+    $("events-sub").textContent = `Warteschlange ${i.spool_pending} · fehlgeschlagen ${i.spool_failed}` +
+      (i.last_event_error ? " · " + i.last_event_error : "");
+    $("frames").textContent = fmt(i.frames_written);
+    $("frames-sub").textContent = `ausstehend ${fmt(i.frames_pending)} · verworfen ${fmt(i.frames_dropped)}` +
+      ` · Parse-Fehler ${fmt(i.parse_errors)}`;
+    renderStations(d.stations);
+  } catch (e) {
+    dot($("db-dot"), "bad");
+    $("db").textContent = "Server nicht erreichbar";
+  }
+}
+
+async function refreshLog() {
+  try {
+    const r = await fetch(`/api/diagnostics/logs?after_id=${lastLogId}&level=INFO&limit=200`, { cache: "no-store" });
+    const { entries } = await r.json();
+    const pre = $("log");
+    const atBottom = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 4;
+    for (const e of entries) {
+      const line = document.createElement("div");
+      line.className = "lvl-" + e.level;
+      line.textContent = e.message;
+      pre.append(line);
+      lastLogId = e.id;
+    }
+    while (pre.childElementCount > 500) pre.firstElementChild.remove();
+    if (atBottom) pre.scrollTop = pre.scrollHeight;
+  } catch (e) { /* server restarting */ }
+}
+
+refresh(); refreshLog();
+setInterval(refresh, 1000);
+setInterval(refreshLog, 2000);
+</script>
+</body>
+</html>

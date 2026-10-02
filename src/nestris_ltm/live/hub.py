@@ -22,7 +22,11 @@ log = structlog.get_logger(__name__)
 # A station is "stale" when no status arrived for this long (it publishes
 # every 10 s by default).
 STALE_AFTER = timedelta(seconds=35)
-SUBSCRIBER_QUEUE_SIZE = 256
+# Live data this recent proves the station is up, whatever the last status said
+# (e.g. a stale "offline" last will after a client-id takeover).
+LIVE_PROVES_ONLINE = timedelta(seconds=5)
+# 8 stations x 60 Hz = 480 messages/s; this absorbs about 4 s of client lag.
+SUBSCRIBER_QUEUE_SIZE = 2048
 
 
 def _now() -> datetime:
@@ -43,19 +47,21 @@ class StationState:
     messages: int = 0
     last_message_at: datetime | None = None
 
-    @property
-    def online(self) -> bool:
+    def online(self, now: datetime) -> bool:
+        if self.live_at is not None and now - self.live_at <= LIVE_PROVES_ONLINE:
+            return True
         return self.status is not None and self.status.state == "online"
 
     def stale(self, now: datetime) -> bool:
-        return self.status_at is None or now - self.status_at > STALE_AFTER
+        last = max((t for t in (self.status_at, self.live_at) if t is not None), default=None)
+        return last is None or now - last > STALE_AFTER
 
     def snapshot(self, now: datetime | None = None) -> dict[str, Any]:
         now = now or _now()
         return {
             "id": self.id,
             "name": self.status.name if self.status else None,
-            "online": self.online,
+            "online": self.online(now),
             "stale": self.stale(now),
             "status": self.status.model_dump(mode="json") if self.status else None,
             "status_at": _iso(self.status_at),

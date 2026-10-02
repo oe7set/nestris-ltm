@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import secrets
 import sys
 from collections.abc import Coroutine
 from datetime import UTC, datetime
@@ -48,8 +49,21 @@ class Runtime:
         self.frames = FrameBuffer(self.db)
         self.ingest = IngestService(self.db, self.hub, self.frames, self.spool)
         self.mqtt = MqttIngest(settings.mqtt, self.ingest)
+        # Sent by the Qt shell's embedded browser; grants an admin session
+        # without a login (the shell runs on the host itself).
+        self.shell_token = secrets.token_urlsafe(32)
+        self.loop: asyncio.AbstractEventLoop | None = None
         self._tasks: set[asyncio.Task[Any]] = set()
         self._server: uvicorn.Server | None = None
+
+    @property
+    def http_started(self) -> bool:
+        """True once the HTTP server accepts connections."""
+        return self._server is not None and self._server.started
+
+    @property
+    def local_url(self) -> str:
+        return f"http://127.0.0.1:{self.settings.http.port}"
 
     def spawn(self, coro: Coroutine[Any, Any, Any], *, name: str) -> asyncio.Task[Any]:
         """Start a background task that is cancelled on shutdown."""
@@ -86,6 +100,7 @@ class Runtime:
     async def serve(self) -> None:
         from nestris_ltm.api.app import create_app
 
+        self.loop = asyncio.get_running_loop()
         app = create_app(self)
         config = uvicorn.Config(
             app,
@@ -101,6 +116,13 @@ class Runtime:
         await self._server.serve()
 
     def request_shutdown(self) -> None:
-        """Thread-unsafe; call via loop.call_soon_threadsafe from other threads."""
+        """Ask the HTTP server (and with it the runtime) to stop. Thread-safe."""
+        loop = self.loop
+        if loop is not None and not loop.is_closed():
+            loop.call_soon_threadsafe(self._stop_server)
+        else:
+            self._stop_server()
+
+    def _stop_server(self) -> None:
         if self._server is not None:
             self._server.should_exit = True

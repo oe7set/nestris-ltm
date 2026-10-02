@@ -33,7 +33,7 @@ from nestris_ltm.core.ngf import NgfFrame, iter_frames, split_games
 log = structlog.get_logger(__name__)
 
 MIN_GAME_FRAMES = 120  # like the station's session.min_game_frames
-LIVE_INTERVAL_MS = 100  # 10 Hz, the station default
+DEFAULT_LIVE_HZ = 60.0  # one live message per NES frame
 COUNT_CONFIRM_FRAMES = 3
 I_PIECE = 6  # index of I in the T J Z O S L I counter order
 
@@ -117,12 +117,15 @@ class StationSimulator:
         card_name: str | None = None,
         card_uid: str | None = None,
         speed: float = 1.0,
+        live_hz: float = DEFAULT_LIVE_HZ,
     ) -> None:
         self.settings = settings
         self.station = station
         self.card_name = card_name
         self.card_uid = card_uid or (f"{zlib.crc32(station.encode()):08X}" if card_name else None)
         self.speed = max(speed, 0.01)
+        # Interval in recorded game time between two live messages.
+        self.live_interval_ms = 1000.0 / max(live_hz, 0.1)
         self.base = f"{settings.topic_prefix.rstrip('/')}/{station}"
         self._started = time.monotonic()
         self._game_state = "title"
@@ -248,11 +251,11 @@ class StationSimulator:
         await self._pub(client, "status", self._status(), qos=1, retain=True)
 
         base_ms = frames[0].ctime_ms
-        last_live = -LIVE_INTERVAL_MS
+        last_live = -self.live_interval_ms
         for frame in frames:
             tracker.update(frame)
             rel_ms = frame.ctime_ms - base_ms
-            if rel_ms - last_live < LIVE_INTERVAL_MS and frame is not frames[-1]:
+            if rel_ms - last_live < self.live_interval_ms and frame is not frames[-1]:
                 continue
             last_live = rel_ms
             delay = rel_ms / 1000 / self.speed - (time.monotonic() - t0)

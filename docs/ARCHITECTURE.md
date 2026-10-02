@@ -48,7 +48,7 @@ Qt shell: tray icon, window = QWebEngineView(admin), autostart, single instance
 | Versus | Scenes with station slots and a fixed OBS URL per scene; rounds freeze finished scores |
 | Tetris diff | lead ÷ (1200 × (level + 1)) of the trailing player |
 | Bracket | Single elimination 2–64 with byes and third place (ported from TournamentHigscore) |
-| Recordings | Live frames from MQTT (≤ 10 Hz) plus the station's `.ngf.gz` uploaded over HTTP |
+| Recordings | Live frames from MQTT (up to 60 Hz, set `mqtt.live_max_hz = 60` on the stations) plus the station's `.ngf.gz` uploaded over HTTP |
 | Auth | Overlays and kiosk views public; admin needs a login; machine clients use bearer tokens |
 | Registration | RetroverseAnmledung moves from direct DB access to the REST API |
 | Website uplink | Not planned |
@@ -84,7 +84,7 @@ scene, so every layout shows identical values.
 2. **Ingest**: MQTT client, durable event spool, idempotent upserts, frame
    buffer, LiveHub, diagnostics API + `/ws/live`, NGF codec, station
    simulator. ✅
-3. **Qt shell**: tray, window, close-to-tray, single instance, autostart.
+3. **Qt shell**: tray, window, close-to-tray, single instance, autostart. ✅
 4. **Admin SPA**: login, dashboard/diagnostics, players, games, events,
    hiding, audit.
 5. **Highscore and tournament**: port of TournamentHigscore logic and views.

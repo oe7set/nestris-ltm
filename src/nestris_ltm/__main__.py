@@ -32,6 +32,9 @@ def _parser() -> argparse.ArgumentParser:
         default=default_config_path(),
     )
     parser.add_argument("--headless", action="store_true", help="run without the GUI shell")
+    parser.add_argument(
+        "--minimized", action="store_true", help="start hidden in the tray (used by autostart)"
+    )
     sub = parser.add_subparsers(dest="command")
     sub.add_parser("migrate", help="create/upgrade the database schema and exit")
     sub.add_parser("config-path", help="print the config file location and exit")
@@ -46,6 +49,7 @@ def _parser() -> argparse.ArgumentParser:
         "--names", default="", help="comma-separated card names per station (empty = no card)"
     )
     sim.add_argument("--speed", type=float, default=1.0, help="playback speed factor")
+    sim.add_argument("--live-hz", type=float, default=60.0, help="live messages per second")
     sim.add_argument("--loop", action="store_true", help="repeat the games forever")
     return parser
 
@@ -83,7 +87,9 @@ async def _simulate(settings: Settings, args: argparse.Namespace) -> None:
         # Each station starts with a different game so their scores differ.
         rotated = games[i % len(games) :] + games[: i % len(games)]
         name = names[i] if i < len(names) else None
-        sim = StationSimulator(settings.mqtt, station, card_name=name, speed=args.speed)
+        sim = StationSimulator(
+            settings.mqtt, station, card_name=name, speed=args.speed, live_hz=args.live_hz
+        )
         sims.append(sim.run(rotated, loop=args.loop))
     await asyncio.gather(*sims)
 
@@ -113,10 +119,13 @@ def main(argv: list[str] | None = None) -> int:
         _run_headless(settings)
         return 0
 
-    # The Qt shell arrives in phase 3; until then fall back to headless.
-    log.warning("GUI shell not available yet, running headless")
-    _run_headless(settings)
-    return 0
+    try:
+        from nestris_ltm.shell.app import run_shell
+    except ImportError as exc:  # e.g. PySide6 missing on a server install
+        log.warning("GUI shell unavailable, running headless", error=str(exc))
+        _run_headless(settings)
+        return 0
+    return run_shell(settings, args.config, minimized=args.minimized)
 
 
 if __name__ == "__main__":
