@@ -60,10 +60,14 @@ class InstanceServer(QObject):
         while (socket := self._server.nextPendingConnection()) is not None:
             socket.readyRead.connect(lambda s=socket: self._read(s))
             # Read what is left before the socket goes away.
-            socket.disconnected.connect(lambda s=socket: (self._read(s), s.deleteLater()))
+            socket.disconnected.connect(lambda s=socket: self._read_and_close(s))
             # A fast client may have written (and even closed) before we got
             # here; that data never triggers readyRead again.
             self._read(socket)
+
+    def _read_and_close(self, socket: QLocalSocket) -> None:
+        self._read(socket)
+        socket.deleteLater()
 
     def _read(self, socket: QLocalSocket) -> None:
         while socket.canReadLine():
