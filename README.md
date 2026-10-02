@@ -14,8 +14,8 @@ Retroverse Classic Tetris tournament. It runs on the host PC and:
 
 It replaces the old `NestrisLTM/` desktop app and `TournamentHigscore/`.
 
-> Status: phase 4 (admin UI: players, games, events, stations, audit log,
-> settings, overview of all pages). See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+> Status: phase 5 (highscore + tournament kiosk with all TournamentHigscore
+> animations, tournament console in the admin UI). See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 > for the design and the roadmap. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full
 > design and the roadmap.
 
@@ -88,6 +88,24 @@ uv run nestris-ltm simulate ..\0QR5AJ2RRDPNMZK5FT53K.ngf ..\YXHGT4GXCYMCTDW912MN
 | `GET /api/diagnostics` | broker, database, ingest counters, spool, every station |
 | `GET /api/diagnostics/logs?after_id=0&level=INFO` | recent log records |
 | `WS /ws/live` | snapshot of all stations, then `station`, `live`, `game_event` messages |
+
+## Highscore and tournament
+
+- `http://<host>:7990/view/highscore` is the full-screen display ported from
+  TournamentHigscore with all of its animations: FLIP flights between list
+  and bracket, score-train count-up, live banners (new record, lead change,
+  milestone), CRT/tetromino ambiente, victory bursts and the champion
+  celebration (podium, confetti, rockets). Options: `?only=highscore`,
+  `?only=bracket`, `?transparent=1` (OBS).
+- It shows the **active event**: the best game per player inside the event
+  window, running games live (green dot), without hidden players, stations
+  and games.
+- *Turnier* in the admin UI embeds the original console: tournament size,
+  FIX/RESET/UNSEED, click a player to set the winner, *disable* = the event
+  flag "nur im Turnierbaum ausblenden", plus the display remote control
+  (font size, autoscroll, scroll position, effects, banners, transparency,
+  celebration). Bracket state, view settings and the celebration switch are
+  stored in the database and survive restarts.
 
 ## How results are stored
 

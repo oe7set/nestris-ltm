@@ -1,0 +1,198 @@
+/* ----------------------------------------------------------------------
+   "Wow" effects layer for the public kiosk view.
+
+   Three self-contained features wired from view.html (each backed by a
+   window.X module): a retro CRT + drifting-tetromino ambiente, full-width
+   live-drama banners (new record / lead change / score milestone), and a
+   bracket victory burst (pop + particles) when a match is decided.
+
+   This file owns only the layering, scaffolding and styling; the motion is
+   driven by ambiente.js / drama.js / bracket-juice.js. Palette + reduced-
+   motion conventions mirror app.css.
+
+   Z-index map (see app.css for the rest):
+     #ambiente-bg     -1   tetromino canvas + glow (BEHIND content)
+     content grid    auto
+     #ambiente-fg     50   scanlines + vignette (above content, CRT look)
+     #flip-layer      60   (app.css) re-seed flights
+     #juice-layer     62   bracket victory particle burst
+     #drama-layer     70   live-drama banners
+     #celebration-layer 80 (app.css) final podium + confetti
+   ---------------------------------------------------------------------- */
+
+/* Admin "effects off" switch: hard-hide a layer regardless of its own display. */
+.fx-hidden { display: none !important; }
+
+/* ======================================================================
+   Feature 1 — Retro CRT & Tetris ambiente
+   ====================================================================== */
+
+/* Tetromino canvas + base glow: fixed, behind all page content but above the
+   body background paint (z-index:-1 is the standard fixed-background trick).
+   If a future Tailwind reset ever clips this, the fallback is to set this to
+   z-index:0 and give the view.html grid `position:relative; z-index:1`. */
+#ambiente-bg {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    overflow: hidden;
+}
+.tetromino-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+/* Scanlines + vignette: above content so the CRT lines fall across the whole
+   screen, but below every animation overlay so flights/banners/podium stay
+   crisp. Purely decorative -> pointer-events:none. */
+#ambiente-fg {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    pointer-events: none;
+    /* Horizontal scanlines. */
+    background: repeating-linear-gradient(
+        to bottom,
+        rgba(0, 0, 0, 0) 0px,
+        rgba(0, 0, 0, 0) 2px,
+        rgba(0, 0, 0, 0.14) 3px,
+        rgba(0, 0, 0, 0) 4px
+    );
+    /* Subtle, slow brightness flicker for the "tube warming up" feel. */
+    animation: crt-flicker 6s ease-in-out infinite;
+}
+/* Vignette: darken the corners like a curved CRT. */
+#ambiente-fg::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(
+        ellipse at center,
+        transparent 55%,
+        rgba(0, 0, 0, 0.45) 100%
+    );
+}
+@keyframes crt-flicker {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.96; }
+}
+
+/* ======================================================================
+   Feature 2 — Live-drama banners
+   ====================================================================== */
+
+#drama-layer {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: 7%;
+    z-index: 70;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.drama-banner {
+    /* Start above the viewport, slide down into place. */
+    transform: translateY(-160%);
+    opacity: 0;
+    transition: transform 0.45s cubic-bezier(0.2, 0.9, 0.25, 1), opacity 0.45s ease;
+
+    min-width: min(60vw, 720px);
+    max-width: 90vw;
+    text-align: center;
+    padding: 0.7rem 2rem;
+    border-radius: 0.6rem;
+    border: 2px solid currentColor;
+    background: rgba(17, 24, 39, 0.92);
+    box-shadow: 0 0 28px rgba(0, 0, 0, 0.6), 0 0 22px currentColor;
+}
+.drama-banner.show {
+    transform: translateY(0);
+    opacity: 1;
+}
+.drama-banner .db-title {
+    font-size: 1.9rem;
+    font-weight: bold;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    text-shadow: 0 0 14px currentColor;
+    line-height: 1.1;
+}
+.drama-banner .db-sub {
+    margin-top: 0.2rem;
+    font-size: 1.05rem;
+    letter-spacing: 0.06em;
+    color: #e5e7eb;
+    text-shadow: none;
+}
+
+/* Type colours (the `currentColor` glow/border picks these up). */
+.drama-banner--highscore { color: var(--gold); }
+.drama-banner--milestone { color: #4dd2ff; }
+.drama-banner--lead      { color: var(--good, #46e07a); }
+.drama-banner--overtake  { color: var(--good, #46e07a); }
+
+/* ======================================================================
+   Feature 3 — Bracket victory juice
+   ====================================================================== */
+
+#juice-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 62;
+    pointer-events: none;
+    overflow: visible;
+}
+.juice-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+/* Pop the freshly-decided winner slot (layers on top of the existing .winner
+   styling). Champion gets a bigger, glowier variant. */
+@keyframes slot-juice-pop {
+    0%   { transform: scale(1); }
+    35%  { transform: scale(1.12); filter: brightness(1.6); }
+    100% { transform: scale(1); }
+}
+.slot.slot-juice-pop {
+    animation: slot-juice-pop 0.6s cubic-bezier(0.2, 1.3, 0.4, 1);
+}
+@keyframes slot-juice-champ {
+    0%   { transform: scale(1); box-shadow: 0 0 0 rgba(251, 191, 36, 0); }
+    30%  { transform: scale(1.16); filter: brightness(1.8); box-shadow: 0 0 36px rgba(251, 191, 36, 0.85); }
+    100% { transform: scale(1); box-shadow: 0 0 0 rgba(251, 191, 36, 0); }
+}
+.slot.slot-juice-champ {
+    animation: slot-juice-champ 1.2s cubic-bezier(0.2, 1.2, 0.4, 1);
+}
+
+/* Static (non-animated) acknowledgement used under reduced motion. */
+.slot.slot-juice-static {
+    box-shadow: 0 0 18px rgba(251, 191, 36, 0.7);
+}
+
+/* ======================================================================
+   Reduced motion — keep information, drop the movement.
+   ====================================================================== */
+@media (prefers-reduced-motion: reduce) {
+    /* Ambiente: static scanlines/vignette stay (not motion); kill flicker.
+       The tetromino canvas draws a single static frame (handled in JS). */
+    #ambiente-fg { animation: none; }
+
+    /* Banners still appear (they convey info) but without the slide motion. */
+    .drama-banner { transition: opacity 0.2s ease; transform: none; }
+    .drama-banner.show { transform: none; }
+
+    /* No victory motion. */
+    .slot.slot-juice-pop,
+    .slot.slot-juice-champ { animation: none; }
+}

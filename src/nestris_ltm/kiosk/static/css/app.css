@@ -1,0 +1,551 @@
+/* ----------------------------------------------------------------------
+   TournamentHighscore styles.
+   Tailwind (via CDN) handles layout/utilities; this file holds the bracket
+   geometry, the score-train animation, the FLIP re-seed animation and a few
+   reusable component classes. The palette mirrors the reference tournament
+   bracket app: gray-900 background, gray-800 panels, gold accent.
+   ---------------------------------------------------------------------- */
+
+:root {
+    --bg: #111827;       /* gray-900 */
+    --panel: #1f2937;    /* gray-800 */
+    --panel2: #374151;   /* gray-700 */
+    --line: #374151;     /* gray-700 borders */
+    --line-hover: #4b5563;
+    --gold: #fbbf24;     /* gold-400 */
+    --gold-dark: #f59e0b;/* gold-500 */
+    --muted: #6b7280;    /* gray-500 */
+    /* Opacity of the tournament/highscore boxes. 1 = solid; lower lets the
+       background tetrominoes show through. Set on the public view via
+       view-controls.js from the admin TRANSPARENZ slider. */
+    --box-opacity: 1;
+}
+
+/* --- Icons (self-hosted Twemoji SVGs) -------------------------------- */
+/* Emoji are font glyphs and render as empty boxes on systems without a
+   colour-emoji font (e.g. the offline Raspberry Pi kiosk). We render them as
+   self-hosted SVG <img> instead so they look identical on every platform.
+   Sizing follows the surrounding font-size (height:1em) so the existing
+   font-size rules keep working unchanged. */
+.tw-icon {
+    height: 1em;
+    width: auto;
+    vertical-align: -0.15em;
+    display: inline-block;
+}
+
+/* --- Generic panels & buttons ---------------------------------------- */
+
+.panel {
+    /* var(--panel) #1f2937, alpha-driven so the background tetrominoes can show
+       through when the admin lowers the box opacity. */
+    background: rgba(31, 41, 55, var(--box-opacity, 1));
+    border: 1px solid var(--line);
+}
+
+.btn {
+    background: var(--panel2);
+    border: 1px solid var(--line);
+    color: #e5e7eb;
+    padding: 0.4rem 0.8rem;
+    border-radius: 0.375rem;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: filter 0.15s ease, transform 0.05s ease;
+}
+.btn:hover { filter: brightness(1.25); }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; filter: none; }
+.btn:disabled:active { transform: none; }
+
+/* A control group locked because the bracket is seeded (e.g. tournament size). */
+.is-locked { opacity: 0.45; cursor: not-allowed; }
+.is-locked input { cursor: not-allowed; }
+.btn-accent { background: var(--gold); color: #111827; border-color: var(--gold); font-weight: bold; }
+.btn-bad { background: rgba(220, 38, 38, 0.5); border-color: #dc2626; color: #fecaca; }
+/* Compact buttons for the tournament-size controls (+/- steppers and presets). */
+.btn-step { padding: 0.2rem 0.55rem; font-size: 0.95rem; line-height: 1; font-weight: bold; }
+.btn-preset { padding: 0.2rem 0.5rem; font-size: 0.7rem; min-width: 2rem; }
+
+/* --- Connection status dot -------------------------------------------- */
+
+.conn-dot {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+.conn-dot::before {
+    content: "";
+    width: 0.6rem;
+    height: 0.6rem;
+    border-radius: 9999px;
+    background: currentColor;
+    box-shadow: 0 0 8px currentColor;
+}
+.conn-up { color: #46e07a; }
+.conn-down { color: #ff5d6c; }
+
+/* --- Admin seed fixed/live status badge ------------------------------- */
+
+.seed-badge {
+    font-size: 0.7rem;
+    font-weight: bold;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.25rem 0.6rem;
+    border-radius: 9999px;
+    border: 1px solid currentColor;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.seed-badge.live { color: #4dd2ff; background: rgba(77, 210, 255, 0.12); }
+.seed-badge.is-fixed { color: #46e07a; background: rgba(70, 224, 122, 0.14); }
+
+/* Guaranteed hide utility (independent of the Tailwind CDN scan) so toggling
+   buttons by state always works. */
+.hidden { display: none !important; }
+
+/* Pulse the FIX button while the bracket is still live (not fixed). */
+.btn.is-active { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.6); animation: fix-pulse 1.8s ease-out infinite; }
+@keyframes fix-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.55); }
+    100% { box-shadow: 0 0 0 6px rgba(251, 191, 36, 0); }
+}
+
+/* --- Stats cards ------------------------------------------------------ */
+
+.stat-card {
+    /* var(--panel2) #374151, alpha-driven (see --box-opacity). */
+    background: rgba(55, 65, 81, var(--box-opacity, 1));
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+    padding: 0.4rem 0.25rem;
+}
+.stat-card .val { font-size: 1.05rem; color: var(--gold); line-height: 1.1; }
+.stat-card .lbl { font-size: 0.55rem; color: var(--muted); letter-spacing: 0.08em; }
+
+/* --- Score train ------------------------------------------------------ */
+
+.train-rail {
+    position: relative;
+    height: 1.4rem;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 9999px;
+    overflow: hidden;
+}
+.train-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    background: linear-gradient(90deg, var(--gold-dark), var(--gold));
+    transition: width 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+    box-shadow: 0 0 12px rgba(251, 191, 36, 0.5);
+}
+.train-loco {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 1rem;
+    transition: left 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+    filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.8));
+}
+
+/* --- Leaderboard rows ------------------------------------------------- */
+
+/* Admin-controlled zoom for the public list (1.0 = default). Set as a custom
+   property on #leaderboard by view-controls.js; rows scale their font from it. */
+#leaderboard { --lb-font-scale: 1; }
+
+.lb-row {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 0.25rem;
+    align-items: center;
+    /* Extra right padding keeps the right-aligned SCORE/LVL clear of the scrollbar. */
+    padding: 0.3rem 0.9rem 0.3rem 0.5rem;
+    border-radius: 0.375rem;
+    font-size: calc(0.8rem * var(--lb-font-scale, 1));
+    background: rgba(255, 255, 255, 0.02);
+}
+.lb-row .rank { color: var(--muted); }
+.lb-row.top1 { background: rgba(251, 191, 36, 0.16); }
+.lb-row.top1 .rank { color: var(--gold); }
+.lb-row.top2 { background: rgba(190, 200, 220, 0.12); }
+.lb-row.top3 { background: rgba(217, 119, 6, 0.16); }
+.lb-row .score { color: var(--gold); text-align: right; }
+
+/* Live indicator: pulsing green dot shown when a player's best game is an
+   in-progress run (playing right now and already beating their prior best). */
+.live-dot {
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    margin-right: 0.4rem;
+    border-radius: 9999px;
+    background: #22c55e;
+    box-shadow: 0 0 6px rgba(34, 197, 94, 0.9);
+    vertical-align: middle;
+    animation: live-pulse 1.4s ease-in-out infinite;
+}
+@keyframes live-pulse {
+    0%, 100% { box-shadow: 0 0 4px rgba(34, 197, 94, 0.7); opacity: 0.85; }
+    50%      { box-shadow: 0 0 10px rgba(34, 197, 94, 1); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .live-dot { animation: none; }
+}
+
+/* Disabled player: still listed in the highscore list but flagged as not
+   competing in the tournament (struck through + dimmed, with an OUT tag). */
+.lb-row.disabled { opacity: 0.5; }
+/* Keep the name readable — only the score is struck through; the OUT badge and
+   dimming already signal that the player is out of the tournament. */
+.lb-row.disabled .score { text-decoration: line-through; }
+.out-badge {
+    display: inline-block;
+    margin-right: 0.4rem;
+    padding: 0 0.3rem;
+    border-radius: 0.25rem;
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    vertical-align: middle;
+    color: #fca5a5;
+    background: rgba(220, 38, 38, 0.25);
+    border: 1px solid #dc2626;
+    text-decoration: none;
+}
+
+/* --- Bracket geometry (reference DOM: container -> round -> match -> slot) --- */
+
+.bracket-container {
+    display: flex;
+    gap: 1.25rem;
+    align-items: stretch;
+    overflow: auto;
+    padding: 0.5rem;
+}
+.round {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+    min-width: 160px;
+    flex: 1;
+}
+.round > h3 {
+    text-align: center;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 0.5rem;
+}
+.matches {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+    flex: 1;
+    gap: 0.5rem;
+}
+
+.match {
+    /* var(--panel) #1f2937, alpha-driven (see --box-opacity). */
+    background: rgba(31, 41, 55, var(--box-opacity, 1));
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+    overflow: hidden;
+    transition: border-color 0.2s;
+}
+.match:hover { border-color: var(--line-hover); }
+
+/* Padding matches beyond the tournament size N (set via the server `hidden`
+   flag) are hidden but KEEP their layout space so the surrounding bracket stays
+   aligned. In-size byes/TBD matches remain visible. */
+.match-hidden { visibility: hidden; }
+
+.slot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.85rem;
+    min-height: 2.2rem;
+    /* Re-seed motion is handled by flip.js clones in the overlay, not by an
+       in-place transform here (which would be clipped by the container). */
+}
+.slot .left { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
+.slot .seed {
+    color: var(--gold);
+    font-weight: bold;
+    font-size: 0.75rem;
+    width: 1.4rem;
+    text-align: center;
+    flex-shrink: 0;
+}
+.slot .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.slot .pts { color: var(--muted); font-size: 0.65rem; flex-shrink: 0; }
+
+/* The VS divider between the two slots of a match. */
+.vs {
+    text-align: center;
+    font-size: 0.6rem;
+    padding: 0.1rem;
+    background: rgba(0, 0, 0, 0.3);
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+/* States */
+.slot.auto-lost { color: var(--muted); text-decoration: line-through; opacity: 0.55; }
+.slot.auto-lost .seed { color: var(--muted); }
+.slot.winner { background: rgba(217, 119, 6, 0.3); border-left: 4px solid var(--gold-dark); }
+.slot.winner .name { color: var(--gold); }
+.slot.empty .name { color: #4b5563; font-style: italic; }
+
+/* Admin: clickable slots in REAL matches (only meaningful once seeded). */
+.bracket-container.admin .match.kind-REAL .slot.clickable { cursor: pointer; }
+.bracket-container.admin .match.kind-REAL .slot.clickable:hover {
+    background: rgba(251, 191, 36, 0.18);
+}
+.slot .clear-btn {
+    cursor: pointer;
+    color: #ff5d6c;
+    font-size: 0.9rem;
+    padding: 0 0.2rem;
+    flex-shrink: 0;
+}
+
+/* Third-place match label inside the podium column. */
+.podium .tpm-label {
+    text-align: center;
+    font-size: 0.55rem;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-top: 0.4rem;
+}
+
+/* Responsive bracket geometry: shrink columns/slots as the tree grows so a
+   32- or 64-slot bracket still fits the right 2/3 panel (capacity is set as a
+   data attribute by bracket-view.js). */
+.bracket-container[data-capacity="32"] .round,
+.bracket-container[data-capacity="64"] .round { min-width: 120px; }
+.bracket-container[data-capacity="32"] .slot,
+.bracket-container[data-capacity="64"] .slot {
+    font-size: 0.7rem;
+    min-height: 1.5rem;
+    padding: 0.2rem 0.4rem;
+}
+.bracket-container[data-capacity="32"] .matches,
+.bracket-container[data-capacity="64"] .matches { gap: 0.2rem; }
+.bracket-container[data-capacity="64"] .round { min-width: 104px; }
+
+/* ----------------------------------------------------------------------
+   Full-screen FLIP animation overlay (flip.js).
+   Player boxes fly here (cloned) so their motion is NOT clipped by the
+   bracket container's overflow.
+   ---------------------------------------------------------------------- */
+#flip-layer {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 60;
+    overflow: visible;
+}
+.flip-clone {
+    position: fixed;
+    margin: 0;
+    pointer-events: none;
+    will-change: transform, opacity;
+    box-sizing: border-box;
+}
+
+/* Podium / champion column */
+.podium {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.6rem;
+    min-width: 160px;
+}
+.podium .crown {
+    background: var(--panel);
+    border: 2px solid var(--line);
+    border-radius: 0.5rem;
+    padding: 0.6rem;
+    text-align: center;
+}
+.podium .crown.gold { border-color: var(--gold-dark); box-shadow: 0 0 16px rgba(251, 191, 36, 0.3); }
+.podium .crown.silver { border-color: #94a3b8; }
+.podium .crown.bronze { border-color: #d97706; }
+.podium .crown .place { font-size: 0.6rem; color: var(--muted); letter-spacing: 0.1em; }
+.podium .crown .icon { font-size: 1.4rem; }
+.podium .crown .who { font-size: 0.95rem; }
+.podium .crown.gold .who { color: var(--gold); }
+
+/* --- Admin player-management sidebar --------------------------------- */
+
+.player-card {
+    background: var(--panel2);
+    border-radius: 0.375rem;
+    padding: 0.5rem 0.65rem;
+    margin-bottom: 0.4rem;
+    transition: background-color 0.2s;
+}
+.player-card:hover { background: #4b5563; }
+.player-card.disabled { opacity: 0.45; }
+.player-card.disabled .pc-name { text-decoration: line-through; }
+.player-card .pc-rank { color: var(--gold); font-weight: bold; width: 2rem; }
+.player-card .pc-rank.out { color: var(--muted); }
+.player-card .pc-score { color: var(--muted); font-size: 0.75rem; }
+.player-card .pc-toggle {
+    cursor: pointer;
+    font-size: 0.6rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 9999px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    border: 1px solid var(--line);
+}
+.player-card .pc-toggle.on { background: rgba(220, 38, 38, 0.25); color: #fca5a5; border-color: #dc2626; }
+.player-card .pc-toggle.off { background: rgba(70, 224, 122, 0.18); color: #86efac; border-color: #16a34a; }
+
+/* Scrollbars (reference look) */
+.bracket-container::-webkit-scrollbar,
+#player-list::-webkit-scrollbar,
+#leaderboard::-webkit-scrollbar,
+.scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.bracket-container::-webkit-scrollbar-thumb,
+#player-list::-webkit-scrollbar-thumb,
+#leaderboard::-webkit-scrollbar-thumb,
+.scroll::-webkit-scrollbar-thumb { background: var(--line-hover); border-radius: 4px; }
+.bracket-container::-webkit-scrollbar-thumb:hover,
+#leaderboard::-webkit-scrollbar-thumb:hover,
+.scroll::-webkit-scrollbar-thumb:hover { background: var(--gold-dark); }
+.bracket-container::-webkit-scrollbar-track,
+#leaderboard::-webkit-scrollbar-track,
+.scroll::-webkit-scrollbar-track { background: var(--panel); border-radius: 4px; }
+/* Firefox */
+.scroll, #leaderboard, #player-list, .bracket-container {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-hover) var(--panel);
+}
+
+/* Toast */
+#toast.ok { background: #143524; color: #46e07a; border: 1px solid #46e07a; }
+#toast.err { background: #3a1a22; color: #ff9aa3; border: 1px solid #ff5d6c; }
+
+/* ----------------------------------------------------------------------
+   Tournament-finish celebration overlay (celebration.js).
+   Full-screen layer above everything: a canvas of confetti/rockets plus a
+   big centered winners' podium. pointer-events:none so it never blocks the
+   kiosk underneath. Hidden until the tournament is complete + enabled.
+   ---------------------------------------------------------------------- */
+#celebration-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    pointer-events: none;
+    overflow: hidden;
+    background: radial-gradient(ellipse at center,
+        rgba(17, 24, 39, 0.55) 0%, rgba(17, 24, 39, 0.82) 100%);
+}
+#celebration-layer.hidden { display: none !important; }
+.celebration-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+.celebration-podium {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2rem;
+}
+.celebration-podium .cp-title {
+    font-size: 2.2rem;
+    letter-spacing: 0.18em;
+    color: var(--gold);
+    text-shadow: 0 0 18px rgba(251, 191, 36, 0.7);
+    text-align: center;
+}
+.celebration-podium .cp-stage {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 1.5rem;
+}
+.cp-place {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 13rem;
+}
+.cp-place .cp-medal { font-size: 3rem; line-height: 1; }
+.cp-place .cp-crown {
+    font-size: 2.2rem;
+    line-height: 1;
+    animation: cp-bob 1.8s ease-in-out infinite;
+}
+.cp-place .cp-name {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #fff;
+    margin-top: 0.3rem;
+    text-align: center;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.cp-place .cp-score { font-size: 1rem; color: var(--muted); margin-bottom: 0.5rem; }
+.cp-place .cp-block {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.5rem 0.5rem 0 0;
+    border: 2px solid var(--line);
+    border-bottom: none;
+}
+.cp-place .cp-rank {
+    font-size: 3.5rem;
+    font-weight: bold;
+    color: rgba(255, 255, 255, 0.85);
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+/* Heights make the Stockerl shape: gold tallest in the middle. */
+.cp-gold .cp-block   { height: 13rem; background: linear-gradient(180deg, var(--gold), var(--gold-dark)); border-color: var(--gold); box-shadow: 0 0 40px rgba(251, 191, 36, 0.6); }
+.cp-silver .cp-block { height: 9rem;  background: linear-gradient(180deg, #cbd5e1, #94a3b8); border-color: #94a3b8; }
+.cp-bronze .cp-block { height: 6.5rem; background: linear-gradient(180deg, #e0a366, #d97706); border-color: #d97706; }
+.cp-gold .cp-name { color: var(--gold); font-size: 1.8rem; text-shadow: 0 0 12px rgba(251, 191, 36, 0.6); }
+.cp-gold .cp-medal { font-size: 3.6rem; }
+
+/* Entrance: the stage pops in with a slight bounce. */
+.celebration-podium.cp-enter .cp-stage { animation: cp-pop 0.7s cubic-bezier(0.2, 1.3, 0.4, 1) both; }
+.celebration-podium.cp-enter .cp-title { animation: cp-drop 0.6s ease-out both; }
+
+@keyframes cp-pop {
+    0%   { transform: scale(0.3); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+@keyframes cp-drop {
+    0%   { transform: translateY(-40px); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+}
+@keyframes cp-bob {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-8px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .celebration-podium.cp-enter .cp-stage,
+    .celebration-podium.cp-enter .cp-title,
+    .cp-place .cp-crown { animation: none; }
+}

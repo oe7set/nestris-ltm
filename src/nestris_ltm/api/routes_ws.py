@@ -1,30 +1,60 @@
-"""WebSocket feed of live station state.
+"""WebSocket feeds.
 
-``/ws/live`` sends ``{"type": "snapshot", "stations": [...]}`` on connect,
-then every hub message (``station``, ``live``, ``game_event``). Clients may
-send ``{"type": "ping"}`` and get ``{"type": "pong"}``.
+- ``/ws/live``  : station live state. A ``{"type": "snapshot", "stations": [...]}``
+  on connect, then every hub message (``station``, ``live``, ``game_event``).
+- ``/ws/kiosk`` : highscore + tournament in the TournamentHigscore protocol
+  (``{"type": ..., "data": ...}``, starting with ``init``).
+
+Clients may send ``{"type": "ping"}``; the answer is ``pong``.
 """
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
+from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from nestris_ltm.live.hub import LiveHub, Subscription
+from nestris_ltm.live.broadcast import Broadcaster, Subscription
 
 router = APIRouter()
 
 
 @router.websocket("/ws/live")
 async def live_feed(websocket: WebSocket) -> None:
-    hub: LiveHub = websocket.app.state.runtime.hub
+    hub = websocket.app.state.runtime.hub
+    await serve(websocket, hub, lambda: _live_init(hub), pong={"type": "pong"})
+
+
+@router.websocket("/ws/kiosk")
+async def kiosk_feed(websocket: WebSocket) -> None:
+    tournament = websocket.app.state.runtime.tournament
+
+    async def init() -> dict[str, Any]:
+        return {"type": "init", "data": await tournament.snapshot()}
+
+    await serve(websocket, tournament, init, pong={"type": "pong", "data": {}})
+
+
+async def _live_init(hub: Any) -> dict[str, Any]:
+    return {"type": "snapshot", "stations": hub.snapshot()}
+
+
+async def serve(
+    websocket: WebSocket,
+    source: Broadcaster,
+    initial: Any,
+    *,
+    pong: dict[str, Any],
+) -> None:
+    """Send ``initial()`` then every message of ``source`` until the client leaves."""
     await websocket.accept()
-    sub = hub.subscribe()
+    # Subscribe before building the snapshot so no update in between is lost.
+    sub = source.subscribe()
     try:
-        await websocket.send_json({"type": "snapshot", "stations": hub.snapshot()})
-        receiver = asyncio.create_task(_receive(websocket, sub))
+        await websocket.send_json(await initial())
+        receiver = asyncio.create_task(_receive(websocket, sub, pong))
         try:
             while not receiver.done():
                 getter = asyncio.create_task(sub.queue.get())
@@ -42,15 +72,13 @@ async def live_feed(websocket: WebSocket) -> None:
     except WebSocketDisconnect:
         pass
     finally:
-        hub.unsubscribe(sub)
+        source.unsubscribe(sub)
 
 
-async def _receive(websocket: WebSocket, sub: Subscription) -> None:
-    """Answer pings until the client disconnects.
-
-    Replies go through the subscription queue so only one task ever sends.
-    """
+async def _receive(websocket: WebSocket, sub: Subscription, pong: dict[str, Any]) -> None:
+    """Answer pings until the client disconnects (replies go through the queue,
+    so only one task ever sends)."""
     while True:
         message = await websocket.receive_json()
         if isinstance(message, dict) and message.get("type") == "ping":
-            sub.queue.put_nowait({"type": "pong"})
+            sub.queue.put_nowait(pong)

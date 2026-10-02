@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<!-- Ported from TournamentHigscore/templates (base.html + admin.html). -->
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NestrisLTM — Turnier</title>
+
+    <!-- Tailwind self-hosted (downloaded CDN build) so the kiosk works offline. -->
+    <script src="/kiosk/static/vendor/tailwind.js"></script>
+    <script>
+        // Theme aligned with the reference tournament bracket app: gray-900
+        // background, gray-800 panels, gold accent palette.
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        // Reference gray scale (Tailwind gray-700/800/900).
+                        ink: "#111827",      // page background (gray-900)
+                        panel: "#1f2937",    // panels / match boxes (gray-800)
+                        panel2: "#374151",   // borders / sidebar cards (gray-700)
+                        // Gold accent palette.
+                        gold: {
+                            100: "#fef3c7",
+                            200: "#fde68a",
+                            300: "#fcd34d",
+                            400: "#fbbf24",
+                            500: "#f59e0b",
+                            600: "#d97706",
+                        },
+                        accent: "#fbbf24",   // gold-400 (headings, ranks)
+                        accent2: "#4dd2ff",  // cyan (score train)
+                        good: "#46e07a",
+                        bad: "#ff5d6c",
+                        muted: "#6b7280",    // gray-500 (secondary text)
+                    },
+                    fontFamily: {
+                        mono: ['"Share Tech Mono"', "ui-monospace", "monospace"],
+                    },
+                },
+            },
+        };
+    </script>
+    <link rel="stylesheet" href="/kiosk/static/css/fonts.css">
+    <link rel="stylesheet" href="/kiosk/static/css/app.css">
+    <link rel="stylesheet" href="/kiosk/static/css/effects.css">
+</head>
+<body class="bg-ink text-gray-100 font-mono overflow-hidden">
+    
+<div class="h-screen w-screen flex overflow-hidden">
+
+    <!-- ============ LEFT: player management sidebar ============ -->
+    <aside class="w-80 flex-shrink-0 bg-panel border-r border-panel2 flex flex-col">
+        <div class="p-4 border-b border-panel2">
+            <h2 class="text-accent text-lg tracking-widest mb-1">PLAYERS</h2>
+            <p class="text-[11px] text-muted">
+                Disable a player to keep them out of the bracket. They still appear
+                on the public highscore list.
+            </p>
+        </div>
+        <div id="player-list" class="flex-1 overflow-y-auto p-3 scroll"></div>
+    </aside>
+
+    <!-- ============ RIGHT: controls + bracket ============ -->
+    <div class="flex-1 flex flex-col p-3 gap-3 min-w-0">
+
+        <!-- Single control bar: a mode toggle button + the active mode's controls,
+             all on ONE line. The toggle's label is the mode it switches TO. -->
+        <header class="panel rounded-lg p-3 flex items-center gap-4 flex-wrap">
+            <!-- Mode toggle: cycles TOURNAMENT -> VIEW HIGHSCORE -> EFFEKT; the
+                 label shows the mode currently active. -->
+            <button id="mode-toggle" class="btn btn-accent flex-shrink-0">TOURNAMENT</button>
+            <span id="conn-status" class="conn-dot conn-down text-xs flex-shrink-0">offline</span>
+
+            <div class="h-6 w-px bg-white/10 flex-shrink-0"></div>
+
+            <!-- ===== TOURNAMENT controls group ===== -->
+            <div id="admin-group" class="flex items-center gap-4 flex-wrap">
+                <!-- Seed fixed / live status -->
+                <span id="seed-status" class="seed-badge live">● LIVE — not fixed</span>
+
+                <!-- Seeding controls. FIX shows while live; UNSEED while fixed. -->
+                <button id="btn-fix" class="btn btn-accent flex-shrink-0">FIX / SEED</button>
+                <button id="btn-reset" class="btn flex-shrink-0">RESET WINNERS</button>
+                <button id="btn-unseed" class="btn btn-bad flex-shrink-0">UNSEED</button>
+
+                <div class="h-6 w-px bg-white/10 flex-shrink-0"></div>
+
+                <!-- Active count (N): slider + steppers + presets, all drive #active-count.
+                     Disabled (locked) once the bracket is seeded. -->
+                <div id="size-controls" class="text-xs text-muted flex items-center gap-2 flex-shrink-0">
+                    TOURNAMENT SIZE
+                    <button id="size-minus" class="btn btn-step" aria-label="Decrease size">−</button>
+                    <input id="active-count" type="range" min="2" max="64" value="16" class="w-40">
+                    <button id="size-plus" class="btn btn-step" aria-label="Increase size">+</button>
+                    <span id="active-count-val" class="text-accent2 w-7 text-center">16</span>
+                    <span class="flex items-center gap-1 ml-1">
+                        <button class="btn btn-preset" data-size="8">8</button>
+                        <button class="btn btn-preset" data-size="12">12</button>
+                        <button class="btn btn-preset" data-size="16">16</button>
+                        <button class="btn btn-preset" data-size="32">32</button>
+                        <button class="btn btn-preset" data-size="64">64</button>
+                    </span>
+                </div>
+            </div>
+
+            <!-- ===== VIEW HIGHSCORE controls group (highscore-list settings) ===== -->
+            <div id="view-group" class="flex items-center gap-4 flex-wrap hidden">
+                <!-- Font/zoom size of the public list. -->
+                <div class="text-xs text-muted flex items-center gap-2 flex-shrink-0">
+                    SIZE
+                    <button id="font-minus" class="btn btn-step" aria-label="Smaller text">−</button>
+                    <input id="font-scale" type="range" min="0.6" max="2.5" step="0.1" value="1" class="w-40">
+                    <button id="font-plus" class="btn btn-step" aria-label="Larger text">+</button>
+                    <span id="font-scale-val" class="text-accent2 w-10 text-center">1.0×</span>
+                </div>
+
+                <div class="h-6 w-px bg-white/10 flex-shrink-0"></div>
+
+                <!-- Auto-scroll toggle. -->
+                <button id="btn-autoscroll" class="btn flex-shrink-0">AUTOSCROLL: OFF</button>
+
+                <div class="h-6 w-px bg-white/10 flex-shrink-0"></div>
+
+                <!-- One-shot scroll position. -->
+                <div class="text-xs text-muted flex items-center gap-2 flex-shrink-0">
+                    SCROLL
+                    <button id="scroll-top" class="btn btn-preset">TOP</button>
+                    <input id="scroll-pos" type="range" min="0" max="100" value="0" class="w-40">
+                    <button id="scroll-bottom" class="btn btn-preset">BOTTOM</button>
+                </div>
+            </div>
+
+            <!-- ===== EFFEKT controls group (visual effects + celebration) ===== -->
+            <div id="effects-group" class="flex items-center gap-4 flex-wrap hidden">
+                <!-- Celebration effect toggle (shown on the view when complete). -->
+                <button id="btn-celebration" class="btn flex-shrink-0"><img class="tw-icon" src="/kiosk/static/icons/party.svg" alt=""> <span class="lbl">CELEBRATION: ON</span></button>
+
+                <!-- Visual effects toggle (CRT ambiente + bracket victory bursts). -->
+                <button id="btn-effects" class="btn flex-shrink-0"><img class="tw-icon" src="/kiosk/static/icons/sparkles.svg" alt=""> <span class="lbl">EFFEKTE: ON</span></button>
+
+                <!-- Live-drama banners toggle (independent of EFFEKTE). -->
+                <button id="btn-banners" class="btn flex-shrink-0"><img class="tw-icon" src="/kiosk/static/icons/speech.svg" alt=""> <span class="lbl">MELDUNGEN: ON</span></button>
+
+                <div class="h-6 w-px bg-white/10 flex-shrink-0"></div>
+
+                <!-- Box transparency (lets the background tetrominoes show through). -->
+                <div class="text-xs text-muted flex items-center gap-2 flex-shrink-0">
+                    TRANSPARENZ
+                    <input id="box-opacity" type="range" min="0" max="75" step="5" value="0" class="w-40">
+                    <span id="box-opacity-val" class="text-accent2 w-10 text-center">0%</span>
+                </div>
+            </div>
+
+            <span id="bracket-meta" class="text-xs text-muted ml-auto"></span>
+        </header>
+
+        <div id="toast" class="hidden fixed top-4 right-4 z-50 px-4 py-2 rounded text-sm"></div>
+
+        <!-- Bracket (editable once seeded). -->
+        <main class="panel rounded-lg p-3 flex-1 min-h-0 flex flex-col">
+            <p class="text-xs text-muted mb-2">
+                While in auto-fill the bracket follows the live highscore. Press FIX to lock
+                the line-up, then click a player in a contested match to mark them the winner.
+                Greyed players are auto-lost; byes/no-contest matches are hidden.
+            </p>
+            <div id="bracket" class="bracket-container admin flex-1"></div>
+        </main>
+    </div>
+</div>
+
+    <!-- Full-viewport overlay where flip.js animates player boxes (clones). -->
+    <div id="flip-layer"></div>
+    
+<script src="/kiosk/static/js/ws.js"></script>
+<script src="/kiosk/static/js/flip.js"></script>
+<script src="/kiosk/static/js/bracket-view.js"></script>
+<script src="/kiosk/static/js/admin.js"></script>
+
+<script>
+    // Inside the NestrisLTM admin UI this page is embedded as an iframe; when
+    // opened without a session, send the user to the login.
+    fetch("/api/auth/me").then((r) => r.json()).then((me) => {
+        if (!me.authenticated) location.href = "/#/tournament";
+    }).catch(() => {});
+</script>
+
+</body>
+</html>

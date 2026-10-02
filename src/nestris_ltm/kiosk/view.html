@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<!-- Ported from TournamentHigscore/templates (base.html + view.html). -->
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NestrisLTM — Highscore</title>
+
+    <!-- Tailwind self-hosted (downloaded CDN build) so the kiosk works offline. -->
+    <script src="/kiosk/static/vendor/tailwind.js"></script>
+    <script>
+        // Theme aligned with the reference tournament bracket app: gray-900
+        // background, gray-800 panels, gold accent palette.
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        // Reference gray scale (Tailwind gray-700/800/900).
+                        ink: "#111827",      // page background (gray-900)
+                        panel: "#1f2937",    // panels / match boxes (gray-800)
+                        panel2: "#374151",   // borders / sidebar cards (gray-700)
+                        // Gold accent palette.
+                        gold: {
+                            100: "#fef3c7",
+                            200: "#fde68a",
+                            300: "#fcd34d",
+                            400: "#fbbf24",
+                            500: "#f59e0b",
+                            600: "#d97706",
+                        },
+                        accent: "#fbbf24",   // gold-400 (headings, ranks)
+                        accent2: "#4dd2ff",  // cyan (score train)
+                        good: "#46e07a",
+                        bad: "#ff5d6c",
+                        muted: "#6b7280",    // gray-500 (secondary text)
+                    },
+                    fontFamily: {
+                        mono: ['"Share Tech Mono"', "ui-monospace", "monospace"],
+                    },
+                },
+            },
+        };
+    </script>
+    <link rel="stylesheet" href="/kiosk/static/css/fonts.css">
+    <link rel="stylesheet" href="/kiosk/static/css/app.css">
+    <link rel="stylesheet" href="/kiosk/static/css/effects.css">
+    <style>
+        /* URL options for OBS / extra screens:
+           ?only=highscore | ?only=bracket   show a single column, full width
+           ?transparent=1                     transparent page background */
+        body.only-highscore main { display: none; }
+        body.only-highscore aside { grid-column: span 3 / span 3; }
+        body.only-bracket aside { display: none; }
+        body.only-bracket main { grid-column: span 3 / span 3; }
+        body.transparent, body.transparent .bg-ink { background: transparent !important; }
+    </style>
+</head>
+<body class="bg-ink text-gray-100 font-mono overflow-hidden">
+    <script>
+    (function () {
+        const q = new URLSearchParams(location.search);
+        const only = q.get("only");
+        if (only === "highscore" || only === "bracket") document.body.classList.add("only-" + only);
+        if (q.get("transparent") === "1") document.body.classList.add("transparent");
+    })();
+</script>
+
+<!-- Full-screen 16:9 kiosk layout: left 1/3 highscore, right 2/3 bracket. -->
+<div class="h-screen w-screen grid grid-cols-3 gap-3 p-3">
+
+    <!-- ============ LEFT 1/3: highscore, stats, score train ============ -->
+    <aside class="col-span-1 flex flex-col gap-3 min-h-0">
+
+        <!-- Connection status -->
+        <div class="flex items-center justify-between gap-2 text-xs text-muted">
+            <span class="text-accent text-sm tracking-wide truncate">RETROVERSE TETRIS HIGHSCORES</span>
+            <span id="conn-status" class="conn-dot conn-down flex-shrink-0">offline</span>
+        </div>
+
+        <!-- Aggregate stats -->
+        <section id="stats-grid" class="grid grid-cols-3 gap-2 text-center"></section>
+
+        <!-- Score train -->
+        <section class="panel rounded-lg p-3">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-xs text-muted tracking-widest">SCORE TRAIN</span>
+                <span id="train-total" class="text-accent2 text-lg">0</span>
+            </div>
+            <div id="train-bar" class="train-rail">
+                <div id="train-fill" class="train-fill" style="width:0%"></div>
+                <div id="train-loco" class="train-loco"><img class="tw-icon" src="/kiosk/static/icons/train.svg" alt=""></div>
+            </div>
+            <div class="flex items-center justify-between mt-1 text-[10px] text-muted">
+                <span id="train-current">0</span>
+                <span id="train-next">—</span>
+            </div>
+        </section>
+
+        <!-- Highscore list (scrolls if it overflows) -->
+        <section class="panel rounded-lg p-2 flex-1 min-h-0 overflow-hidden flex flex-col">
+            <div class="grid grid-cols-12 gap-1 text-[10px] text-muted pl-2 pr-[0.9rem] pb-1 border-b border-white/10">
+                <span class="col-span-1">#</span>
+                <span class="col-span-6">PLAYER</span>
+                <span class="col-span-3 text-right">SCORE</span>
+                <span class="col-span-2 text-right">LVL</span>
+            </div>
+            <ol id="leaderboard" class="scroll flex-1 overflow-y-auto mt-1 space-y-0.5"></ol>
+        </section>
+    </aside>
+
+    <!-- ============ RIGHT 2/3: tournament bracket ============ -->
+    <main class="col-span-2 panel rounded-lg p-3 min-h-0 flex flex-col">
+        <div class="flex items-center justify-between mb-2">
+            <span class="text-accent text-base tracking-widest">RETROVERSE TETRIS TOURNAMENT</span>
+            <span id="bracket-meta" class="text-xs text-muted"></span>
+        </div>
+        <div id="bracket" class="bracket-container flex-1"></div>
+    </main>
+</div>
+
+    <!-- Full-viewport overlay where flip.js animates player boxes (clones). -->
+    <div id="flip-layer"></div>
+    
+<script src="/kiosk/static/js/ws.js"></script>
+<script src="/kiosk/static/js/flip.js"></script>
+<script src="/kiosk/static/js/leaderboard.js"></script>
+<script src="/kiosk/static/js/score-train.js"></script>
+<script src="/kiosk/static/js/bracket-view.js"></script>
+<script src="/kiosk/static/js/view-controls.js"></script>
+<script src="/kiosk/static/js/celebration.js"></script>
+<!-- "Wow" effects: CRT/tetromino ambiente, live-drama banners, bracket juice. -->
+<script src="/kiosk/static/js/ambiente.js"></script>
+<script src="/kiosk/static/js/drama.js"></script>
+<script src="/kiosk/static/js/bracket-juice.js"></script>
+<script>
+    // Highscore list animates its row reorder in place.
+    function renderLeaderboardAnimated(entries) {
+        const list = document.getElementById("leaderboard");
+        window.Flip.animatedList(list, () => renderLeaderboard(entries));
+    }
+
+    // Keep the leaderboard's "disabled" markers in sync with the bracket state.
+    // The bracket carries disabled_user_ids; re-render the list when it changes.
+    function syncDisabled(bracket) {
+        if (!bracket) return;
+        if (setDisabledIds(bracket.disabled_user_ids)) {
+            renderLeaderboardAnimated(window.__lastLeaderboard || []);
+        }
+    }
+
+    // Celebration: re-evaluated whenever the bracket OR the enabled flag changes.
+    // It shows only when the tournament is complete AND the admin has it enabled.
+    let __lastBracket = null;
+    let __celebrationEnabled = true;
+    function evalCelebration() {
+        window.Celebration.evaluate(__lastBracket, __celebrationEnabled);
+    }
+
+    // Admin on/off switches carried on the view_settings message (default on):
+    //   effects_enabled -> CRT/tetromino ambiente + bracket victory bursts
+    //   banners_enabled -> live-drama banners (independent of the above)
+    // The tournament-finish celebration is controlled separately.
+    function applyEffectsSettings(viewSettings) {
+        const s = viewSettings || {};
+        const effectsOn = s.effects_enabled !== false;
+        const bannersOn = s.banners_enabled !== false;
+        window.Ambiente.setEnabled(effectsOn);
+        window.BracketJuice.setEnabled(effectsOn);
+        window.Drama.setEnabled(bannersOn);
+    }
+
+    // Wire the shared WebSocket to the view renderers.
+    const ws = new KioskSocket();
+    ws.on("init", (d) => {
+        window.__lastLeaderboard = d.leaderboard || [];
+        __lastBracket = d.bracket;
+        __celebrationEnabled = (d.celebration || {}).enabled !== false;
+        setDisabledIds((d.bracket || {}).disabled_user_ids);
+        renderLeaderboard(d.leaderboard);
+        renderStats(d.stats);
+        renderTrain(d.train);
+        renderBracket(d.bracket);
+        window.ViewControls.applyViewSettings(d.view_settings);
+        // Seed the wow-effect baselines from the snapshot (NEVER fires a banner
+        // or burst — so a connect/reconnect re-init can't false-trigger).
+        window.Drama.observeInit(d);
+        window.BracketJuice.observeInit(d.bracket);
+        applyEffectsSettings(d.view_settings);
+        evalCelebration();
+    });
+    ws.on("leaderboard_update", (lb) => {
+        window.__lastLeaderboard = lb || [];
+        renderLeaderboardAnimated(lb);
+        window.Drama.observeLeaderboard(lb);
+    });
+    ws.on("stats_update", (s) => { renderStats(s); window.Drama.observeStats(s); });
+    ws.on("train_update", (t) => { renderTrain(t); window.Drama.observeTrain(t); });
+    ws.on("bracket_update", (b) => {
+        // Detect newly-decided matches against the PREVIOUS bracket before the
+        // re-render, then fire the victory juice once the FLIP flight settles.
+        const newly = window.BracketJuice.diffAndSchedule(__lastBracket, b);
+        const wasComplete = __lastBracket && window.BracketJuice.isComplete(__lastBracket);
+        __lastBracket = b;
+        renderBracket(b);
+        syncDisabled(b);
+        // Defer the celebration podium when the tournament FIRST becomes complete,
+        // so the champion flourish plays into it (Celebration.show is idempotent,
+        // so a later immediate call is harmless). The champion slot gets the big
+        // flourish whenever the final match is newly decided, even if the 3rd-
+        // place match is settled afterwards.
+        const justCompleted =
+            __celebrationEnabled && !wasComplete && window.BracketJuice.isComplete(b);
+        if (justCompleted) {
+            window.BracketJuice.fireAfterFlip(newly, true, evalCelebration);
+        } else {
+            window.BracketJuice.fireAfterFlip(newly, newly.champion, null);
+            evalCelebration();
+        }
+    });
+    // Remote control of the public list from the admin panel.
+    ws.on("view_settings", (s) => {
+        window.ViewControls.applyViewSettings(s);
+        applyEffectsSettings(s);
+    });
+    ws.on("view_scroll", (d) => window.ViewControls.scrollViewTo(d.position));
+    ws.on("celebration", (s) => {
+        __celebrationEnabled = !!s.enabled;
+        evalCelebration();
+    });
+    ws.onStatus((ok) => setConnStatus(ok));
+    ws.connect();
+</script>
+
+</body>
+</html>

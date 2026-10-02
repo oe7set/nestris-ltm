@@ -20,6 +20,7 @@ from nestris_ltm.api import (
     routes_health,
     routes_pages,
     routes_players,
+    routes_tournament,
     routes_ws,
 )
 from nestris_ltm.db.manager import DatabaseUnavailableError
@@ -57,12 +58,20 @@ def create_app(runtime: Runtime) -> FastAPI:
         routes_players,
         routes_games,
         routes_events,
+        routes_tournament,
         routes_diagnostics,
         routes_ws,
         routes_pages,
     ):
         app.include_router(module.router)
     # Hashed bundle files of the admin UI (``pnpm build``); absent in a bare checkout.
+    # Kiosk assets ported from TournamentHigscore (JS effects, CSS, fonts, icons).
+    app.include_router(routes_tournament.pages)
+    app.mount(
+        "/kiosk/static",
+        StaticFiles(directory=routes_tournament.kiosk_dir() / "static"),
+        name="kiosk-static",
+    )
     app.mount(
         "/assets",
         StaticFiles(directory=routes_pages.admin_dist() / "assets", check_dir=False),

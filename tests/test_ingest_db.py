@@ -15,7 +15,8 @@ from nestris_ltm.ingest import service as ingest_service
 from nestris_ltm.ingest.frame_buffer import FrameBuffer
 from nestris_ltm.ingest.service import IngestService
 from nestris_ltm.ingest.spool import EventSpool
-from nestris_ltm.live.hub import LiveHub, Subscription
+from nestris_ltm.live.broadcast import Subscription
+from nestris_ltm.live.hub import LiveHub
 from nestris_ltm.services import games
 from nestris_ltm.services.players import resolve_card
 from tests.payload_samples import CHEAT, GAME_END, GAME_START, LIVE, STATUS, dumps

@@ -87,7 +87,10 @@ scene, so every layout shows identical values.
 3. **Qt shell**: tray, window, close-to-tray, single instance, autostart. ✅
 4. **Admin SPA**: login, dashboard/diagnostics, players, games, events,
    stations, hiding, audit, settings (admins, API tokens), overview page. ✅
-5. **Highscore and tournament**: port of TournamentHigscore logic and views.
+5. **Highscore and tournament**: bracket logic and tests ported 1:1
+   (`core/bracket.py`), kiosk assets copied unchanged (`kiosk/static`), same
+   WebSocket protocol on `/ws/kiosk`, data from the active event incl. live
+   games, console embedded in the admin UI. ✅
 6. **Overlays**: UI components, scenes, rounds, layouts.
 7. **Recordings and replay**: NGF upload endpoint, `nestris-station`
    uploader, replay in admin and as overlay source.

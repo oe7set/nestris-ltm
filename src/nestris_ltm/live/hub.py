@@ -8,14 +8,14 @@ messages rather than slowing down the ingest.
 
 from __future__ import annotations
 
-import asyncio
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
 
 from nestris_ltm.ingest.payloads import LivePayload, PlayerPayload, StatusPayload
+from nestris_ltm.live.broadcast import Broadcaster
 
 log = structlog.get_logger(__name__)
 
@@ -25,8 +25,6 @@ STALE_AFTER = timedelta(seconds=35)
 # Live data this recent proves the station is up, whatever the last status said
 # (e.g. a stale "offline" last will after a client-id takeover).
 LIVE_PROVES_ONLINE = timedelta(seconds=5)
-# 8 stations x 60 Hz = 480 messages/s; this absorbs about 4 s of client lag.
-SUBSCRIBER_QUEUE_SIZE = 2048
 
 
 def _now() -> datetime:
@@ -83,18 +81,10 @@ def _iso(value: datetime | None) -> str | None:
     return value.isoformat() if value else None
 
 
-@dataclass(eq=False)
-class Subscription:
-    queue: asyncio.Queue[dict[str, Any]] = field(
-        default_factory=lambda: asyncio.Queue(SUBSCRIBER_QUEUE_SIZE)
-    )
-    dropped: int = 0
-
-
-class LiveHub:
+class LiveHub(Broadcaster):
     def __init__(self) -> None:
+        super().__init__()
         self._stations: dict[str, StationState] = {}
-        self._subscribers: set[Subscription] = set()
 
     # ------------------------------------------------------------ state
 
@@ -156,27 +146,6 @@ class LiveHub:
     def snapshot(self) -> list[dict[str, Any]]:
         now = _now()
         return [s.snapshot(now) for s in self.stations()]
-
-    # ------------------------------------------------------------ pub/sub
-
-    def subscribe(self) -> Subscription:
-        sub = Subscription()
-        self._subscribers.add(sub)
-        return sub
-
-    def unsubscribe(self, sub: Subscription) -> None:
-        self._subscribers.discard(sub)
-
-    @property
-    def subscriber_count(self) -> int:
-        return len(self._subscribers)
-
-    def publish(self, message: dict[str, Any]) -> None:
-        for sub in self._subscribers:
-            try:
-                sub.queue.put_nowait(message)
-            except asyncio.QueueFull:
-                sub.dropped += 1
 
     def _publish_station(self, state: StationState) -> None:
         self.publish({"type": "station", "station": state.id, "data": state.snapshot()})

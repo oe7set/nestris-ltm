@@ -19,6 +19,7 @@ export const routes: RouteDef[] = [
   { name: "game-new", pattern: "/games/new" },
   { name: "game", pattern: "/games/:id" },
   { name: "events", pattern: "/events" },
+  { name: "tournament", pattern: "/tournament" },
   { name: "stations", pattern: "/stations" },
   { name: "audit", pattern: "/audit" },
   { name: "settings", pattern: "/settings" },

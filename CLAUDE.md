@@ -62,3 +62,9 @@ pnpm check; pnpm test; pnpm dev:admin          # svelte-check, vitest, Vite dev 
 - Every admin route depends on `AdminDep`; every write records an audit entry
   (`services/audit.py`). New pages/views are registered in `pages.py` so the
   overview page lists them.
+- `kiosk/static` is ported verbatim from TournamentHigscore (only URLs were
+  rewritten to `/kiosk/static/...`, `/ws/kiosk`, `/api/tournament/...`). Keep
+  it close to the original; the server side (`services/tournament.py`) speaks
+  the original WebSocket protocol (`init`, `*_update`, `view_settings`, ...).
+- `core/bracket.py` holds the verbatim `derive_bracket` port plus the pure
+  `BracketState`; `tests/test_bracket.py` is the original test suite.

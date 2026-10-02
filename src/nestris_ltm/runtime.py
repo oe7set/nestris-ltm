@@ -24,6 +24,7 @@ from nestris_ltm.ingest.mqtt_client import MqttIngest
 from nestris_ltm.ingest.service import IngestService
 from nestris_ltm.ingest.spool import EventSpool
 from nestris_ltm.live.hub import LiveHub
+from nestris_ltm.services.tournament import TournamentService
 
 log = structlog.get_logger(__name__)
 
@@ -49,6 +50,7 @@ class Runtime:
         self.frames = FrameBuffer(self.db)
         self.ingest = IngestService(self.db, self.hub, self.frames, self.spool)
         self.mqtt = MqttIngest(settings.mqtt, self.ingest)
+        self.tournament = TournamentService(self.db, self.hub)
         # Sent by the Qt shell's embedded browser; grants an admin session
         # without a login (the shell runs on the host itself).
         self.shell_token = secrets.token_urlsafe(32)
@@ -84,6 +86,7 @@ class Runtime:
         self.spawn(self.ingest.run_station_sync(), name="station-sync")
         self.spawn(self.ingest.run_sweeper(), name="sweeper")
         self.spawn(self.frames.run(), name="frame-buffer")
+        self.spawn(self.tournament.run(), name="kiosk")
 
     async def stop(self) -> None:
         for task in list(self._tasks):
