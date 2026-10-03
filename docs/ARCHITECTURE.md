@@ -110,3 +110,6 @@ scene, so every layout shows identical values.
    installer that installs or reuses PostgreSQL and Mosquitto (pinned,
    SHA-256 checked downloads), firewall rules, GitHub CI and release
    workflows, [OPERATIONS.md](OPERATIONS.md). ✅
+10. **Updates** (planned): check GitHub releases of `oe7set/*` automatically,
+   install on click, for NestrisLTM, the terminal, the stations and the
+   reader firmware: [UPDATES.md](UPDATES.md).
