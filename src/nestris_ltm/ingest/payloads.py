@@ -41,7 +41,10 @@ class StatusPayload(_Payload):
     capture_detail: str | None = None
     lock: str | None = None
     game_state: str | None = None
+    # ok / offline / outdated (reader firmware with another protocol) / disabled
     rfid: str | None = None
+    reader_fw: str | None = None
+    reader_serial: str | None = None
     game_id: str | None = None
     fps: float | None = None
     dropped_frames: int | None = None

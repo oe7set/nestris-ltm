@@ -95,6 +95,13 @@ uv run nestris-ltm simulate ..\0QR5AJ2RRDPNMZK5FT53K.ngf ..\YXHGT4GXCYMCTDW912MN
 | `GET /api/diagnostics/logs?after_id=0&level=INFO` | recent log records |
 | `WS /ws/live` | snapshot of all stations, then `station`, `live`, `game_event` messages |
 
+**Card readers at the stations:** when a player places a card, NestrisLTM
+sends the station's reader a `show` command (reader protocol v2,
+`../nestris-rfid-reader/docs/PROTOCOL.md`) with the nickname and the
+player's place and best score in the active event, e.g. *Erv / Platz 3 ·
+159.867* (`services/reader_display.py`). The dashboard shows each station's
+reader state (`outdated` = old reader firmware) and firmware version.
+
 ## Highscore and tournament
 
 - `http://<host>:7990/view/highscore` is the full-screen display ported from

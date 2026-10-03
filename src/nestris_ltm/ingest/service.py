@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -36,7 +37,7 @@ from nestris_ltm.ingest.payloads import (
 )
 from nestris_ltm.ingest.spool import EventSpool, SpooledEvent
 from nestris_ltm.live.hub import LiveHub
-from nestris_ltm.services import games, players
+from nestris_ltm.services import games, highscore, players, reader_display
 
 log = structlog.get_logger(__name__)
 
@@ -91,6 +92,8 @@ class IngestService:
         self._attempts: dict[str, int] = {}
         self._dirty_stations: set[str] = set()
         self._background: set[asyncio.Task[Any]] = set()
+        # Sends a command to a station (<prefix>/<station>/cmd); set by the runtime.
+        self.command_sink: Callable[[str, dict[str, Any]], Awaitable[bool]] | None = None
 
     # ------------------------------------------------------------ MQTT side
 
@@ -141,6 +144,22 @@ class IngestService:
             log.debug("card lookup failed", error=repr(exc))
             nickname = card.name
         self.hub.set_player_nickname(station, nickname)
+        await self._greet_on_reader(station, card.uid, card.name)
+
+    async def _greet_on_reader(self, station: str, uid: str, name: str | None) -> None:
+        """Nickname and standing on the station's card reader (protocol v2 ``show``)."""
+        sink = self.command_sink
+        if sink is None or not self.db.is_ready:
+            return
+        try:
+            async with self.db.session() as session:
+                live = highscore.live_values_from_hub(self.hub.stations())
+                lines = await reader_display.card_greeting(session, uid, name, live)
+        except Exception as exc:
+            log.debug("reader greeting failed", error=repr(exc))
+            return
+        if lines:
+            await sink(station, {"type": "show", "uid": uid, "lines": lines})
 
     # ------------------------------------------------------------ event worker
 

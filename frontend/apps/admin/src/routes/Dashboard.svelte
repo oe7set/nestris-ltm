@@ -148,7 +148,10 @@
             {s.online ? (s.stale ? t("dash.stale") : t("dash.online")) : t("dash.offline")}
           </td>
           <td>{String(st.capture ?? "–")}</td>
-          <td>{String(st.rfid ?? "–")}</td>
+          <td>
+            <span class:warn-text={st.rfid === "outdated"}>{String(st.rfid ?? "–")}</span>
+            {#if st.reader_fw}<span class="muted small">fw {String(st.reader_fw)}</span>{/if}
+          </td>
           <td>
             {s.player_nickname ?? s.card?.name ?? (s.card_present ? t("dash.blank_card") : t("dash.no_card"))}
           </td>
@@ -190,6 +193,10 @@
 </div>
 
 <style>
+  .warn-text {
+    color: var(--warn);
+    font-weight: 600;
+  }
   .big {
     font-size: 18px;
     font-weight: 600;

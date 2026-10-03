@@ -51,6 +51,7 @@ class Runtime:
         self.frames = FrameBuffer(self.db)
         self.ingest = IngestService(self.db, self.hub, self.frames, self.spool)
         self.mqtt = MqttIngest(settings.mqtt, self.ingest)
+        self.ingest.command_sink = self.mqtt.publish_command
         self.tournament = TournamentService(self.db, self.hub)
         self.scenes = SceneEngine(self.db, self.hub)
         # Sent by the Qt shell's embedded browser; grants an admin session
