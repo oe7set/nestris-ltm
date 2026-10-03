@@ -1,7 +1,8 @@
 """Start with Windows: the per-user ``Run`` registry key.
 
 The entry starts NestrisLTM minimized to the tray. In a PyInstaller build
-the executable itself is registered; in development ``pythonw -m
+the GUI executable (``NestrisLTM.exe``, also when called from the console CLI
+``nestris-ltm.exe`` next to it) is registered; in development ``pythonw -m
 nestris_ltm`` is used so no console window appears.
 """
 
@@ -12,6 +13,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+GUI_EXE = "NestrisLTM.exe"
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 VALUE_NAME = "NestrisLTM"
 
@@ -22,7 +24,8 @@ def is_supported() -> bool:
 
 def launch_command(config: Path | None = None) -> str:
     if getattr(sys, "frozen", False):
-        args = [sys.executable]
+        gui = Path(sys.executable).with_name(GUI_EXE)
+        args = [str(gui if gui.exists() else sys.executable)]
     else:
         python = Path(sys.executable)
         pythonw = python.with_name("pythonw.exe")

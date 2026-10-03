@@ -28,7 +28,17 @@ uv run nestris-ltm simulate ..\*.ngf --stations station-1,station-2 --names "A,B
 uv run alembic revision --autogenerate -m "..."  # new migration (reads app config)
 cd frontend; pnpm install; pnpm build          # admin UI -> src/nestris_ltm/web/admin (git-ignored)
 pnpm check; pnpm test; pnpm dev:admin          # svelte-check, vitest, Vite dev server on :5173
+uv run nestris-ltm check                       # database / broker / port check (installer uses it)
+powershell -ExecutionPolicy Bypass -File packaging\build.ps1   # UI + PyInstaller + installer
 ```
+
+Packaging: `packaging/nestris-ltm.spec` (one folder, `NestrisLTM.exe` GUI +
+`nestris-ltm.exe` console CLI; data dirs `web`, `kiosk`, `api/pages` and
+`db/migrations` are shipped as files because they are read via
+`importlib.resources`/Alembic, so a new resource directory must be added
+there). `packaging/installer.iss` pins the PostgreSQL/Mosquitto download URLs
+and SHA-256 hashes. Releases: tag `v<version>` → `.github/workflows/release.yml`.
+Operations guide: `docs/OPERATIONS.md`.
 
 ## Conventions
 

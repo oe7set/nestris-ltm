@@ -14,10 +14,16 @@ Retroverse Classic Tetris tournament. It runs on the host PC and:
 
 It replaces the old `NestrisLTM/` desktop app and `TournamentHigscore/`.
 
-> Status: phase 7 (recordings: station upload, replay in the admin UI and
-> as an OBS layout, NGF import/download). See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-> for the design and the roadmap. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full
-> design and the roadmap.
+> Status: feature-complete for the first event (phases 1–9). Design and
+> roadmap: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). **Installing and
+> running it at an event: [docs/OPERATIONS.md](docs/OPERATIONS.md).**
+
+## Install (Windows)
+
+Download `NestrisLTM-Setup-<version>.exe` from the GitHub releases and run
+it. It installs or reuses PostgreSQL and Mosquitto, sets up the firewall and
+autostart, writes the database connection and checks everything at the end.
+Details: [docs/OPERATIONS.md](docs/OPERATIONS.md).
 
 ## Requirements
 
@@ -169,6 +175,11 @@ example `NESTRIS_LTM__DATABASE__PASSWORD`. See
 [config.example.toml](config.example.toml) for every key.
 
 ## Development
+
+Releases: bump `version` in `pyproject.toml`, push a tag `v<version>`;
+`.github/workflows/release.yml` builds the installer on Windows and publishes
+it. CI (`ci.yml`) runs lint, mypy, all tests (incl. database tests) and the
+frontend checks on every push. Local build: `packaging\build.ps1`.
 
 ```powershell
 uv run pytest                          # unit tests

@@ -4,6 +4,9 @@ nestris-ltm                 run with the tray/GUI shell (default)
 nestris-ltm --headless      run the core without any GUI
 nestris-ltm migrate         create/upgrade the database and exit
 nestris-ltm config-path     print the config file location
+nestris-ltm configure ...   change settings in config.toml (used by the installer)
+nestris-ltm check           check database, MQTT broker and HTTP port
+nestris-ltm autostart on|off|status
 """
 
 from __future__ import annotations
@@ -14,7 +17,7 @@ from pathlib import Path
 
 import structlog
 
-from nestris_ltm import __version__
+from nestris_ltm import __version__, setup_cli
 from nestris_ltm.config import Settings, default_config_path, load_settings
 from nestris_ltm.logging_setup import configure_logging
 from nestris_ltm.runtime import run_async
@@ -42,6 +45,7 @@ def _parser() -> argparse.ArgumentParser:
         "set-admin-password", help="create an admin account or reset its password (asks for it)"
     )
     admin.add_argument("username")
+    setup_cli.add_parsers(sub)
     sim = sub.add_parser("simulate", help="replay NGF recordings as MQTT stations")
     sim.add_argument("files", nargs="+", type=Path, help=".ngf / .ngf.gz recordings")
     sim.add_argument(
@@ -140,6 +144,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "config-path":
         print(args.config)
         return 0
+    if args.command == "configure":
+        return setup_cli.configure(args)
+    if args.command == "check":
+        return setup_cli.check(args)
+    if args.command == "autostart":
+        return setup_cli.autostart_cmd(args)
 
     settings = load_settings(args.config)
     configure_logging(settings)

@@ -104,5 +104,9 @@ scene, so every layout shows identical values.
    for the new project `../nestris-terminal` (replaces RetroverseAnmledung):
    card lookup, registration with e-mail consent, player profile with
    per-event history, self-reported scores (`source = self_reported`,
-   flagged), highscore with replay game ids.
-9. **Packaging**: PyInstaller, Inno Setup installer, operations guide.
+   flagged), highscore with replay game ids. ✅
+9. **Packaging**: PyInstaller folder (`NestrisLTM.exe` tray app +
+   `nestris-ltm.exe` CLI with `configure`/`check`/`autostart`), Inno Setup
+   installer that installs or reuses PostgreSQL and Mosquitto (pinned,
+   SHA-256 checked downloads), firewall rules, GitHub CI and release
+   workflows, [OPERATIONS.md](OPERATIONS.md). ✅
