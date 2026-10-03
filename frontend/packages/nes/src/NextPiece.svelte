@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { PIECES, drawBlock, levelColors } from "../lib/nes";
+  import { PIECES, drawBlock, levelColors } from "./nes";
 
   interface Props {
     piece: string | null | undefined;

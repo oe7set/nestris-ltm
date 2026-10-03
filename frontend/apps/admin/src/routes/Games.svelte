@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import Modal from "../components/Modal.svelte";
   import Pager from "../components/Pager.svelte";
+  import PlayerPicker from "../components/PlayerPicker.svelte";
   import { api } from "../lib/api";
   import { dateTime, duration, num, pct } from "../lib/format";
   import { i18n, t, tDynamic } from "../lib/i18n.svelte";
@@ -22,6 +24,35 @@
   let page = $state<Page<Game> | null>(null);
   let stations = $state<StationRow[]>([]);
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let importing = $state(false);
+  let importFile = $state<File | null>(null);
+  let importPlayer = $state<number | null>(null);
+  let importBusy = $state(false);
+
+  async function runImport(): Promise<void> {
+    if (!importFile) return;
+    importBusy = true;
+    try {
+      const params = new URLSearchParams();
+      if (importPlayer !== null) params.set("player_id", String(importPlayer));
+      const response = await fetch(`/api/games/import?${params}`, {
+        method: "POST",
+        body: await importFile.arrayBuffer(),
+        headers: { "Content-Type": "application/octet-stream" },
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(typeof body.detail === "string" ? body.detail : response.statusText);
+      toasts.ok(t("games.imported", { n: body.games.length }));
+      importing = false;
+      importFile = null;
+      importPlayer = null;
+      await load();
+    } catch (e) {
+      toasts.error(e);
+    } finally {
+      importBusy = false;
+    }
+  }
 
   async function load(): Promise<void> {
     router.setQuery({
@@ -59,8 +90,27 @@
 <div class="row">
   <h1>{t("games.title")}</h1>
   <span class="spacer"></span>
+  <button onclick={() => (importing = true)}>{t("games.import")}</button>
   <a class="button primary" href="#/games/new">+ {t("games.new")}</a>
 </div>
+
+{#if importing}
+  <Modal title={t("games.import")} onclose={() => (importing = false)}>
+    <p class="hint">{t("games.import_hint")}</p>
+    <label class="field">
+      {t("games.import_file")}
+      <input type="file" accept=".ngf,.gz" onchange={(e) => (importFile = e.currentTarget.files?.[0] ?? null)} />
+    </label>
+    <div class="field-like">
+      <span class="muted small">{t("games.import_player")}</span>
+      <PlayerPicker value={importPlayer} onselect={(p) => (importPlayer = p.id)} />
+    </div>
+    {#snippet footer()}
+      <button onclick={() => (importing = false)}>{t("common.cancel")}</button>
+      <button class="primary" disabled={!importFile || importBusy} onclick={runImport}>{t("games.import")}</button>
+    {/snippet}
+  </Modal>
+{/if}
 
 <div class="row filters">
   <select bind:value={allTime} onchange={reload}>
@@ -150,6 +200,10 @@
     display: flex;
     gap: 4px;
     flex-wrap: wrap;
+  }
+  .field-like {
+    display: grid;
+    gap: 4px;
   }
   tr.dim td {
     opacity: 0.55;

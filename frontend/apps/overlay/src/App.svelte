@@ -7,6 +7,7 @@
   import { slotView, type SlotView } from "./lib/view";
   import FourPlayers from "./layouts/FourPlayers.svelte";
   import OneVsOne from "./layouts/OneVsOne.svelte";
+  import Replay from "./layouts/Replay.svelte";
   import Single from "./layouts/Single.svelte";
   import SingleCompact from "./layouts/SingleCompact.svelte";
   import TwoByOneVsOne from "./layouts/TwoByOneVsOne.svelte";
@@ -18,6 +19,7 @@
     "1v1": OneVsOne,
     "2x1v1": TwoByOneVsOne,
     "4p": FourPlayers,
+    replay: Replay,
   };
 
   const W = 1920;

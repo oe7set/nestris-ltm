@@ -58,6 +58,9 @@ LAYOUTS: dict[str, Layout] = {
                "Alle gegen alle mit Rangliste; Modi: Top 2 weiter, Schlechtester raus, nur Sieger.",
                "Everyone against everyone with ranking; modes: top 2 advance, worst out, winner only.",
                supports_modes=True),
+        Layout("replay", 0, "Replay", "Replay",
+               "Spielt ein aufgezeichnetes Spiel ab; gestartet wird es auf der Spielseite im Admin.",
+               "Plays a recorded game; start it from the game page in the admin UI."),
     )
 }
 # fmt: on

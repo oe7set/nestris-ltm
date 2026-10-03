@@ -14,8 +14,8 @@ Retroverse Classic Tetris tournament. It runs on the host PC and:
 
 It replaces the old `NestrisLTM/` desktop app and `TournamentHigscore/`.
 
-> Status: phase 6 (OBS overlays: scenes with station slots, rounds with
-> frozen scores, layouts single / single compact / 1v1 / 2×1v1 / 4 players). See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+> Status: phase 7 (recordings: station upload, replay in the admin UI and
+> as an OBS layout, NGF import/download). See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 > for the design and the roadmap. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full
 > design and the roadmap.
 
@@ -127,6 +127,21 @@ uv run nestris-ltm simulate ..\0QR5AJ2RRDPNMZK5FT53K.ngf ..\YXHGT4GXCYMCTDW912MN
   *Auto-Runde*). *Slot zurücksetzen* lets one slot play again.
 - Stream Deck: `POST /api/scenes/<slug>/rounds` with an API token that has
   the `scenes` scope starts the next round.
+
+## Recordings and replay
+
+- Stations with `[host] url/token_file` (nestris-core `docs/STATION.md`)
+  upload every game's complete `.ngf.gz` after it ended. NestrisLTM stores
+  it and deletes that game's 60 Hz live frames (a 7-minute game is ~50 KB
+  instead of several MB). Create the token under *Einstellungen → API-Tokens*
+  with the `stations` scope.
+- Every game page has a replay player (play/pause, 0.25×–8×, scrubbing,
+  frame steps; space and arrow keys). Without the station's file it replays
+  the stored live frames.
+- *Im Overlay abspielen* sends a game to a scene with the `replay` layout,
+  e.g. to show a highlight on stream.
+- *Spiele → NGF importieren* imports `.ngf`/`.ngf.gz` files as finished
+  games; *NGF herunterladen* exports any game.
 
 ## How results are stored
 

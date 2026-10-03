@@ -72,3 +72,8 @@ pnpm check; pnpm test; pnpm dev:admin          # svelte-check, vitest, Vite dev 
   `/overlay-assets/`). A new layout = entry in `core/layouts.py` + component in
   `frontend/apps/overlay/src/layouts/` + mapping in its `App.svelte`. All versus
   numbers come from `SceneEngine.compute_state`; overlays only display.
+- `frontend/packages/nes` (`@nestris-ltm/nes`) is shared by admin and overlay:
+  NES palettes/blocks, `<Playfield>`, `<NextPiece>`, the NGF decoder (keep it in
+  step with `core/ngf.py`) and the replay `Timeline`.
+- Every game replays as NGF via `/api/games/<id>/recording`: the station's file
+  if uploaded, else synthesized from `game_frames`.

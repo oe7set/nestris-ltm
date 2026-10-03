@@ -1,6 +1,6 @@
 <script lang="ts">
   // 10x20 NES playfield on a canvas, redrawn on every frame (up to 60 Hz).
-  import { drawBlock, levelColors, parseRows } from "../lib/nes";
+  import { drawBlock, levelColors, parseRows } from "./nes";
 
   interface Props {
     rows: string[] | null | undefined;

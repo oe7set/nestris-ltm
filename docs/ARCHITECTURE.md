@@ -95,7 +95,10 @@ scene, so every layout shows identical values.
    LiveHub, rounds and outcome rules (`core/rounds.py`), scoring and pace
    (`core/scoring.py`), Svelte overlay app (`frontend/apps/overlay`) with
    the layouts single, single_compact, 1v1, 2x1v1, 4p; admin page *Szenen*. ✅
-7. **Recordings and replay**: NGF upload endpoint, `nestris-station`
-   uploader, replay in admin and as overlay source.
+7. **Recordings and replay**: upload endpoint + live-frame pruning
+   (`services/recordings.py`), `nestris-station` upload queue
+   (`crates/nestris-station/src/upload.rs`), shared frontend package
+   `@nestris-ltm/nes` (rendering, NGF decoder, replay clock), replay player in
+   the admin UI, `replay` overlay layout, NGF import/download. ✅
 8. **Registration API**: `/api/v1/players`, port RetroverseAnmledung.
 9. **Packaging**: PyInstaller, Inno Setup installer, operations guide.

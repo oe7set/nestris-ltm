@@ -1,23 +1,30 @@
 {
-  "name": "@nestris-ltm/admin",
+  "name": "@nestris-ltm/nes",
   "private": true,
   "type": "module",
+  "description": "NES Tetris rendering and NGF decoding shared by the admin UI and the overlays",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "svelte": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
     "check": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
     "test": "vitest run"
+  },
+  "peerDependencies": {
+    "svelte": "^5.57.1"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@tsconfig/svelte": "^5.0.8",
+    "@types/node": "^22.20.5",
     "svelte": "^5.57.1",
     "svelte-check": "^4.7.6",
     "typescript": "^6.0.3",
     "vite": "^8.3.2",
     "vitest": "^5.0.3"
-  },
-  "dependencies": {
-    "@nestris-ltm/nes": "workspace:*"
   }
 }

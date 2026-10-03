@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import Modal from "../components/Modal.svelte";
   import PlayerPicker from "../components/PlayerPicker.svelte";
+  import Replay from "../components/Replay.svelte";
   import { api } from "../lib/api";
   import { dateTime, duration, fromLocalInput, num, pct, toLocalInput } from "../lib/format";
   import { i18n, t, tDynamic } from "../lib/i18n.svelte";
@@ -17,6 +18,10 @@
   let editing = $state(false);
   let hiding = $state(false);
   let hideReason = $state("");
+  let replayScenes = $state<{ slug: string; name: string }[]>([]);
+  let replayScene = $state("");
+  let replaySpeed = $state(1);
+  let replayLoop = $state(false);
   let edit = $state({
     player_id: null as number | null,
     score: null as number | null,
@@ -95,8 +100,37 @@
     }
   }
 
+  async function playInScene(): Promise<void> {
+    if (!replayScene) return;
+    try {
+      await api(`/api/scenes/${replayScene}/replay`, {
+        method: "POST",
+        body: { game_id: id, speed: replaySpeed, loop: replayLoop },
+      });
+      const name = replayScenes.find((s) => s.slug === replayScene)?.name ?? replayScene;
+      toasts.ok(t("replay.started", { scene: name }));
+    } catch (e) {
+      toasts.error(e);
+    }
+  }
+
+  async function stopInScene(): Promise<void> {
+    if (!replayScene) return;
+    try {
+      await api(`/api/scenes/${replayScene}/replay`, { method: "DELETE" });
+    } catch (e) {
+      toasts.error(e);
+    }
+  }
+
   onMount(() => {
     void load();
+    api<{ slug: string; name: string; layout: string }[]>("/api/scenes")
+      .then((all) => {
+        replayScenes = all.filter((s) => s.layout === "replay");
+        replayScene = replayScenes[0]?.slug ?? "";
+      })
+      .catch(() => {});
   });
 </script>
 
@@ -185,10 +219,41 @@
         {/each}
       {/if}
       <h2 class="sub">{t("game.recording")}</h2>
+      <p class="small muted">
+        {game.recording
+          ? `${num(game.recording.size_bytes, i18n.locale)} B · ${dateTime(game.recording.received_at, i18n.locale)}`
+          : t("game.no_recording")}
+      </p>
       <p class="small muted">{t("game.frames", { n: num(game.frame_count, i18n.locale) })}</p>
-      <p class="small muted">{game.recording ? `${num(game.recording.size_bytes, i18n.locale)} B` : t("game.no_recording")}</p>
     </section>
   </div>
+
+  {#if game.recording || game.frame_count > 0}
+    <section class="panel replay-panel">
+      <div class="row">
+        <h2>{t("replay.title")}</h2>
+        <span class="spacer"></span>
+        <a class="button" href={`/api/games/${id}/recording?download=true`}>{t("replay.download")}</a>
+      </div>
+      <Replay gameId={id} />
+      <div class="row to-scene">
+        {#if replayScenes.length}
+          <span class="muted small">{t("replay.to_scene")}:</span>
+          <select bind:value={replayScene} aria-label={t("replay.scene")}>
+            {#each replayScenes as s (s.slug)}<option value={s.slug}>{s.name}</option>{/each}
+          </select>
+          <select bind:value={replaySpeed} aria-label="speed">
+            {#each [0.5, 1, 2, 4] as v (v)}<option value={v}>{v}×</option>{/each}
+          </select>
+          <label class="check"><input type="checkbox" bind:checked={replayLoop} /> {t("replay.loop")}</label>
+          <button class="primary" onclick={playInScene}>▶ {t("replay.to_scene")}</button>
+          <button onclick={stopInScene}>{t("replay.stop")}</button>
+        {:else}
+          <span class="muted small">{t("replay.no_scene")}</span>
+        {/if}
+      </div>
+    </section>
+  {/if}
 {:else}
   <p class="muted">{t("common.loading")}</p>
 {/if}
@@ -282,6 +347,18 @@
   }
   h2.sub {
     margin-top: 14px;
+  }
+  .replay-panel {
+    margin-top: 16px;
+    display: grid;
+    gap: 10px;
+  }
+  .replay-panel h2 {
+    margin: 0;
+  }
+  .to-scene {
+    border-top: 1px solid var(--line);
+    padding-top: 10px;
   }
   .field-like {
     display: grid;

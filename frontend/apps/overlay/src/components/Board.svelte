@@ -3,8 +3,7 @@
   // Playfield with frame, NEXT box, status overlays and the tetris flash.
   import { text, type Lang } from "../lib/format";
   import { clearedLines, type SlotView } from "../lib/view";
-  import NextPiece from "./NextPiece.svelte";
-  import Playfield from "./Playfield.svelte";
+  import { NextPiece, Playfield } from "@nestris-ltm/nes";
 
   interface Props {
     view: SlotView;

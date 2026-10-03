@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { diffSeries } from "./graph";
 import { clearedLines } from "./view";
-import { levelColors, parseRows } from "./nes";
+import { levelColors, parseRows } from "@nestris-ltm/nes";
 import { fmt, signed } from "./format";
 
 describe("overlay helpers", () => {

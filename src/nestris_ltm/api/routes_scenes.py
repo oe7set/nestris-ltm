@@ -9,6 +9,7 @@ a Stream Deck button can start the next round with one HTTP request::
 from __future__ import annotations
 
 import re
+import secrets
 from importlib import resources
 from pathlib import Path
 from typing import Annotated, Any
@@ -22,8 +23,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from nestris_ltm.api.auth import AdminDep, Principal, require_scope
 from nestris_ltm.api.deps import SessionDep, get_runtime
 from nestris_ltm.core.layouts import LAYOUTS
-from nestris_ltm.db.models import SCENE_MODES, Scene, SceneSlot, Station
-from nestris_ltm.services import audit
+from nestris_ltm.db.models import SCENE_MODES, Game, Player, Scene, SceneSlot, Station
+from nestris_ltm.services import audit, recordings
 from nestris_ltm.services.scenes import SceneEngine
 
 router = APIRouter(prefix="/api/scenes", tags=["scenes"])
@@ -97,6 +98,12 @@ class ScenePatch(BaseModel):
     @classmethod
     def _mode(cls, value: str | None) -> str | None:
         return None if value is None else _check_mode(value)
+
+
+class ReplayIn(BaseModel):
+    game_id: int
+    speed: float = Field(default=1.0, ge=0.25, le=8.0)
+    loop: bool = False
 
 
 class SlotReset(BaseModel):
@@ -263,6 +270,63 @@ async def reset_slot(slug: str, body: SlotReset, request: Request, _: ScenesDep)
         await _engine(request).reset_slot(slug, body.slot)
     except KeyError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "scene not found") from exc
+    return {"ok": True}
+
+
+@router.post("/{slug}/replay")
+async def start_replay(
+    slug: str, body: ReplayIn, request: Request, p: ScenesDep, session: SessionDep
+) -> dict[str, Any]:
+    """Play a game in a replay scene (the overlay restarts on every call)."""
+    async with session.begin():
+        scene = await session.scalar(select(Scene).where(Scene.slug == slug))
+        if scene is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "scene not found")
+        if scene.layout != "replay":
+            raise HTTPException(status.HTTP_409_CONFLICT, "scene does not use the replay layout")
+        row = (
+            await session.execute(
+                select(Game, Player.nickname)
+                .outerjoin(Player, Player.id == Game.player_id)
+                .where(Game.id == body.game_id)
+            )
+        ).one_or_none()
+        if row is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "game not found")
+        game, nickname = row
+        if await recordings.recording_bytes(session, game.id) is None:
+            raise HTTPException(status.HTTP_409_CONFLICT, "game has no recording or live frames")
+        replay = {
+            "game_id": game.id,
+            "speed": body.speed,
+            "loop": body.loop,
+            "token": secrets.token_hex(6),
+            "player": nickname or game.card_name,
+            "score": game.score,
+            "lines": game.lines,
+            "start_level": game.start_level,
+            "end_level": game.end_level,
+            "started_at": game.started_at.isoformat(),
+        }
+        scene.settings = {**scene.settings, "replay": replay}
+        await audit.record(
+            session, actor=p.actor, action="replay", entity="scene", entity_id=scene.id,
+            after={"game_id": game.id, "speed": body.speed},
+        )  # fmt: skip
+    await _engine(request).load()
+    return {"ok": True, "replay": replay}
+
+
+@router.delete("/{slug}/replay")
+async def stop_replay(
+    slug: str, request: Request, _: ScenesDep, session: SessionDep
+) -> dict[str, bool]:
+    async with session.begin():
+        scene = await session.scalar(select(Scene).where(Scene.slug == slug))
+        if scene is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "scene not found")
+        scene.settings = {k: v for k, v in scene.settings.items() if k != "replay"}
+    await _engine(request).load()
     return {"ok": True}
 
 

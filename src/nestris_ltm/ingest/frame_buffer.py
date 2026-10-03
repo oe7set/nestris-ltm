@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from nestris_ltm.core import playfield
 from nestris_ltm.db.manager import DatabaseManager
-from nestris_ltm.db.models import Game, GameFrame
+from nestris_ltm.db.models import Game, GameFrame, GameRecording
 from nestris_ltm.ingest.payloads import LivePayload
 
 log = structlog.get_logger(__name__)
@@ -53,11 +53,21 @@ class FrameBuffer:
         self._pending: dict[str, _Pending] = {}
         self._games: OrderedDict[str, _GameRef] = OrderedDict()
         self._lock = asyncio.Lock()
+        # Games whose complete recording arrived: further live frames are dropped.
+        self._closed: OrderedDict[str, None] = OrderedDict()
         self.frames_written = 0
         self.frames_dropped = 0
 
+    def discard(self, external_id: str) -> None:
+        """Stop storing live frames of a game (its full recording arrived)."""
+        self._closed[external_id] = None
+        while len(self._closed) > GAME_CACHE_SIZE:
+            self._closed.popitem(last=False)
+        self._pending.pop(external_id, None)
+        self._games.pop(external_id, None)
+
     def add(self, payload: LivePayload) -> None:
-        if payload.game_id is None:
+        if payload.game_id is None or payload.game_id in self._closed:
             return
         pending = self._pending.setdefault(payload.game_id, _Pending())
         pending.frames.append(payload)
@@ -116,6 +126,9 @@ class FrameBuffer:
                 if ref is None:
                     ref = await self._load_ref(session, external_id)
                 if ref is None:
+                    if external_id in self._closed:
+                        self.frames_dropped += len(frames)
+                        continue
                     pending = self._pending[external_id]
                     if time.monotonic() - pending.first_seen > MAX_WAIT_FOR_GAME_S:
                         self.frames_dropped += len(frames) + len(pending.frames)
@@ -158,6 +171,9 @@ class FrameBuffer:
             )
         ).one_or_none()
         if row is None:
+            return None
+        if await session.get(GameRecording, row.id) is not None:
+            self.discard(external_id)  # complete recording already stored
             return None
         max_seq = (
             await session.execute(
