@@ -145,6 +145,7 @@
     {#if game.cheated}<span class="badge bad">{t("games.cheat", { n: game.cheated })}</span>{/if}
     {#if game.valid === false}<span class="badge bad">{t("games.invalid")}</span>{/if}
     {#if game.is_edited}<span class="badge accent">{t("games.edited")}</span>{/if}
+    {#if game.source === "self_reported"}<span class="badge warn">{t("games.self_reported")}</span>{/if}
     {#if game.hidden}<span class="badge">{t("games.hidden")}</span>{/if}
     <span class="spacer"></span>
     <button onclick={startEdit}>{t("common.edit")}</button>

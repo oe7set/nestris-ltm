@@ -44,6 +44,7 @@ class LiveValues:
 
 @dataclass
 class _Best:
+    game_id: int
     player_id: int
     nickname: str
     score: int
@@ -125,6 +126,7 @@ async def compute_standings(
     best_rows = (
         await session.execute(
             select(
+                Game.id,
                 Game.player_id,
                 PlayerRow.nickname,
                 Game.score,
@@ -146,7 +148,14 @@ async def compute_standings(
     ).all()
     best: dict[int, _Best] = {
         r.player_id: _Best(
-            r.player_id, r.nickname, r.score, r.end_level, r.lines, r.tetris_rate, r.started_at
+            r.id,
+            r.player_id,
+            r.nickname,
+            r.score,
+            r.end_level,
+            r.lines,
+            r.tetris_rate,
+            r.started_at,
         )
         for r in best_rows
     }
@@ -155,6 +164,7 @@ async def compute_standings(
     live_rows = (
         await session.execute(
             select(
+                Game.id,
                 Game.external_id,
                 Game.player_id,
                 PlayerRow.nickname,
@@ -194,6 +204,7 @@ async def compute_standings(
         current = best.get(row.player_id)
         if current is None or values.score > current.score:
             best[row.player_id] = _Best(
+                row.id,
                 row.player_id,
                 (row.nickname or "")[:NICKNAME_MAX],
                 values.score,
@@ -215,6 +226,7 @@ async def compute_standings(
             lines=b.lines,
             tetris_rate=b.tetris_rate,
             is_live=b.is_live,
+            game_id=b.game_id,
         )
         for i, b in enumerate(ordered[:display_count], start=1)
     ]

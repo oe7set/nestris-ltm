@@ -119,10 +119,9 @@ PAGES: tuple[PageInfo, ...] = (
     PageInfo("api-docs", "api", "/docs", "API-Dokumentation", "API documentation",
              "Alle REST-Schnittstellen interaktiv (OpenAPI).",
              "Every REST endpoint, interactive (OpenAPI)."),
-    PageInfo("api-players", "api", "/api/v1/players", "Anmelde-API", "Registration API",
-             "Schnittstelle für RetroverseAnmledung (Spieler anlegen, mit Token).",
-             "Interface for the registration kiosk (create players, token required).",
-             status="planned", phase=8),
+    PageInfo("api-terminal", "api", "/api/terminal/v1", "Terminal-API", "Terminal API",
+             "Schnittstelle des Spieler-Terminals (nestris-terminal): Karte prüfen, anmelden, Spielerseite, Score eintragen, Highscore. API-Token mit Recht „terminal“.",
+             "Interface of the player terminal (nestris-terminal): card lookup, registration, player page, self-reported scores, highscore. API token with the “terminal” scope."),
     # ------------------------------------------------------------ tray menu
     PageInfo("tray-open", "tray", "Öffnen", "Öffnen", "Open",
              "Holt das Fenster nach vorne (auch: Doppelklick aufs Tray-Symbol).",

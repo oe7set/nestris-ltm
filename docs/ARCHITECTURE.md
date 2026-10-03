@@ -50,7 +50,7 @@ Qt shell: tray icon, window = QWebEngineView(admin), autostart, single instance
 | Bracket | Single elimination 2–64 with byes and third place (ported from TournamentHigscore) |
 | Recordings | Live frames from MQTT (up to 60 Hz, set `mqtt.live_max_hz = 60` on the stations) plus the station's `.ngf.gz` uploaded over HTTP |
 | Auth | Overlays and kiosk views public; admin needs a login; machine clients use bearer tokens |
-| Registration | RetroverseAnmledung moves from direct DB access to the REST API |
+| Registration | The new player terminal (`../nestris-terminal`) uses the terminal API; no direct DB access |
 | Website uplink | Not planned |
 
 ## Schema overview
@@ -100,5 +100,9 @@ scene, so every layout shows identical values.
    (`crates/nestris-station/src/upload.rs`), shared frontend package
    `@nestris-ltm/nes` (rendering, NGF decoder, replay clock), replay player in
    the admin UI, `replay` overlay layout, NGF import/download. ✅
-8. **Registration API**: `/api/v1/players`, port RetroverseAnmledung.
+8. **Player terminal**: terminal API (`/api/terminal/v1`, scope `terminal`)
+   for the new project `../nestris-terminal` (replaces RetroverseAnmledung):
+   card lookup, registration with e-mail consent, player profile with
+   per-event history, self-reported scores (`source = self_reported`,
+   flagged), highscore with replay game ids.
 9. **Packaging**: PyInstaller, Inno Setup installer, operations guide.

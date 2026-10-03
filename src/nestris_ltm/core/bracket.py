@@ -114,6 +114,8 @@ class LeaderboardEntry(BaseModel):
     # True when this player's shown best game is an in-progress run (playing live
     # and already beating their previous best). Drives the live indicator dot.
     is_live: bool = False
+    # NestrisLTM: the game behind this entry (replays from the terminal).
+    game_id: int | None = None
 
 
 class Stats(BaseModel):

@@ -74,7 +74,7 @@ def _row(
     data.update(
         player_nickname=nickname,
         hidden=hidden,
-        flagged=bool(game.cheated) or game.valid is False,
+        flagged=bool(game.cheated) or game.valid is False or game.source == "self_reported",
         **(extra or {}),
     )
     return data
@@ -122,7 +122,7 @@ async def list_games(
     station_id: str | None = None,
     status_: Literal["live", "finished", "abandoned"] | None = Query(None, alias="status"),
     unassigned: bool = False,
-    flagged: bool = Query(False, description="cheat detected or validation failed"),
+    flagged: bool = Query(False, description="cheat, failed validation or self-reported"),
     hidden: bool | None = Query(None, description="filter by hidden state in the event"),
     q: str = Query("", max_length=64, description="player nickname or card name"),
     sort: Literal["started_at", "score"] = "started_at",
@@ -147,7 +147,9 @@ async def list_games(
     if unassigned:
         stmt = stmt.where(Game.player_id.is_(None))
     if flagged:
-        stmt = stmt.where(or_(Game.cheated > 0, Game.valid.is_(False)))
+        stmt = stmt.where(
+            or_(Game.cheated > 0, Game.valid.is_(False), Game.source == "self_reported")
+        )
     if hidden is not None and hidden_expr is not None:
         stmt = stmt.where(hidden_expr if hidden else ~hidden_expr)
     if q.strip():

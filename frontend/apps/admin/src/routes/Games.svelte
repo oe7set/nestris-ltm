@@ -176,6 +176,7 @@
             {#if g.valid === false}<span class="badge bad">{t("games.invalid")}</span>{/if}
             {#if g.is_edited}<span class="badge accent">{t("games.edited")}</span>{/if}
             {#if g.source === "manual"}<span class="badge">{t("games.manual")}</span>{/if}
+            {#if g.source === "self_reported"}<span class="badge warn">{t("games.self_reported")}</span>{/if}
             {#if g.hidden}<span class="badge">{t("games.hidden")}</span>{/if}
           </div></td>
         </tr>

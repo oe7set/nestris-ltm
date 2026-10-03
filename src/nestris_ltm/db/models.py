@@ -42,7 +42,8 @@ NAMING_CONVENTION = {
 }
 
 GAME_STATUSES = ("live", "finished", "abandoned")
-GAME_SOURCES = ("station", "manual", "ngf_import")
+# self_reported: entered by the player at the terminal; counts, but is flagged.
+GAME_SOURCES = ("station", "manual", "ngf_import", "self_reported")
 END_REASONS = ("game_over", "reset", "signal_lost", "shutdown")
 SCENE_MODES = ("none", "top2_advance", "worst_out", "winner_only")
 ROUND_OUTCOMES = ("advanced", "eliminated", "winner")
@@ -115,6 +116,9 @@ class Player(TimestampMixin, Base):
     last_name: Mapped[str | None] = mapped_column(String(64))
     birth_date: Mapped[date | None] = mapped_column(Date)
     email: Mapped[str | None] = mapped_column(String(255))
+    # Consent to be contacted by e-mail (given at the terminal registration).
+    email_consent: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    email_consent_at: Mapped[datetime | None]
     phone: Mapped[str | None] = mapped_column(String(32))
     street: Mapped[str | None] = mapped_column(String(128))
     postal_code: Mapped[str | None] = mapped_column(String(16))

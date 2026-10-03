@@ -54,7 +54,7 @@ export interface Game {
   card_name: string | null;
   card_uid: string | null;
   status: "live" | "finished" | "abandoned";
-  source: "station" | "manual" | "ngf_import";
+  source: "station" | "manual" | "ngf_import" | "self_reported";
   started_at: string;
   ended_at: string | null;
   duration_s: number | null;

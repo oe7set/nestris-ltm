@@ -22,6 +22,7 @@ from nestris_ltm.api import (
     routes_players,
     routes_recordings,
     routes_scenes,
+    routes_terminal,
     routes_tournament,
     routes_ws,
 )
@@ -63,6 +64,7 @@ def create_app(runtime: Runtime) -> FastAPI:
         routes_events,
         routes_tournament,
         routes_scenes,
+        routes_terminal,
         routes_diagnostics,
         routes_ws,
         routes_pages,
