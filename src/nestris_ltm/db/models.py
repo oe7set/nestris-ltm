@@ -380,6 +380,10 @@ class SceneRoundEntry(Base):
     )
     slot: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
     game_id: Mapped[int | None] = mapped_column(ForeignKey("games.id", ondelete="SET NULL"))
+    # The station's game id; set while the game runs (games.id only exists later).
+    game_external_id: Mapped[str | None] = mapped_column(String(96))
+    player_name: Mapped[str | None] = mapped_column(String(64))
+    frozen_start_level: Mapped[int | None] = mapped_column(SmallInteger)
     frozen_score: Mapped[int | None] = mapped_column(Integer)
     frozen_lines: Mapped[int | None] = mapped_column(Integer)
     frozen_level: Mapped[int | None] = mapped_column(SmallInteger)

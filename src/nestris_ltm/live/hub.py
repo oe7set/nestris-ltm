@@ -8,6 +8,7 @@ messages rather than slowing down the ingest.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -85,6 +86,20 @@ class LiveHub(Broadcaster):
     def __init__(self) -> None:
         super().__init__()
         self._stations: dict[str, StationState] = {}
+        # Synchronous in-process listeners (e.g. the scene engine); they see
+        # every message right away, before any WebSocket client.
+        self._listeners: list[Callable[[dict[str, Any]], None]] = []
+
+    def add_listener(self, listener: Callable[[dict[str, Any]], None]) -> None:
+        self._listeners.append(listener)
+
+    def publish(self, message: dict[str, Any]) -> None:
+        for listener in self._listeners:
+            try:
+                listener(message)
+            except Exception:
+                log.exception("live listener failed", type=message.get("type"))
+        super().publish(message)
 
     # ------------------------------------------------------------ state
 

@@ -1,4 +1,4 @@
-# ruff: noqa: E501  (descriptions read better unwrapped)
+# ruff: noqa: E501, RUF001  (descriptions read better unwrapped)
 """Registry of every page, view and endpoint NestrisLTM offers.
 
 The admin UI's overview page renders this list, so a new page only has to
@@ -61,9 +61,8 @@ PAGES: tuple[PageInfo, ...] = (
              "Turnierbaum steuern: Größe, FIX/UNSEED, Sieger per Klick, Spieler aus dem Baum nehmen; Anzeige fernsteuern (Schriftgröße, Autoscroll, Effekte, Meldungen, Transparenz, Celebration).",
              "Control the bracket: size, fix/unseed, click winners, remove players; remote-control the display (font size, autoscroll, effects, banners, transparency, celebration)."),
     PageInfo("scenes", "admin", "/#/scenes", "Szenen", "Scenes",
-             "OBS-Szenen anlegen: Layout, Stationen je Slot, Modus, Runden steuern.",
-             "Create OBS scenes: layout, stations per slot, mode, round control.",
-             status="planned", phase=6),
+             "OBS-Szenen anlegen: Layout, Stationen je Slot, Modus, neue Runde, Slot zurücksetzen, Vorschau, OBS-URL kopieren.",
+             "Create OBS scenes: layout, stations per slot, mode, new round, reset a slot, preview, copy the OBS URL."),
     # ------------------------------------------------------------ public displays
     PageInfo("kiosk", "display", "/view/highscore", "Highscore + Turnierbaum", "Highscore + bracket",
              "Vollbild-Anzeige mit allen Animationen (Flug-Animationen, Score-Train, Meldungen, Sieger-Feier). Auch für OBS geeignet.",
@@ -79,9 +78,15 @@ PAGES: tuple[PageInfo, ...] = (
              "The tournament control as a page of its own, e.g. on a tablet."),
     # ------------------------------------------------------------ OBS overlays
     PageInfo("overlay-scene", "overlay", "/o/<szene>", "Overlay je Szene", "Overlay per scene",
-             "Feste OBS-Browserquelle je Szene; Layout und Stationen werden im Admin gewählt.",
-             "Fixed OBS browser source per scene; layout and stations are chosen in the admin UI.",
-             public=True, status="planned", phase=6),
+             "Feste OBS-Browserquelle (1920×1080, transparent) je Szene. Layouts: Einzel, Einzel kompakt, 1 gegen 1, 2 × 1 gegen 1, 4 Spieler. Optionen: ?bg=dark, ?lang=en.",
+             "Fixed OBS browser source (1920×1080, transparent) per scene. Layouts: single, single compact, 1 vs 1, 2 × 1 vs 1, 4 players. Options: ?bg=dark, ?lang=en.",
+             public=True),
+    PageInfo("overlay-round", "api", "/api/scenes/<szene>/rounds", "Neue Runde (Stream Deck)", "New round (Stream Deck)",
+             "POST mit API-Token (Recht „scenes“) startet die nächste Runde einer Szene, z. B. per Stream-Deck-Taste.",
+             "POST with an API token (scope “scenes”) starts the next round of a scene, e.g. from a Stream Deck button."),
+    PageInfo("ws-scene", "api", "/ws/scene/<szene>", "WebSocket Szene", "WebSocket scene",
+             "Zustand einer Szene plus Live-Frames (60 Hz) der Slots.",
+             "A scene's state plus the slots' live frames (60 Hz).", public=True),
     # ------------------------------------------------------------ diagnostics
     PageInfo("status", "diagnostics", "/status", "Statusseite", "Status page",
              "Einfache Statusseite für Diagnosen, auch ohne gebaute Admin-Oberfläche.",

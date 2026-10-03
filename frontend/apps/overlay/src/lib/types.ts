@@ -1,0 +1,83 @@
+// Shapes of the /ws/scene/<slug> protocol (see services/scenes.py).
+
+export interface Gap {
+  points: number; // positive = behind
+  tetrises: number;
+  tetrises_needed: number;
+}
+
+export type SlotStatus = "empty" | "waiting" | "playing" | "finished";
+export type Outcome = "advanced" | "eliminated" | "winner" | null;
+
+export interface SlotState {
+  slot: number;
+  station_id: string | null;
+  label: string | null;
+  name: string | null;
+  status: SlotStatus;
+  online: boolean;
+  score: number | null;
+  lines: number | null;
+  level: number | null;
+  start_level: number | null;
+  tetris_rate: number | null;
+  burn: number | null;
+  drought: number | null;
+  max_drought: number | null;
+  pieces: number | null;
+  pace: number | null;
+  rank: number | null;
+  outcome: Outcome;
+  to_leader?: Gap;
+  vs_partner?: Gap;
+  to_advance?: Gap & { score: number };
+}
+
+export interface SceneInfo {
+  slug: string;
+  name: string;
+  layout: string;
+  mode: "none" | "top2_advance" | "worst_out" | "winner_only";
+  auto_round: boolean;
+  settings: SceneSettings;
+  pairs: [number, number][];
+}
+
+export interface SceneSettings {
+  lang?: "de" | "en";
+  background?: "transparent" | "dark";
+  camera_frames?: boolean;
+  title?: string;
+}
+
+export interface SceneState {
+  scene: SceneInfo;
+  round: number;
+  complete: boolean;
+  leader: number | null;
+  slots: SlotState[];
+}
+
+export interface Frame {
+  game_id: string | null;
+  game_state: string;
+  score: number | null;
+  lines: number | null;
+  level: number | null;
+  next_piece: string | null;
+  tetris_rate: number | null;
+  burn: number;
+  drought: number;
+  max_drought: number;
+  pieces: number;
+  playfield: string[] | null;
+}
+
+export type History = Record<string, [number, number][]>;
+
+export type Message =
+  | { type: "init"; data: { state: SceneState; frames: Record<string, Frame>; history: History } }
+  | { type: "state"; data: SceneState }
+  | { type: "frame"; slot: number; data: Frame }
+  | { type: "scene_removed" }
+  | { type: "pong" };

@@ -4,6 +4,7 @@
   on connect, then every hub message (``station``, ``live``, ``game_event``).
 - ``/ws/kiosk`` : highscore + tournament in the TournamentHigscore protocol
   (``{"type": ..., "data": ...}``, starting with ``init``).
+- ``/ws/scene/<slug>``: one overlay scene (see ``services/scenes.py``).
 
 Clients may send ``{"type": "ping"}``; the answer is ``pong``.
 """
@@ -35,6 +36,20 @@ async def kiosk_feed(websocket: WebSocket) -> None:
         return {"type": "init", "data": await tournament.snapshot()}
 
     await serve(websocket, tournament, init, pong={"type": "pong", "data": {}})
+
+
+@router.websocket("/ws/scene/{slug}")
+async def scene_feed(websocket: WebSocket, slug: str) -> None:
+    engine = websocket.app.state.runtime.scenes
+    runtime = engine.scenes.get(slug)
+    if runtime is None:
+        await websocket.close(code=4404, reason="unknown scene")
+        return
+
+    async def init() -> dict[str, Any]:
+        return {"type": "init", "data": engine.snapshot(slug)}
+
+    await serve(websocket, runtime.channel, init, pong={"type": "pong"})
 
 
 async def _live_init(hub: Any) -> dict[str, Any]:

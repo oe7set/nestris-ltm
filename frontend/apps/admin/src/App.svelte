@@ -13,6 +13,7 @@
   import Pages from "./routes/Pages.svelte";
   import PlayerDetail from "./routes/PlayerDetail.svelte";
   import Players from "./routes/Players.svelte";
+  import Scenes from "./routes/Scenes.svelte";
   import Settings from "./routes/Settings.svelte";
   import Stations from "./routes/Stations.svelte";
   import Tournament from "./routes/Tournament.svelte";
@@ -23,6 +24,7 @@
     { route: "games", href: "/games", label: "nav.games", also: ["game", "game-new"] },
     { route: "events", href: "/events", label: "nav.events" },
     { route: "tournament", href: "/tournament", label: "nav.tournament" },
+    { route: "scenes", href: "/scenes", label: "nav.scenes" },
     { route: "stations", href: "/stations", label: "nav.stations" },
     { route: "audit", href: "/audit", label: "nav.audit" },
     { route: "settings", href: "/settings", label: "nav.settings" },
@@ -82,6 +84,8 @@
           <Events />
         {:else if current.name === "tournament"}
           <Tournament />
+        {:else if current.name === "scenes"}
+          <Scenes />
         {:else if current.name === "stations"}
           <Stations />
         {:else if current.name === "audit"}

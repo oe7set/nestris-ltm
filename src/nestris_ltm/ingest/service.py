@@ -210,7 +210,11 @@ class IngestService:
             if event.kind == "event/game_start":
                 start = GameStartPayload.model_validate_json(event.payload)
                 game_id = await self._in_tx(games.record_game_start, start)
-                self.hub.game_event(event.station, "game_start", {"game_id": start.game_id})
+                self.hub.game_event(
+                    event.station,
+                    "game_start",
+                    {"game_id": start.game_id, "start_level": start.start_level},
+                )
             elif event.kind == "event/cheat":
                 cheat = CheatPayload.model_validate_json(event.payload)
                 game_id = await self._in_tx(games.record_cheat, cheat)
@@ -223,7 +227,15 @@ class IngestService:
                 self.hub.game_event(
                     event.station,
                     "game_end",
-                    {"game_id": end.game_id, "score": end.score, "valid": end.valid},
+                    {
+                        "game_id": end.game_id,
+                        "score": end.score,
+                        "lines": end.lines,
+                        "level": end.end_level,
+                        "start_level": end.start_level,
+                        "valid": end.valid,
+                        "ended_at": end.ended_at.isoformat(),
+                    },
                 )
             else:
                 raise PermanentEventError(f"unknown event kind {event.kind!r}")

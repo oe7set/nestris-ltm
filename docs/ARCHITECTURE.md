@@ -91,7 +91,10 @@ scene, so every layout shows identical values.
    (`core/bracket.py`), kiosk assets copied unchanged (`kiosk/static`), same
    WebSocket protocol on `/ws/kiosk`, data from the active event incl. live
    games, console embedded in the admin UI. ✅
-6. **Overlays**: UI components, scenes, rounds, layouts.
+6. **Overlays**: scene engine (`services/scenes.py`) on top of the
+   LiveHub, rounds and outcome rules (`core/rounds.py`), scoring and pace
+   (`core/scoring.py`), Svelte overlay app (`frontend/apps/overlay`) with
+   the layouts single, single_compact, 1v1, 2x1v1, 4p; admin page *Szenen*. ✅
 7. **Recordings and replay**: NGF upload endpoint, `nestris-station`
    uploader, replay in admin and as overlay source.
 8. **Registration API**: `/api/v1/players`, port RetroverseAnmledung.

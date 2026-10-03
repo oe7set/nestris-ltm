@@ -68,3 +68,7 @@ pnpm check; pnpm test; pnpm dev:admin          # svelte-check, vitest, Vite dev 
   the original WebSocket protocol (`init`, `*_update`, `view_settings`, ...).
 - `core/bracket.py` holds the verbatim `derive_bracket` port plus the pure
   `BracketState`; `tests/test_bracket.py` is the original test suite.
+- Overlays: `frontend/apps/overlay` (served at `/o/<slug>`, bundle under
+  `/overlay-assets/`). A new layout = entry in `core/layouts.py` + component in
+  `frontend/apps/overlay/src/layouts/` + mapping in its `App.svelte`. All versus
+  numbers come from `SceneEngine.compute_state`; overlays only display.

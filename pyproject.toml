@@ -52,6 +52,10 @@ src = ["src", "tests"]
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM", "ASYNC", "RUF"]
 
+[tool.ruff.lint.per-file-ignores]
+# Test data reads better on one line.
+"tests/*" = ["E501"]
+
 [tool.mypy]
 python_version = "3.13"
 strict = true

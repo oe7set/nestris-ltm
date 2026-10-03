@@ -24,6 +24,7 @@ from nestris_ltm.ingest.mqtt_client import MqttIngest
 from nestris_ltm.ingest.service import IngestService
 from nestris_ltm.ingest.spool import EventSpool
 from nestris_ltm.live.hub import LiveHub
+from nestris_ltm.services.scenes import SceneEngine
 from nestris_ltm.services.tournament import TournamentService
 
 log = structlog.get_logger(__name__)
@@ -51,6 +52,7 @@ class Runtime:
         self.ingest = IngestService(self.db, self.hub, self.frames, self.spool)
         self.mqtt = MqttIngest(settings.mqtt, self.ingest)
         self.tournament = TournamentService(self.db, self.hub)
+        self.scenes = SceneEngine(self.db, self.hub)
         # Sent by the Qt shell's embedded browser; grants an admin session
         # without a login (the shell runs on the host itself).
         self.shell_token = secrets.token_urlsafe(32)
@@ -87,6 +89,7 @@ class Runtime:
         self.spawn(self.ingest.run_sweeper(), name="sweeper")
         self.spawn(self.frames.run(), name="frame-buffer")
         self.spawn(self.tournament.run(), name="kiosk")
+        self.spawn(self.scenes.run(), name="scenes")
 
     async def stop(self) -> None:
         for task in list(self._tasks):
@@ -94,10 +97,11 @@ class Runtime:
         for task in list(self._tasks):
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await task
-        # Write whatever live frames are still buffered.
+        # Write whatever live frames and round results are still buffered.
         if self.db.is_ready:
             with contextlib.suppress(Exception):
                 await self.frames.flush()
+            await self.scenes.close()
         await self.db.dispose()
 
     async def serve(self) -> None:

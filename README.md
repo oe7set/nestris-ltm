@@ -14,8 +14,8 @@ Retroverse Classic Tetris tournament. It runs on the host PC and:
 
 It replaces the old `NestrisLTM/` desktop app and `TournamentHigscore/`.
 
-> Status: phase 5 (highscore + tournament kiosk with all TournamentHigscore
-> animations, tournament console in the admin UI). See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+> Status: phase 6 (OBS overlays: scenes with station slots, rounds with
+> frozen scores, layouts single / single compact / 1v1 / 2×1v1 / 4 players). See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 > for the design and the roadmap. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full
 > design and the roadmap.
 
@@ -106,6 +106,27 @@ uv run nestris-ltm simulate ..\0QR5AJ2RRDPNMZK5FT53K.ngf ..\YXHGT4GXCYMCTDW912MN
   (font size, autoscroll, scroll position, effects, banners, transparency,
   celebration). Bracket state, view settings and the celebration switch are
   stored in the database and survive restarts.
+
+## OBS overlays (scenes)
+
+- *Szenen* in the admin UI: a scene has a fixed URL `http://<host>:7990/o/<slug>`,
+  a layout, a mode and one station per slot. Add it in OBS as a browser
+  source, 1920×1080, transparent; cameras go below/beside it in OBS.
+  Changing layout or stations happens in the admin UI only.
+- Layouts: `single`, `single_compact`, `1v1`, `2x1v1` (slots 1 vs 2 and
+  3 vs 4), `4p` (modes: top 2 advance, last place out, winner only).
+- Playfields render at up to 60 Hz in the NES level colours; scores count
+  up, a tetris flashes the board, outcomes are stamped (WEITER / RAUS /
+  SIEGER), drought ≥ 13 blinks.
+- Versus numbers are computed on the server: difference, lead in tetrises
+  at the trailing player's level, pace to level 29, difference graph,
+  "needs N tetrises to win/advance" once the leader has topped out.
+- Rounds: the first game on a slot's station is bound to the slot; when it
+  ends the result is frozen and stays on screen while the others play; later
+  games on that slot are ignored until *Neue Runde* (or automatically with
+  *Auto-Runde*). *Slot zurücksetzen* lets one slot play again.
+- Stream Deck: `POST /api/scenes/<slug>/rounds` with an API token that has
+  the `scenes` scope starts the next round.
 
 ## How results are stored
 

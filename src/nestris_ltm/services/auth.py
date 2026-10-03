@@ -30,7 +30,7 @@ from nestris_ltm.db.models import AdminUser, ApiToken, Setting
 SESSION_TTL_S = 7 * 24 * 3600
 SESSION_SECRET_KEY = "session_secret"
 TOKEN_PREFIX = "nltm_"
-SCOPES = ("admin", "players:write", "games:write", "stations")
+SCOPES = ("admin", "players:write", "games:write", "stations", "scenes")
 
 _hasher = PasswordHasher()
 

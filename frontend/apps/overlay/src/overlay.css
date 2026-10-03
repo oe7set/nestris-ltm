@@ -1,0 +1,29 @@
+/* Share Tech Mono ships with the kiosk assets of NestrisLTM. */
+@font-face {
+  font-family: "Share Tech Mono";
+  src: url("/kiosk/static/fonts/share-tech-mono-latin-400.woff2") format("woff2");
+  font-display: block;
+}
+
+:root {
+  --panel: rgba(10, 15, 30, 0.86);
+  --frame: #2b3b63;
+  --well-bg: rgba(0, 0, 0, 0.92);
+  --text: #f1f5f9;
+  --muted: #8b9ab5;
+  --accent: #f5b800;
+  --cyan: #4dd2ff;
+  --side-a: #4dd2ff;
+  --side-b: #ff6b9a;
+  --good: #46e07a;
+  --bad: #ff5d6c;
+}
+
+html,
+body {
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+  color: var(--text);
+  font-family: "Share Tech Mono", ui-monospace, monospace;
+}

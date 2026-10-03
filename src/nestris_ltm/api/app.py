@@ -20,6 +20,7 @@ from nestris_ltm.api import (
     routes_health,
     routes_pages,
     routes_players,
+    routes_scenes,
     routes_tournament,
     routes_ws,
 )
@@ -59,6 +60,7 @@ def create_app(runtime: Runtime) -> FastAPI:
         routes_games,
         routes_events,
         routes_tournament,
+        routes_scenes,
         routes_diagnostics,
         routes_ws,
         routes_pages,
@@ -67,6 +69,13 @@ def create_app(runtime: Runtime) -> FastAPI:
     # Hashed bundle files of the admin UI (``pnpm build``); absent in a bare checkout.
     # Kiosk assets ported from TournamentHigscore (JS effects, CSS, fonts, icons).
     app.include_router(routes_tournament.pages)
+    app.include_router(routes_scenes.pages)
+    # Overlay bundle (frontend/apps/overlay); absent in a bare checkout.
+    app.mount(
+        "/overlay-assets",
+        StaticFiles(directory=routes_scenes.overlay_dist(), check_dir=False),
+        name="overlay-assets",
+    )
     app.mount(
         "/kiosk/static",
         StaticFiles(directory=routes_tournament.kiosk_dir() / "static"),
