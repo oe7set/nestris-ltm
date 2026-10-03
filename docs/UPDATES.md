@@ -10,7 +10,7 @@ silently in the middle of an event.
 | NestrisLTM (host) | `oe7set/nestris-ltm` | host PC, Windows | `NestrisLTM-Setup-<v>.exe` | itself (admin UI / tray) |
 | Player terminal | `oe7set/nestris-terminal` | touch PC, Windows | `RetroverseTerminal-Setup-<v>.exe` | itself (hidden menu) |
 | Capture station | `oe7set/nestris-core` | Debian PCs | `nestris-station_<v>_<arch>.deb` | NestrisLTM admin → station updater |
-| Reader firmware | `oe7set/nestris-rfid-reader` | ESP32 on USB | `nestris-rfid-reader-<v>-esp32dev.bin` | terminal / station it is plugged into |
+| Reader firmware | `oe7set/nestris-rfid-reader` | ESP32 on USB | `nestris-rfid-reader-<v>-esp32dev-app.bin` + `-manifest.json` | terminal / station it is plugged into |
 
 ## Release convention (all repositories)
 
@@ -90,8 +90,10 @@ Common steps, done by a small shared module in each app
 - App: `RetroverseTerminal-Setup-<v>.exe /VERYSILENT /SUPPRESSMSGBOXES
   /update=1` (per-user install, no UAC prompt on the kiosk), then quit; the
   installer restarts the kiosk.
-- Reader firmware: close the reader port, flash the merged image with
-  `esptool` (bundled), wait for `hello`, compare `fw`, reopen.
+- Reader firmware: close the reader port, flash the **app image at
+  `0x10000`** (offset from the release manifest; keeps the reader's settings)
+  with `esptool` (bundled), wait for `hello`, compare `fw`, reopen. Readers
+  still on the v1 sketch need the factory image once (`0x0`).
 
 ### Station
 
