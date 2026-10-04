@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { copyText } from "../lib/clipboard";
   import { onMount } from "svelte";
   import Modal from "../components/Modal.svelte";
   import { api } from "../lib/api";
@@ -179,8 +180,12 @@
   }
 
   async function copy(text: string): Promise<void> {
-    await navigator.clipboard.writeText(text);
-    toasts.ok(t("common.copied"));
+    try {
+      await copyText(text);
+      toasts.ok(t("common.copied"));
+    } catch (e) {
+      toasts.error(e);
+    }
   }
 
   function slugify(name: string): string {

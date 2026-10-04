@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { copyText } from "../lib/clipboard";
   import { onMount } from "svelte";
   import { api } from "../lib/api";
   import { i18n, t, type MessageKey } from "../lib/i18n.svelte";
@@ -30,7 +31,7 @@
 
   async function copy(text: string): Promise<void> {
     try {
-      await navigator.clipboard.writeText(text);
+      await copyText(text);
       toasts.ok(t("common.copied"));
     } catch (e) {
       toasts.error(e);

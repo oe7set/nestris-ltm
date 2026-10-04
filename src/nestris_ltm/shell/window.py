@@ -7,11 +7,15 @@ local server, which grants an admin session without a login.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QUrl, Signal
+from collections.abc import Callable
+
+from PySide6.QtCore import QObject, QUrl, Signal
 from PySide6.QtGui import QCloseEvent, QDesktopServices
 from PySide6.QtWebEngineCore import (
     QWebEnginePage,
+    QWebEnginePermission,
     QWebEngineProfile,
+    QWebEngineSettings,
     QWebEngineUrlRequestInfo,
     QWebEngineUrlRequestInterceptor,
 )
@@ -37,21 +41,81 @@ class ShellTokenInterceptor(QWebEngineUrlRequestInterceptor):
             info.setHttpHeader(SHELL_TOKEN_HEADER, self._token)
 
 
-class _Page(QWebEnginePage):
-    """Opens links to other sites in the system browser instead of the app."""
+UrlOpener = Callable[[QUrl], object]
 
-    def __init__(self, profile: QWebEngineProfile, origin: QUrl) -> None:
+
+class _NewWindowPage(QWebEnginePage):
+    """Stand-in for a new browser window (``target="_blank"``, ``window.open``).
+
+    The embedded browser has no tabs: the first URL the "window" navigates to
+    is handed to the system browser, then the stand-in deletes itself.
+    """
+
+    def __init__(self, profile: QWebEngineProfile, parent: QObject, opener: UrlOpener) -> None:
+        super().__init__(profile, parent)
+        self._opener = opener
+        self._done = False
+        # Some navigations (e.g. rel="noopener") only show up as a URL change.
+        self.urlChanged.connect(self._open)
+
+    def acceptNavigationRequest(
+        self, url: QUrl | str, nav_type: QWebEnginePage.NavigationType, is_main_frame: bool
+    ) -> bool:
+        self._open(QUrl(url))
+        return False
+
+    def _open(self, url: QUrl) -> None:
+        if self._done or url.scheme() not in ("http", "https", "mailto"):
+            return
+        self._done = True
+        self._opener(url)
+        self.deleteLater()
+
+
+class _Page(QWebEnginePage):
+    """The admin UI page.
+
+    - Links to other sites and new windows open in the system browser (the
+      overlay and kiosk views are meant for OBS / other screens anyway).
+    - The page may write to the clipboard ("URL kopieren" buttons).
+    """
+
+    def __init__(
+        self, profile: QWebEngineProfile, origin: QUrl, opener: UrlOpener = QDesktopServices.openUrl
+    ) -> None:
         super().__init__(profile)
         self._origin = origin
+        self._opener = opener
+        settings = self.settings()
+        settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanAccessClipboard, True)
+        settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanPaste, True)
+        self.permissionRequested.connect(self._on_permission)
 
     def acceptNavigationRequest(
         self, url: QUrl | str, nav_type: QWebEnginePage.NavigationType, is_main_frame: bool
     ) -> bool:
         url = QUrl(url)
-        if is_main_frame and url.host() != self._origin.host():
-            QDesktopServices.openUrl(url)
+        external = url.scheme() == "mailto" or (
+            url.scheme() in ("http", "https") and url.host() != self._origin.host()
+        )
+        if is_main_frame and external:
+            self._opener(url)
             return False
         return super().acceptNavigationRequest(url, nav_type, is_main_frame)
+
+    def createWindow(self, _type: QWebEnginePage.WebWindowType) -> QWebEnginePage:
+        return _NewWindowPage(self.profile(), self, self._opener)
+
+    def _on_permission(self, permission: QWebEnginePermission) -> None:
+        # Only the app's own pages, and only the clipboard.
+        same_origin = permission.origin().host() == self._origin.host()
+        clipboard = (
+            permission.permissionType() == QWebEnginePermission.PermissionType.ClipboardReadWrite
+        )
+        if same_origin and clipboard:
+            permission.grant()
+        else:
+            permission.deny()
 
 
 class MainWindow(QMainWindow):
