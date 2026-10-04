@@ -24,6 +24,7 @@ from nestris_ltm.api import (
     routes_scenes,
     routes_terminal,
     routes_tournament,
+    routes_updates,
     routes_ws,
 )
 from nestris_ltm.db.manager import DatabaseUnavailableError
@@ -65,6 +66,7 @@ def create_app(runtime: Runtime) -> FastAPI:
         routes_tournament,
         routes_scenes,
         routes_terminal,
+        routes_updates,
         routes_diagnostics,
         routes_ws,
         routes_pages,

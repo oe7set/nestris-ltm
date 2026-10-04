@@ -67,6 +67,7 @@ class ShellApp:
         self._told_about_tray = False
         self._quitting = False
         self._start_minimized = minimized
+        self._notified_update: str | None = None
 
         self._build_tray()
         self.window.hidden_to_tray.connect(self._on_hidden_to_tray)
@@ -137,6 +138,10 @@ class ShellApp:
         )
         menu.addAction(logs)
 
+        updates = QAction("Nach Updates suchen …", menu)
+        updates.triggered.connect(self.show_updates)
+        menu.addAction(updates)
+
         menu.addSeparator()
         self._autostart_action = QAction("Mit Windows starten", menu, checkable=True)
         self._autostart_action.setEnabled(autostart.is_supported())
@@ -153,6 +158,7 @@ class ShellApp:
         self.tray.setContextMenu(menu)
         self.tray.setToolTip(f"NestrisLTM {__version__}")
         self.tray.activated.connect(self._on_tray_activated)
+        self.tray.messageClicked.connect(self._on_message_clicked)
 
     def _on_tray_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
         if reason in (
@@ -188,10 +194,23 @@ class ShellApp:
     def show_window(self) -> None:
         self.window.bring_to_front()
 
+    def show_updates(self) -> None:
+        self.window.load_app("/#/updates")
+        self.window.bring_to_front()
+
+    def _on_message_clicked(self) -> None:
+        # The only balloon with an action is the update hint.
+        if self._notified_update:
+            self.show_updates()
+
     # ------------------------------------------------------------ status
 
     def _refresh_status(self) -> None:
         rt = self.runtime
+        if self.core.finished.is_set() and rt.quit_requested:
+            # E.g. the updater started the installer: leave without an error.
+            self.quit()
+            return
         if self.core.finished.is_set():
             self._set_health(Health.DOWN)
             error = self.core.error or "Kern wurde beendet"
@@ -220,9 +239,35 @@ class ShellApp:
                     f"Datenbank: {'ok' if db_ok else 'nicht verbunden'}",
                     f"MQTT: {'verbunden' if rt.mqtt.connected else 'nicht verbunden'}",
                     f"Stationen online: {online}/{len(stations)}",
+                    *self._update_lines(),
                 ]
             )
         )
+        self._notify_update()
+
+    def _update_lines(self) -> list[str]:
+        upd = self.runtime.updates
+        if upd.update_available and upd.latest is not None:
+            return [f"Update verfügbar: {upd.latest.version}"]
+        return []
+
+    def _notify_update(self) -> None:
+        """One balloon per new version (installing stays a click in the admin UI)."""
+        upd = self.runtime.updates
+        if not upd.update_available or upd.latest is None:
+            return
+        version = str(upd.latest.version)
+        if version == self._notified_update:
+            return
+        self._notified_update = version
+        if self.tray.supportsMessages():
+            self.tray.showMessage(
+                "Update verfügbar",
+                f"NestrisLTM {version} ist verfügbar (installiert: {upd.current}). "
+                "Klicken, um die Update-Seite zu öffnen.",
+                app_icon(),
+                10000,
+            )
 
     def _set_health(self, health: Health) -> None:
         if health is not self._health:

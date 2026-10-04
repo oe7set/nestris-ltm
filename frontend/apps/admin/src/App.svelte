@@ -17,6 +17,7 @@
   import Settings from "./routes/Settings.svelte";
   import Stations from "./routes/Stations.svelte";
   import Tournament from "./routes/Tournament.svelte";
+  import Updates from "./routes/Updates.svelte";
 
   const nav: { route: string; href: string; label: MessageKey; also?: string[] }[] = [
     { route: "dashboard", href: "/", label: "nav.dashboard" },
@@ -28,6 +29,7 @@
     { route: "stations", href: "/stations", label: "nav.stations" },
     { route: "audit", href: "/audit", label: "nav.audit" },
     { route: "settings", href: "/settings", label: "nav.settings" },
+    { route: "updates", href: "/updates", label: "nav.updates" },
     { route: "pages", href: "/pages", label: "nav.pages" },
   ];
 
@@ -92,6 +94,8 @@
           <Audit />
         {:else if current.name === "settings"}
           <Settings />
+        {:else if current.name === "updates"}
+          <Updates />
         {:else if current.name === "pages"}
           <Pages />
         {:else}

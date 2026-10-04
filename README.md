@@ -18,12 +18,14 @@ It replaces the old `NestrisLTM/` desktop app and `TournamentHigscore/`.
 > roadmap: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). **Installing and
 > running it at an event: [docs/OPERATIONS.md](docs/OPERATIONS.md).**
 
-## Install (Windows)
+## Install and update (Windows)
 
 Download `NestrisLTM-Setup-<version>.exe` from the GitHub releases and run
 it. It installs or reuses PostgreSQL and Mosquitto, sets up the firewall and
 autostart, writes the database connection and checks everything at the end.
-Details: [docs/OPERATIONS.md](docs/OPERATIONS.md).
+Details: [docs/OPERATIONS.md](docs/OPERATIONS.md). Later versions are
+offered by the app itself (admin page *Updates*, tray balloon): signed
+GitHub releases, database backup before installing, one click.
 
 ## Requirements
 

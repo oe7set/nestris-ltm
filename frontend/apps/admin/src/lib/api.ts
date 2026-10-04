@@ -4,9 +4,21 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     readonly detail: string,
+    /** Machine-readable code of `{"detail": {"code", "message"}}` errors. */
+    readonly code: string | null = null,
   ) {
     super(detail);
   }
+}
+
+function errorCode(body: unknown): string | null {
+  if (body && typeof body === "object" && "detail" in body) {
+    const detail = (body as { detail: unknown }).detail;
+    if (detail && typeof detail === "object" && "code" in detail) {
+      return String((detail as { code: unknown }).code);
+    }
+  }
+  return null;
 }
 
 type Query = Record<string, string | number | boolean | null | undefined>;
@@ -38,6 +50,9 @@ export function errorDetail(body: unknown, fallback: string): string {
   if (body && typeof body === "object" && "detail" in body) {
     const detail = (body as { detail: unknown }).detail;
     if (typeof detail === "string") return detail;
+    if (detail && typeof detail === "object" && "message" in detail) {
+      return String((detail as { message: unknown }).message);
+    }
     if (Array.isArray(detail)) {
       return detail
         .map((d) => {
@@ -78,7 +93,11 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
   }
   if (!response.ok) {
     if (response.status === 401) onUnauthorized();
-    throw new ApiError(response.status, errorDetail(body, `${response.status} ${response.statusText}`));
+    throw new ApiError(
+      response.status,
+      errorDetail(body, `${response.status} ${response.statusText}`),
+      errorCode(body),
+    );
   }
   return body as T;
 }

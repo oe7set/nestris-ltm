@@ -149,7 +149,7 @@ reader firmware in a header of their API calls (`X-Terminal-Version`,
 | Phase | Content |
 |---|---|
 | U1 ✅ | Signing key, `sign` step in all release workflows, station `.deb` (amd64 + arm64, built on Debian 12) in the `nestris-core` release, reader firmware release |
-| U2 | NestrisLTM: update service + admin page + tray, DB backup, installer `/update=1` restart |
+| U2 ✅ | NestrisLTM: update service (`services/updates.py`), admin page *Updates*, tray balloon + menu, `pg_dump` backup, installer `/update=1` restart |
 | U3 | Terminal: update service + *Updates* tab, installer restart, reader flashing (`esptool`) |
 | U4 | Station: version in `status`, `control` topic, `.deb` updater with root helper, reader flashing; NestrisLTM station buttons and *Geräte* page |
 | U5 | End-to-end test: publish test releases `v0.x.y` on GitHub and update every part from one release to the next and back |

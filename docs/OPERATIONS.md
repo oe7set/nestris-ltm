@@ -91,6 +91,27 @@ NestrisLTM.exe [--minimized]              # tray app
 | Database | PostgreSQL data directory, e.g. `C:\Program Files\PostgreSQL\18\data` |
 | Mosquitto | `C:\Program Files\mosquitto\mosquitto.conf`, data and log in `C:\ProgramData\mosquitto\` |
 
+## Updates
+
+NestrisLTM checks `github.com/oe7set/nestris-ltm` for new releases one minute
+after the start and then daily (`[updates]` in the config; offline is fine).
+A new version shows up as a tray balloon and on the admin page *Updates*:
+
+1. *Updates* → read the release notes → *Version x.y.z installieren*.
+2. NestrisLTM downloads the installer, checks the **signature** of the
+   release (only releases signed with the Retroverse release key are
+   accepted) and the installer's checksum,
+3. backs up the database with `pg_dump` to `%APPDATA%\NestrisLTM\backups\`
+   (the last 10 are kept),
+4. starts the installer (Windows asks for admin rights once), quits, and
+   the installer starts NestrisLTM again.
+
+If games are running, the page asks first; results sent meanwhile are
+queued by Mosquitto and the stations. *Andere Version …* installs an older
+release (rollback); if the newer version changed the database, restore its
+backup (below) after going back. Installing only works in the installed app,
+not when started from source.
+
 ## Backup and restore
 
 All tournament data is in the PostgreSQL database. Back it up before and

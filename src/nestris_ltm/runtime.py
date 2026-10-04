@@ -26,6 +26,7 @@ from nestris_ltm.ingest.spool import EventSpool
 from nestris_ltm.live.hub import LiveHub
 from nestris_ltm.services.scenes import SceneEngine
 from nestris_ltm.services.tournament import TournamentService
+from nestris_ltm.services.updates import UpdateService, running_live_games
 
 log = structlog.get_logger(__name__)
 
@@ -54,6 +55,14 @@ class Runtime:
         self.ingest.command_sink = self.mqtt.publish_command
         self.tournament = TournamentService(self.db, self.hub)
         self.scenes = SceneEngine(self.db, self.hub)
+        self.updates = UpdateService(
+            settings,
+            live_games=lambda: running_live_games(self.hub.stations()),
+            request_quit=self.request_quit,
+        )
+        # Set when the app should end (e.g. the updater handed over to the
+        # installer); the shell then quits instead of reporting a dead core.
+        self.quit_requested = False
         # Sent by the Qt shell's embedded browser; grants an admin session
         # without a login (the shell runs on the host itself).
         self.shell_token = secrets.token_urlsafe(32)
@@ -91,6 +100,7 @@ class Runtime:
         self.spawn(self.frames.run(), name="frame-buffer")
         self.spawn(self.tournament.run(), name="kiosk")
         self.spawn(self.scenes.run(), name="scenes")
+        self.spawn(self.updates.run(), name="updates")
 
     async def stop(self) -> None:
         for task in list(self._tasks):
@@ -104,6 +114,7 @@ class Runtime:
                 await self.frames.flush()
             await self.scenes.close()
         await self.db.dispose()
+        await self.updates.github.close()
 
     async def serve(self) -> None:
         from nestris_ltm.api.app import create_app
@@ -130,6 +141,11 @@ class Runtime:
             loop.call_soon_threadsafe(self._stop_server)
         else:
             self._stop_server()
+
+    def request_quit(self) -> None:
+        """End the whole app (core and shell). Thread-safe."""
+        self.quit_requested = True
+        self.request_shutdown()
 
     def _stop_server(self) -> None:
         if self._server is not None:

@@ -32,3 +32,12 @@ port = 7990
 level = "INFO"               # DEBUG, INFO, WARNING, ERROR
 to_file = true               # <data_dir>/logs/nestris-ltm.log (rotating)
 buffer_size = 2000           # records kept for the diagnostics view
+
+[updates]
+enabled = true               # check GitHub releases on start and daily (installing is always a click)
+channel = "stable"           # "beta" also offers pre-releases (v1.2.0-rc1)
+owner = "oe7set"             # github.com/<owner>/<repo>
+repo = "nestris-ltm"
+# token = ""                 # optional GitHub token (private repo / rate limits)
+check_interval_h = 24
+# pg_dump = ""               # empty = pg_dump.exe of the local PostgreSQL installation

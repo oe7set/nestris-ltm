@@ -17,6 +17,8 @@ dependencies = [
     "argon2-cffi>=23.1",
     "pyside6>=6.8",
     "tomli-w>=1.1",
+    "httpx>=0.27",
+    "cryptography>=43",
 ]
 
 [project.scripts]
@@ -58,7 +60,8 @@ select = ["E", "F", "W", "I", "UP", "B", "SIM", "ASYNC", "RUF"]
 
 [tool.ruff.lint.per-file-ignores]
 # Test data reads better on one line.
-"tests/*" = ["E501"]
+# Fakes in async tests may touch files directly.
+"tests/*" = ["E501", "ASYNC240"]
 
 [tool.mypy]
 python_version = "3.13"

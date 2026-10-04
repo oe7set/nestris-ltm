@@ -95,6 +95,19 @@ class LogSettings(BaseModel):
     buffer_size: int = Field(default=2000, ge=100)
 
 
+class UpdateSettings(BaseModel):
+    """Update checks against GitHub releases (docs/UPDATES.md)."""
+
+    enabled: bool = True  # automatic checks; installing is always a click
+    channel: Literal["stable", "beta"] = "stable"
+    owner: str = "oe7set"
+    repo: str = "nestris-ltm"
+    token: SecretStr = SecretStr("")  # optional, for private repos / rate limits
+    check_interval_h: float = Field(default=24.0, ge=1)
+    # Empty = find pg_dump.exe of the local PostgreSQL installation.
+    pg_dump: str = ""
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="NESTRIS_LTM__",
@@ -110,6 +123,7 @@ class Settings(BaseSettings):
     mqtt: MqttSettings = Field(default_factory=MqttSettings)
     http: HttpSettings = Field(default_factory=HttpSettings)
     log: LogSettings = Field(default_factory=LogSettings)
+    updates: UpdateSettings = Field(default_factory=UpdateSettings)
 
     @classmethod
     def settings_customise_sources(

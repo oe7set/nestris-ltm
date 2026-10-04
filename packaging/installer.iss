@@ -137,6 +137,8 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#GuiExe}"; Tasks: desktopico
 
 [Run]
 Filename: "{app}\{#GuiExe}"; Description: "{cm:LaunchNow}"; Flags: nowait postinstall skipifsilent runasoriginaluser
+; Update started from NestrisLTM itself (/SILENT /update=1): start it again.
+Filename: "{app}\{#GuiExe}"; Flags: nowait runasoriginaluser; Check: IsUpdate
 
 [UninstallRun]
 Filename: "{app}\{#CliExe}"; Parameters: "autostart off"; Flags: runhidden waituntilterminated; RunOnceId: "AutostartOff"
@@ -197,6 +199,14 @@ end;
 function OnDownloadProgress(const Url, FileName: String; const Progress, ProgressMax: Int64): Boolean;
 begin
   Result := True;
+end;
+
+{ ------------------------------------------------------------ update mode }
+
+function IsUpdate: Boolean;
+begin
+  { Set by NestrisLTM's updater (services/updates.py). }
+  Result := ExpandConstant('{param:update|0}') = '1';
 end;
 
 procedure InitializeWizard;
