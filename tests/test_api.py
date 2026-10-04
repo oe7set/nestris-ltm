@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -12,6 +13,7 @@ import pytest
 from nestris_ltm.api.app import create_app
 from nestris_ltm.config import DatabaseSettings, load_settings
 from nestris_ltm.runtime import Runtime
+from nestris_ltm.services import auth as auth_service
 from tests.payload_samples import GAME_END, GAME_START, dumps
 
 pytestmark = pytest.mark.db
@@ -104,6 +106,48 @@ async def test_shell_token_and_api_tokens(runtime: Runtime, admin: httpx.AsyncCl
         assert (await remote.get("/api/players", headers=auth)).status_code == 403  # not admin
     r = await admin.post("/api/tokens", json={"name": "x", "scopes": ["bogus"]})
     assert r.status_code == 422
+
+
+async def test_stay_signed_in(runtime: Runtime, admin: httpx.AsyncClient) -> None:
+    async with _client(runtime, remote=True) as remote:
+        creds = {"username": "crew", "password": "secret-pw"}
+        r = await remote.post("/api/auth/login", json={**creds, "remember": True})
+        assert r.status_code == 200 and r.json()["remember"] is True
+        assert f"Max-Age={auth_service.SESSION_TTL_S}" in r.headers["set-cookie"]
+
+        r = await remote.post("/api/auth/login", json={**creds, "remember": False})
+        cookie_header = r.headers["set-cookie"]
+        assert "Max-Age" not in cookie_header  # a browser-session cookie
+        assert (await remote.get("/api/players")).status_code == 200
+        # Not renewed: it ends with the browser or after SHORT_SESSION_TTL_S.
+        assert "set-cookie" not in (await remote.get("/api/auth/me")).headers
+
+
+async def test_remembered_login_is_renewed(runtime: Runtime, admin: httpx.AsyncClient) -> None:
+    async with runtime.db.session() as s, s.begin():
+        secret = await auth_service.session_secret(s)
+    now = time.time()
+    # A remembered login used 20 days ago: past half its 30 days, renewed.
+    old = auth_service.make_session_cookie(secret, 1, "crew", now - 20 * 86400, remember=True)
+    fresh = auth_service.make_session_cookie(secret, 1, "crew", now - 86400, remember=True)
+    short = auth_service.make_session_cookie(secret, 1, "crew", now - 3600, remember=False)
+    async with _client(runtime, remote=True) as remote:
+        r = await remote.get("/api/auth/me", headers={"Cookie": f"nltm_session={old}"})
+        assert r.json()["authenticated"] is True
+        renewed = r.headers["set-cookie"]
+        assert f"Max-Age={auth_service.SESSION_TTL_S}" in renewed
+        value = renewed.split(";", 1)[0].split("=", 1)[1].strip('"')
+        data = auth_service.parse_session_cookie(secret, value)
+        assert data is not None and data.remember and data.expires > now + 29 * 86400
+
+        r = await remote.get("/api/auth/me", headers={"Cookie": f"nltm_session={fresh}"})
+        assert "set-cookie" not in r.headers  # still young: nothing to do
+        r = await remote.get("/api/auth/me", headers={"Cookie": f"nltm_session={short}"})
+        assert r.json()["authenticated"] is True and "set-cookie" not in r.headers
+
+    # A non-remembered session runs out after 12 h.
+    expired = auth_service.make_session_cookie(secret, 1, "crew", now - 13 * 3600, remember=False)
+    assert auth_service.parse_session_cookie(secret, expired) is None
 
 
 async def test_login_throttle(runtime: Runtime, admin: httpx.AsyncClient) -> None:

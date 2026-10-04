@@ -27,7 +27,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from nestris_ltm.db.models import AdminUser, ApiToken, Setting
 
-SESSION_TTL_S = 7 * 24 * 3600
+# "Stay signed in": a persistent cookie, renewed while it is used.
+SESSION_TTL_S = 30 * 24 * 3600
+# Without it: a browser-session cookie, and the session ends after this anyway.
+SHORT_SESSION_TTL_S = 12 * 3600
 SESSION_SECRET_KEY = "session_secret"
 TOKEN_PREFIX = "nltm_"
 SCOPES = ("admin", "players:write", "games:write", "stations", "scenes", "terminal")
@@ -54,6 +57,7 @@ class SessionData:
     user_id: int
     username: str
     expires: int
+    remember: bool = False
 
 
 async def session_secret(session: AsyncSession) -> bytes:
@@ -77,10 +81,20 @@ def _unb64(text: str) -> bytes:
     return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
 
 
+def session_ttl(remember: bool) -> int:
+    return SESSION_TTL_S if remember else SHORT_SESSION_TTL_S
+
+
 def make_session_cookie(
-    secret: bytes, user_id: int, username: str, now: float | None = None
+    secret: bytes,
+    user_id: int,
+    username: str,
+    now: float | None = None,
+    *,
+    remember: bool = True,
 ) -> str:
-    payload = {"u": user_id, "n": username, "e": int((now or time.time()) + SESSION_TTL_S)}
+    expires = int((now or time.time()) + session_ttl(remember))
+    payload = {"u": user_id, "n": username, "e": expires, "r": 1 if remember else 0}
     body = _b64(json.dumps(payload, separators=(",", ":")).encode())
     sig = _b64(hmac.new(secret, body.encode(), hashlib.sha256).digest())
     return f"{body}.{sig}"
@@ -97,7 +111,13 @@ def parse_session_cookie(
         return None
     try:
         payload: dict[str, Any] = json.loads(_unb64(body))
-        data = SessionData(int(payload["u"]), str(payload["n"]), int(payload["e"]))
+        data = SessionData(
+            int(payload["u"]),
+            str(payload["n"]),
+            int(payload["e"]),
+            # Cookies from before "stay signed in" existed were persistent.
+            bool(payload.get("r", 1)),
+        )
     except (ValueError, KeyError, TypeError):
         return None
     if data.expires < (now or time.time()):

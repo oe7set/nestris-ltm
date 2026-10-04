@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import time
 from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from nestris_ltm.api.auth import (
     SESSION_COOKIE,
@@ -28,6 +30,9 @@ _throttle = LoginThrottle()
 class Credentials(BaseModel):
     username: str = Field(min_length=1, max_length=64)
     password: str = Field(min_length=1, max_length=256)
+    # "Angemeldet bleiben": persistent 30-day cookie, renewed while used;
+    # otherwise the session ends with the browser (at most 12 h).
+    remember: bool = True
 
 
 class NewAdmin(BaseModel):
@@ -60,11 +65,12 @@ class TokenOut(BaseModel):
     revoked_at: datetime | None
 
 
-def _set_cookie(request: Request, response: Response, value: str) -> None:
+def _set_cookie(request: Request, response: Response, value: str, *, remember: bool = True) -> None:
     response.set_cookie(
         SESSION_COOKIE,
         value,
-        max_age=auth_service.SESSION_TTL_S,
+        # None = a browser-session cookie, dropped when the browser closes.
+        max_age=auth_service.SESSION_TTL_S if remember else None,
         httponly=True,
         samesite="lax",
         secure=request.url.scheme == "https",
@@ -73,9 +79,11 @@ def _set_cookie(request: Request, response: Response, value: str) -> None:
 
 
 @router.get("/auth/me")
-async def me(request: Request, session: SessionDep) -> dict[str, Any]:
+async def me(request: Request, response: Response, session: SessionDep) -> dict[str, Any]:
     principal = await get_principal(request)
     needs_setup = await auth_service.admin_count(session) == 0
+    if principal is not None and principal.kind == "session":
+        await _renew(request, response, session)
     return {
         "authenticated": principal is not None and principal.allows("admin"),
         "kind": principal.kind if principal else None,
@@ -103,11 +111,29 @@ async def login(
             _throttle.failure(key)
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "wrong username or password")
         secret = await auth_service.session_secret(session)
-        cookie = auth_service.make_session_cookie(secret, user.id, user.username)
+        cookie = auth_service.make_session_cookie(
+            secret, user.id, user.username, remember=body.remember
+        )
         username = user.username
     _throttle.success(key)
-    _set_cookie(request, response, cookie)
-    return {"ok": True, "name": username}
+    _set_cookie(request, response, cookie, remember=body.remember)
+    return {"ok": True, "name": username, "remember": body.remember}
+
+
+async def _renew(request: Request, response: Response, session: AsyncSession) -> None:
+    """Sliding expiry for "stay signed in": a cookie past half its lifetime is
+    re-issued, so a regularly used login never runs out."""
+    cookie = request.cookies.get(SESSION_COOKIE)
+    if not cookie:
+        return
+    secret = await auth_service.session_secret(session)
+    data = auth_service.parse_session_cookie(secret, cookie)
+    if data is None or not data.remember:
+        return
+    if data.expires - time.time() > auth_service.SESSION_TTL_S / 2:
+        return
+    fresh = auth_service.make_session_cookie(secret, data.user_id, data.username, remember=True)
+    _set_cookie(request, response, fresh, remember=True)
 
 
 @router.post("/auth/logout")

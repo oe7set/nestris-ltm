@@ -22,8 +22,8 @@ class Session {
     }
   }
 
-  async login(username: string, password: string): Promise<void> {
-    await api("/api/auth/login", { method: "POST", body: { username, password } });
+  async login(username: string, password: string, remember = true): Promise<void> {
+    await api("/api/auth/login", { method: "POST", body: { username, password, remember } });
     await this.refresh();
   }
 

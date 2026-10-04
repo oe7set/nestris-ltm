@@ -5,6 +5,8 @@
   let username = $state("");
   let password = $state("");
   let repeat = $state("");
+  // "Angemeldet bleiben": on by default (the host PC is the crew's machine).
+  let remember = $state(true);
   let error = $state<string | null>(null);
   let busy = $state(false);
 
@@ -21,7 +23,7 @@
     busy = true;
     try {
       if (setupMode) await session.setup(username, password);
-      else await session.login(username, password);
+      else await session.login(username, password, remember);
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     } finally {
@@ -57,6 +59,13 @@
           <input type="password" bind:value={repeat} autocomplete="new-password" required />
         </label>
       {/if}
+      {#if !setupMode}
+        <label class="check remember">
+          <input type="checkbox" bind:checked={remember} />
+          <span>{t("login.remember")}</span>
+        </label>
+        <p class="hint small">{remember ? t("login.remember_hint") : t("login.session_hint")}</p>
+      {/if}
       {#if error}<div class="error-box">{error}</div>{/if}
       <button class="primary" type="submit" disabled={busy}>
         {setupMode ? t("setup.submit") : t("login.submit")}
@@ -66,6 +75,16 @@
 </div>
 
 <style>
+  .remember {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    cursor: pointer;
+  }
+  .remember input {
+    width: 18px;
+    height: 18px;
+  }
   .wrap {
     min-height: 100vh;
     display: grid;

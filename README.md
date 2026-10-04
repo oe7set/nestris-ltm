@@ -50,9 +50,13 @@ uv run nestris-ltm --headless         # core only, no GUI; http://localhost:7990
 ## First start and sign-in
 
 On the first start the window asks for the first admin account (only
-possible on the host PC itself). Other devices sign in with it at
-`http://<host-ip>:7990/`. Further accounts and API tokens are managed under
-*Einstellungen*. Forgotten password:
+possible on the host PC itself). **The desktop app signs in by itself** (it
+sends a per-start token with every request), so on the host PC no password
+is needed. Other devices sign in at `http://<host-ip>:7990/`; with
+*Angemeldet bleiben* (default) that browser stays signed in for 30 days and
+the period renews while it is used, without it the session ends when the
+browser closes (at most 12 h). Further accounts and API tokens are managed
+under *Einstellungen*. Forgotten password:
 `uv run nestris-ltm set-admin-password <name>` on the host.
 
 Without a frontend build `/` shows a plain status page; `/status` always
