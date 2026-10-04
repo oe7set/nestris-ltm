@@ -52,6 +52,19 @@ class StatusPayload(_Payload):
     ts: AwareDatetime | None = None
 
 
+class UpdatePayload(_Payload):
+    """``<base>/update`` (retained): progress of an update started from here."""
+
+    station: str | None = None
+    target: Literal["station", "reader"]
+    version: str
+    # downloading, verifying, installing, flashing, waiting, done, failed
+    state: str = Field(max_length=32)
+    detail: str | None = Field(default=None, max_length=500)
+    progress: float | None = None
+    ts: AwareDatetime | None = None
+
+
 class PlayerPayload(_Payload):
     present: bool
     player: CardPlayer | None = None

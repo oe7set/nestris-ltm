@@ -41,6 +41,7 @@ class MqttIngest:
             (f"{p}/+/player", 1),
             (f"{p}/+/live", 0),
             (f"{p}/+/event/#", 1),
+            (f"{p}/+/update", 1),
         ]
 
     def _new_client(self) -> aiomqtt.Client:

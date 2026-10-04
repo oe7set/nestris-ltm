@@ -124,31 +124,44 @@ Common steps, done by a small shared module in each app
 
 ### Station
 
-The station has no screen, so NestrisLTM drives it:
+The station has no screen and usually no internet, so NestrisLTM drives it
+(contract: `../nestris-core/docs/STATION.md`, *Updates*):
 
 - Stations report `version`, `reader_fw` and `reader_serial` in their MQTT
-  `status`. NestrisLTM's page *Stationen* shows them next to the newest
-  releases and offers *Station aktualisieren* / *Leser aktualisieren*.
-- The button publishes `{"type":"update","target":"station"|"reader","version":"1.2.0"}`
-  to `<prefix>/<station>/control` (new topic, QoS 1). The station reports
-  progress as `event/update` (`downloading`, `verifying`, `installing`,
-  `done`, `failed` + detail).
-- Station: downloads and verifies the `.deb` itself, then hands it to a root
-  helper: it writes `/var/lib/nestris-station/updates/request` and the
-  systemd path unit `nestris-station-update.path` starts the oneshot
-  `nestris-station-update.service`, which verifies the file again and runs
-  `apt-get install ./nestris-station_<v>_<arch>.deb` (restarts the station).
-  The station process itself never runs as root.
-- Reader: the station flashes it directly (it owns the serial port; the
-  `espflash` library), then expects `hello` with the new `fw`.
-- Not during a game: the station refuses with `failed: game running`.
+  `status`. The page *Geräte* shows them next to the newest releases and
+  offers *Station aktualisieren* / *Leser aktualisieren* (with a version
+  choice for rollbacks).
+- NestrisLTM first downloads the release files into
+  `<data_dir>/release-cache/<repo>/<tag>/` and verifies signature and
+  checksums (`services/devices.py`), then publishes
+  `{"type":"update","target":"station"|"reader","release":"v0.3.0","version":"0.2.1"}`
+  on the existing `<prefix>/<station>/cmd` topic (QoS 1). The station's
+  `version` differs from the release tag: `nestris-core` releases carry the
+  station package with its own version (`nestris-station_<v>-1_<arch>.deb`).
+- The station downloads the files from
+  `/api/stations/<station>/updates/<repo>/<tag>/<file>` (token scope
+  `stations`, like the recording upload) and **verifies the signature
+  itself** (`crates/nestris-station/src/update.rs`), so the host is not
+  trusted. Progress: retained `<base>/update` (`downloading`, `verifying`,
+  `installing`, `flashing`, `waiting`, `done`, `failed` + detail).
+- Station package: the station writes `<state_dir>/updates/request`; the
+  path unit `nestris-station-update.path` starts the oneshot
+  `nestris-station-update.service` (root), whose helper copies the files to a
+  root-only directory, verifies them again with the installed binary
+  (`nestris-station verify-update`), runs `apt-get install` and restarts the
+  station. The station process itself never runs as root.
+- Reader: the station closes the port and runs `esptool` (Debian package,
+  a separate GPL program; the plan's `espflash` crate would have added a
+  large dependency for the same job), then expects `hello` with the new `fw`.
+- Not during a game: both NestrisLTM and the station refuse.
 
 ### Device overview (NestrisLTM)
 
-A page *Geräte* lists every station, terminal and reader with its version
+The page *Geräte* lists every station, terminal and reader with its version
 and whether an update is available. Terminals report their version and
-reader firmware in a header of their API calls (`X-Terminal-Version`,
-`X-Reader-Firmware`).
+reader firmware in headers of their API calls (`X-Terminal-Version`,
+`X-Reader-Firmware`); they update themselves (hidden menu), the page only
+shows them.
 
 ## Phases
 
@@ -157,7 +170,7 @@ reader firmware in a header of their API calls (`X-Terminal-Version`,
 | U1 ✅ | Signing key, `sign` step in all release workflows, station `.deb` (amd64 + arm64, built on Debian 12) in the `nestris-core` release, reader firmware release |
 | U2 ✅ | NestrisLTM: update service (`services/updates.py`), admin page *Updates*, tray balloon + menu, `pg_dump` backup, installer `/update=1` restart |
 | U3 ✅ | Terminal: update service + *Updates* tab, installer restart, reader flashing (`esptool`). Open: flashing a real reader through the updater, a real `/update=1` run of the terminal setup |
-| U4 | Station: version in `status`, `control` topic, `.deb` updater with root helper, reader flashing; NestrisLTM station buttons and *Geräte* page |
+| U4 ✅ | Station: `update` command on `cmd`, signed download from the host's release cache, `.deb` updater with root helper, reader flashing (esptool); NestrisLTM *Geräte* page with station buttons, terminal versions. Open: a real Debian station end to end (CI only installs the package and exercises the helper) |
 | U5 | End-to-end test: publish test releases `v0.x.y` on GitHub and update every part from one release to the next and back |
 
 Reader firmware phases R1–R4 (`../nestris-rfid-reader/docs/ARCHITECTURE.md`)

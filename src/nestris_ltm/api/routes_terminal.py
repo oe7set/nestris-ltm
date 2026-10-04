@@ -26,7 +26,24 @@ from nestris_ltm.services import audit, events, highscore, profiles, recordings
 from nestris_ltm.services.players import find_by_nickname
 
 router = APIRouter(prefix="/api/terminal/v1", tags=["terminal"])
-TerminalDep = Annotated[Principal, Depends(require_scope("terminal"))]
+_terminal_scope = require_scope("terminal")
+
+
+async def _terminal(request: Request) -> Principal:
+    """The terminal scope; also notes the terminal for the device overview
+    (it sends its version and reader firmware as headers)."""
+    principal: Principal = await _terminal_scope(request)
+    if request.headers.get("x-terminal-version"):
+        get_runtime(request).devices.note_terminal(
+            principal.name,
+            request.client.host if request.client else None,
+            request.headers.get("x-terminal-version"),
+            request.headers.get("x-reader-firmware"),
+        )
+    return principal
+
+
+TerminalDep = Annotated[Principal, Depends(_terminal)]
 
 # Names go onto a MIFARE block (16 bytes) and the reader's OLED: plain ASCII.
 NICKNAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._-]{1,14}$")

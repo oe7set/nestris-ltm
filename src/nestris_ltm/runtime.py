@@ -24,6 +24,7 @@ from nestris_ltm.ingest.mqtt_client import MqttIngest
 from nestris_ltm.ingest.service import IngestService
 from nestris_ltm.ingest.spool import EventSpool
 from nestris_ltm.live.hub import LiveHub
+from nestris_ltm.services.devices import DeviceUpdates
 from nestris_ltm.services.scenes import SceneEngine
 from nestris_ltm.services.tournament import TournamentService
 from nestris_ltm.services.updates import UpdateService, running_live_games
@@ -60,6 +61,8 @@ class Runtime:
             live_games=lambda: running_live_games(self.hub.stations()),
             request_quit=self.request_quit,
         )
+        # Stations, terminals and readers, and the station updates (U4).
+        self.devices = DeviceUpdates(settings, self.hub, self.mqtt.publish_command)
         # Set when the app should end (e.g. the updater handed over to the
         # installer); the shell then quits instead of reporting a dead core.
         self.quit_requested = False
@@ -101,6 +104,7 @@ class Runtime:
         self.spawn(self.tournament.run(), name="kiosk")
         self.spawn(self.scenes.run(), name="scenes")
         self.spawn(self.updates.run(), name="updates")
+        self.spawn(self.devices.run(), name="device-updates")
 
     async def stop(self) -> None:
         for task in list(self._tasks):
@@ -115,6 +119,7 @@ class Runtime:
             await self.scenes.close()
         await self.db.dispose()
         await self.updates.github.close()
+        await self.devices.close()
 
     async def serve(self) -> None:
         from nestris_ltm.api.app import create_app

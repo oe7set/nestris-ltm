@@ -17,6 +17,7 @@
   import Settings from "./routes/Settings.svelte";
   import Stations from "./routes/Stations.svelte";
   import Tournament from "./routes/Tournament.svelte";
+  import Devices from "./routes/Devices.svelte";
   import Updates from "./routes/Updates.svelte";
 
   const nav: { route: string; href: string; label: MessageKey; also?: string[] }[] = [
@@ -27,6 +28,7 @@
     { route: "tournament", href: "/tournament", label: "nav.tournament" },
     { route: "scenes", href: "/scenes", label: "nav.scenes" },
     { route: "stations", href: "/stations", label: "nav.stations" },
+    { route: "devices", href: "/devices", label: "nav.devices" },
     { route: "audit", href: "/audit", label: "nav.audit" },
     { route: "settings", href: "/settings", label: "nav.settings" },
     { route: "updates", href: "/updates", label: "nav.updates" },
@@ -96,6 +98,8 @@
           <Settings />
         {:else if current.name === "updates"}
           <Updates />
+        {:else if current.name === "devices"}
+          <Devices />
         {:else if current.name === "pages"}
           <Pages />
         {:else}

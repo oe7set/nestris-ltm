@@ -112,6 +112,26 @@ release (rollback); if the newer version changed the database, restore its
 backup (below) after going back. Installing only works in the installed app,
 not when started from source.
 
+### Stations, readers and terminals (*Geräte*)
+
+The admin page *Geräte* lists every station (package version, reader
+firmware) and every terminal (app version, reader firmware) next to the
+newest releases of `nestris-core`, `nestris-rfid-reader` and
+`nestris-terminal`.
+
+- *Station aktualisieren* / *Leser aktualisieren*: NestrisLTM downloads the
+  release (this PC needs internet once; the stations do not), verifies it
+  and sends the station an update command. The station downloads the files
+  from NestrisLTM, checks the signature again, installs and restarts
+  (station) or flashes the reader over USB. Progress appears in the table.
+  The station needs `[host] url` and a token with the scope `stations` (as
+  for the recording upload); reader updates need `esptool` on the station
+  (`sudo apt install esptool`).
+- Not while a game runs on that station (both sides refuse).
+- Terminals update themselves: hidden menu → *Updates* on the touch PC.
+- Downloaded releases stay in `%APPDATA%\NestrisLTM\release-cache\`
+  (delete the folder to free space).
+
 ## Backup and restore
 
 All tournament data is in the PostgreSQL database. Back it up before and

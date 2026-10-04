@@ -5,6 +5,7 @@ Message routing (topics below ``<prefix>/<station>/``):
 - ``status``, ``player``  -> LiveHub (memory); stations are synced to the DB
   in the background.
 - ``live``                -> LiveHub + FrameBuffer (batched DB writes).
+- ``update``              -> LiveHub (progress of a station/reader update).
 - ``event/*``             -> durable spool -> worker -> database. The worker
   is the only writer of game rows, so events are applied strictly in order.
 """
@@ -34,6 +35,7 @@ from nestris_ltm.ingest.payloads import (
     LivePayload,
     PlayerPayload,
     StatusPayload,
+    UpdatePayload,
 )
 from nestris_ltm.ingest.spool import EventSpool, SpooledEvent
 from nestris_ltm.live.hub import LiveHub
@@ -118,6 +120,8 @@ class IngestService:
                 live = LivePayload.model_validate_json(text)
                 self.hub.update_live(station, live)
                 self.frames.add(live)
+            elif kind == "update":
+                self.hub.update_update(station, UpdatePayload.model_validate_json(text))
             elif kind in EVENT_KINDS:
                 await asyncio.to_thread(self.spool.append, station, kind, text)
                 self._wake.set()

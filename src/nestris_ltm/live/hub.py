@@ -15,7 +15,7 @@ from typing import Any
 
 import structlog
 
-from nestris_ltm.ingest.payloads import LivePayload, PlayerPayload, StatusPayload
+from nestris_ltm.ingest.payloads import LivePayload, PlayerPayload, StatusPayload, UpdatePayload
 from nestris_ltm.live.broadcast import Broadcaster
 
 log = structlog.get_logger(__name__)
@@ -43,6 +43,8 @@ class StationState:
     live_at: datetime | None = None
     # Display name of the player resolved from the card (set by the ingest).
     player_nickname: str | None = None
+    # Last update progress the station reported (``<base>/update``).
+    update: UpdatePayload | None = None
     messages: int = 0
     last_message_at: datetime | None = None
 
@@ -71,6 +73,7 @@ class StationState:
             ),
             "card_present": bool(self.player and self.player.present),
             "player_nickname": self.player_nickname,
+            "update": self.update.model_dump(mode="json") if self.update else None,
             "live": self.live.model_dump(mode="json") if self.live else None,
             "live_at": _iso(self.live_at),
             "messages": self.messages,
@@ -134,6 +137,12 @@ class LiveHub(Broadcaster):
         state.player_at = self._touch(state)
         if not payload.present:
             state.player_nickname = None
+        self._publish_station(state)
+
+    def update_update(self, station_id: str, payload: UpdatePayload) -> None:
+        state = self.station(station_id)
+        state.update = payload
+        self._touch(state)
         self._publish_station(state)
 
     def set_player_nickname(self, station_id: str, nickname: str | None) -> None:
