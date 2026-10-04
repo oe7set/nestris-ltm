@@ -359,3 +359,60 @@ async def test_update_api(tmp_path: Path, fresh_db_settings: Any, gh: FakeGitHub
     finally:
         await rt.updates.github.close()
         await rt.db.dispose()
+
+
+def test_pep440_and_semver_spellings() -> None:
+    v = Version.parse
+    assert v("0.2.0b1") == v("0.2.0-beta.1") == v("v0.2.0-beta1")
+    assert v("0.2.0a1") < v("0.2.0b1") < v("0.2.0b2") < v("0.2.0rc1") < v("0.2.0")  # type: ignore[operator]
+    assert v("0.1.0") < v("0.2.0b1")  # type: ignore[operator]
+    assert str(v("v0.2.0b1")) == "0.2.0b1"  # the spelling names the release files
+    assert v("0.2.0b1").is_prerelease and not v("0.2.0").is_prerelease  # type: ignore[union-attr]
+
+
+async def test_beta_channel_with_pep440_releases(tmp_path: Path, gh: FakeGitHub) -> None:
+    gh.add_release("0.2.0b1", prerelease=True)
+    gh.add_release("0.2.0b2", prerelease=True)
+    service, calls = make_service(tmp_path, gh, current="0.2.0b1")
+    assert (await service.check())["update_available"] is False  # stable channel
+    service.settings.updates.channel = "beta"
+    state = await service.check()
+    assert state["update_available"] and state["latest"]["version"] == "0.2.0b2"
+    await service.install("0.2.0b2")
+    assert calls["launched"][0][0].name == "NestrisLTM-Setup-0.2.0b2.exe"
+
+
+@pytest.mark.db
+async def test_channel_switch_is_saved(
+    tmp_path: Path, fresh_db_settings: Any, gh: FakeGitHub
+) -> None:
+    import tomllib
+
+    from nestris_ltm.api.app import create_app
+    from nestris_ltm.runtime import Runtime
+
+    config = tmp_path / "config.toml"
+    config.write_text("[http]\nport = 7990\n", encoding="utf-8")
+    gh.add_release("0.2.0b1", prerelease=True)
+    rt = Runtime(load_settings(config, database=fresh_db_settings, data_dir=tmp_path))
+    await rt.db.run_bootstrap()
+    rt.updates.github = GitHubReleases("oe7set", "nestris-ltm", transport=httpx.MockTransport(gh))
+    rt.updates.current = Version.parse("0.1.0")  # type: ignore[assignment]
+    try:
+        transport = httpx.ASGITransport(app=create_app(rt), client=("127.0.0.1", 5000))
+        headers = {"X-NestrisLTM-Shell-Token": rt.shell_token}
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://t", headers=headers
+        ) as c:
+            r = await c.put("/api/updates/settings", json={"channel": "beta"})
+            assert r.status_code == 200 and r.json()["latest"]["version"] == "0.2.0b1"
+            saved = tomllib.loads(config.read_text(encoding="utf-8"))
+            assert saved == {"http": {"port": 7990}, "updates": {"channel": "beta"}}
+            assert (
+                await c.put("/api/updates/settings", json={"channel": "nightly"})
+            ).status_code == 422
+            r = await c.put("/api/updates/settings", json={"channel": "stable", "enabled": False})
+            assert r.json()["update_available"] is False and r.json()["enabled"] is False
+    finally:
+        await rt.updates.github.close()
+        await rt.db.dispose()

@@ -13,7 +13,7 @@ import os
 import re
 import sys
 from pathlib import Path
-from typing import ClassVar, Literal
+from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel, Field, SecretStr, field_validator
 from pydantic_settings import (
@@ -148,3 +148,30 @@ def load_settings(config_file: Path | None = None, **overrides: object) -> Setti
     """Load settings from ``config_file`` (default location if ``None``)."""
     Settings.config_file = config_file if config_file is not None else default_config_path()
     return Settings(**overrides)  # type: ignore[arg-type]
+
+
+def update_config_file(path: Path, changes: dict[tuple[str, str], object]) -> None:
+    """Set single ``(section, key)`` values in the TOML config.
+
+    Everything else in the file stays as it is. The changed sections are
+    validated first, so a bad value never leaves a broken config behind
+    (raises ``ValueError``).
+    """
+    import os
+    import tomllib
+
+    import tomli_w
+
+    data: dict[str, Any] = tomllib.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+    for (section, key), value in changes.items():
+        data.setdefault(section, {})[key] = value
+    for section in {section for section, _ in changes}:
+        field = Settings.model_fields.get(section)
+        model = field.annotation if field is not None else None
+        if not (isinstance(model, type) and issubclass(model, BaseModel)):
+            raise ValueError(f"unknown config section {section!r}")
+        model.model_validate(data[section])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(tomli_w.dumps(data), encoding="utf-8")
+    os.replace(tmp, path)

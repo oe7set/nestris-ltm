@@ -11,7 +11,7 @@ from __future__ import annotations
 import base64
 import binascii
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
@@ -26,22 +26,54 @@ _SEMVER = re.compile(
 )
 
 
+# Python packages write pre-releases the PEP 440 way: 1.2.0a1, 1.2.0b2, 1.2.0rc1.
+_PEP440 = re.compile(
+    r"^v?(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)\.(?P<patch>0|[1-9]\d*)"
+    r"(?:[-.]?(?P<kind>a|alpha|b|beta|c|rc|pre|preview)[-.]?(?P<num>\d+)?)?$",
+    re.IGNORECASE,
+)
+_KIND = {"a": "alpha", "alpha": "alpha", "b": "beta", "beta": "beta", "c": "rc", "rc": "rc",
+         "pre": "rc", "preview": "rc"}  # fmt: skip
+
+
 @dataclass(frozen=True, order=False)
 class Version:
+    """A release version: semver (``1.2.0-beta.1``) or PEP 440 (``1.2.0b1``).
+
+    Both spellings of the same version compare equal; ``str()`` gives the
+    spelling it was parsed from (it names the release's files).
+    """
+
     major: int
     minor: int
     patch: int
     pre: tuple[int | str, ...] = ()  # empty = a release
+    text: str = field(default="", compare=False)
 
     @classmethod
     def parse(cls, text: str) -> Version | None:
-        m = _SEMVER.match(text.strip())
+        raw = text.strip()
+        clean = raw[1:] if raw[:1] in "vV" else raw
+        m = _SEMVER.match(raw)
+        if m is not None:
+            pre: tuple[int | str, ...] = ()
+            if m["pre"]:
+                pre = tuple(int(p) if p.isdigit() else p.lower() for p in m["pre"].split("."))
+                # "beta1" / "rc1" spelled as one identifier: same as beta.1 / rc.1
+                if len(pre) == 1 and isinstance(pre[0], str):
+                    pm = re.fullmatch(r"(alpha|beta|rc|a|b|c)(\d+)", pre[0])
+                    if pm:
+                        pre = (_KIND[pm[1]], int(pm[2]))
+                elif pre and isinstance(pre[0], str) and pre[0] in _KIND:
+                    pre = (_KIND[pre[0]], *pre[1:])
+            return cls(int(m["major"]), int(m["minor"]), int(m["patch"]), pre, clean)
+        m = _PEP440.match(raw)
         if m is None:
             return None
-        pre: tuple[int | str, ...] = ()
-        if m["pre"]:
-            pre = tuple(int(p) if p.isdigit() else p for p in m["pre"].split("."))
-        return cls(int(m["major"]), int(m["minor"]), int(m["patch"]), pre)
+        pre = ()
+        if m["kind"]:
+            pre = (_KIND[m["kind"].lower()], int(m["num"] or 0))
+        return cls(int(m["major"]), int(m["minor"]), int(m["patch"]), pre, clean)
 
     @property
     def is_prerelease(self) -> bool:
@@ -66,6 +98,8 @@ class Version:
         return self._key() >= other._key()
 
     def __str__(self) -> str:
+        if self.text:
+            return self.text
         core = f"{self.major}.{self.minor}.{self.patch}"
         return core + ("-" + ".".join(str(p) for p in self.pre) if self.pre else "")
 

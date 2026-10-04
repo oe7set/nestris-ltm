@@ -76,6 +76,16 @@
     }
   }
 
+  async function saveSettings(change: { channel?: string; enabled?: boolean }): Promise<void> {
+    try {
+      info = await api<UpdateState>("/api/updates/settings", { method: "PUT", body: change });
+      if (showOther) releases = await api<ReleaseInfo[]>("/api/updates/releases");
+    } catch (e) {
+      toasts.error(e);
+      void load();
+    }
+  }
+
   async function toggleOther(): Promise<void> {
     showOther = !showOther;
     if (showOther && releases === null) {
@@ -169,7 +179,14 @@
         </button>
       {/if}
       <span class="spacer"></span>
-      <span class="muted small">{t("updates.channel", { channel: info.channel })}</span>
+      <label class="check small">
+        <input type="checkbox" checked={info.channel === "beta"} onchange={(e) => saveSettings({ channel: e.currentTarget.checked ? "beta" : "stable" })} />
+        {t("updates.beta")}
+      </label>
+      <label class="check small">
+        <input type="checkbox" checked={info.enabled} onchange={(e) => saveSettings({ enabled: e.currentTarget.checked })} />
+        {t("updates.auto")}
+      </label>
     </div>
     {#if info.check_error}<p class="warn-text small">{t("updates.offline", { error: info.check_error })}</p>{/if}
     {#if !info.can_install}<p class="muted small">{t("updates.dev_mode")}</p>{/if}

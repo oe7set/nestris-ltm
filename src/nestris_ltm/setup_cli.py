@@ -12,17 +12,13 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import os
 import socket
 import sys
-import tomllib
 import urllib.request
 from pathlib import Path
 from typing import Any
 
-import tomli_w
-
-from nestris_ltm.config import Settings, load_settings
+from nestris_ltm.config import Settings, load_settings, update_config_file
 
 
 def add_parsers(sub: Any) -> None:
@@ -59,26 +55,17 @@ _KEYS = {
 
 def configure(args: argparse.Namespace) -> int:
     path: Path = args.config
-    data: dict[str, Any] = tomllib.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
-    changed = []
+    changes: dict[tuple[str, str], object] = {}
     for attr, (section, key) in _KEYS.items():
         value = getattr(args, attr)
-        if value is None:
-            continue
-        data.setdefault(section, {})[key] = value.strip() if isinstance(value, str) else value
-        changed.append(f"{section}.{key}")
-    # Validate before writing: a typo must not leave a broken config behind.
-    Settings.config_file = None
+        if value is not None:
+            changes[(section, key)] = value.strip() if isinstance(value, str) else value
     try:
-        Settings.model_validate(data)
+        update_config_file(path, changes)
     except ValueError as exc:
         print(f"Invalid settings: {exc}", file=sys.stderr)
         return 2
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(tomli_w.dumps(data), encoding="utf-8")
-    os.replace(tmp, path)
-    print(f"Saved {', '.join(changed) or 'nothing'} to {path}")
+    print(f"Saved {', '.join(f'{s}.{k}' for s, k in changes) or 'nothing'} to {path}")
     return 0
 
 

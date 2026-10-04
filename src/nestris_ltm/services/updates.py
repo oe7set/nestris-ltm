@@ -76,7 +76,17 @@ class Release:
 
     @property
     def installer_name(self) -> str:
-        return f"NestrisLTM-Setup-{self.version}.exe"
+        """The release's installer: ``NestrisLTM-Setup-<version>.exe`` in the
+        tag's spelling (``0.2.0b1`` and ``0.2.0-beta.1`` name the same version)."""
+        exact = f"NestrisLTM-Setup-{self.version}.exe"
+        if exact in self.assets:
+            return exact
+        for name in self.assets:
+            if name.startswith("NestrisLTM-Setup-") and name.endswith(".exe"):
+                found = Version.parse(name.removeprefix("NestrisLTM-Setup-").removesuffix(".exe"))
+                if found == self.version:
+                    return name
+        return exact
 
     @property
     def installable(self) -> bool:
