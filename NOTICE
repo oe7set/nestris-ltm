@@ -12,6 +12,11 @@ Share Tech Mono font (src/nestris_ltm/kiosk/static/fonts/)
   Font Name 'Share'. Licensed under the SIL Open Font License, Version 1.1
   (OFL.txt next to the font file).
 
+Press Start 2P font (frontend/apps/overlay/public/fonts/; overlay NES style)
+  Copyright 2012 The Press Start 2P Project Authors (cody@zone38.net), with
+  Reserved Font Name "Press Start 2P". Licensed under the SIL Open Font
+  License, Version 1.1 (OFL-PressStart2P.txt next to the font file).
+
 Twemoji graphics (src/nestris_ltm/kiosk/static/icons/)
   Copyright 2019 Twitter, Inc and other contributors.
   Licensed under CC BY 4.0: https://creativecommons.org/licenses/by/4.0/

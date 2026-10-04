@@ -1,5 +1,6 @@
 import { mount } from "svelte";
 import "./overlay.css";
+import "./nes.css";
 import App from "./App.svelte";
 
 const target = document.getElementById("app");

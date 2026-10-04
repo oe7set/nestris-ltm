@@ -1,6 +1,6 @@
 <script lang="ts">
   // Name, score and the per-player numbers.
-  import { fmt, pct, text, type Lang } from "../lib/format";
+  import { fmt, pct, hud, text, type Lang } from "../lib/format";
   import type { SlotView } from "../lib/view";
   import Hearts from "./Hearts.svelte";
   import Num from "./Num.svelte";
@@ -32,17 +32,17 @@
   {/if}
   <div class="score"><Num value={view.score} /></div>
   <div class="grid">
-    <div class="cell"><span>{text(lang, "lines")}</span><b>{fmt(view.lines)}</b></div>
-    <div class="cell"><span>{text(lang, "level")}</span><b>{fmt(view.level)}</b></div>
-    <div class="cell"><span>{text(lang, "trt")}</span><b>{pct(view.tetris_rate)}</b></div>
+    <div class="cell"><span>{hud(lang, "lines")}</span><b>{fmt(view.lines)}</b></div>
+    <div class="cell"><span>{hud(lang, "level")}</span><b>{fmt(view.level)}</b></div>
+    <div class="cell"><span>{hud(lang, "trt")}</span><b>{pct(view.tetris_rate)}</b></div>
     {#if !compact}
-      <div class="cell"><span>{text(lang, "burn")}</span><b>{fmt(view.burn)}</b></div>
+      <div class="cell"><span>{hud(lang, "burn")}</span><b>{fmt(view.burn)}</b></div>
     {/if}
     <div class="cell" class:alarm={droughtAlarm}>
-      <span>{text(lang, "drought")}</span><b>{view.status === "playing" ? fmt(view.drought) : fmt(view.max_drought)}</b>
+      <span>{hud(lang, "drought")}</span><b>{view.status === "playing" ? fmt(view.drought) : fmt(view.max_drought)}</b>
     </div>
     {#if showPace && !compact}
-      <div class="cell pace"><span>{text(lang, "pace")}</span><b>{fmt(view.pace)}</b></div>
+      <div class="cell pace"><span>{hud(lang, "pace")}</span><b>{fmt(view.pace)}</b></div>
     {/if}
   </div>
 </div>

@@ -1,0 +1,202 @@
+/*
+ * NES style (scene setting "style": "nes" or ?style=nes), close to the
+ * NestrisChamps look: pixel font, black boxes with an NES frame (white outer
+ * line, blue inner line, square corners), white numbers, green/red leads.
+ *
+ * Font: "NES Tetris" if it is installed on the PC running OBS (not shipped:
+ * its licence is non-commercial), otherwise the bundled "Press Start 2P"
+ * (SIL Open Font License, public/fonts/OFL-PressStart2P.txt).
+ */
+@font-face {
+  font-family: "NltmNes";
+  src:
+    local("NES Tetris"),
+    url("/overlay-assets/fonts/PressStart2P-Regular.woff2") format("woff2");
+  font-display: block;
+}
+
+.stage.nes {
+  --panel: #000;
+  --frame: #fcfcfc;
+  --nes-inner: #3cbcfc;
+  --well-bg: #000;
+  --text: #fcfcfc;
+  --muted: #bcbcbc;
+  --accent: #f8b800;
+  --side-a: #58d854;
+  --side-b: #f83800;
+  --good: #58d854;
+  --bad: #f83800;
+  font-family: "NltmNes", "Press Start 2P", monospace;
+  -webkit-font-smoothing: none;
+  font-smooth: never;
+  text-rendering: optimizeSpeed;
+  letter-spacing: 0;
+}
+
+.stage.nes.dark {
+  background: #000;
+}
+
+/* ---- every box gets the NES frame */
+.stage.nes :is(.box, .tag, .stats, .versus, .next, .well, header .title, header .round, header .mode,
+    .center .title .name, .center .title .round, .player, .ranking) {
+  background: #000;
+  border: 4px solid var(--frame);
+  border-radius: 0;
+  box-shadow:
+    inset 0 0 0 2px #000,
+    inset 0 0 0 4px var(--nes-inner),
+    0 0 0 2px #000;
+}
+
+/* Camera areas: the same frame, but always see-through (OBS camera behind). */
+.stage.nes .camera.framed {
+  background: transparent;
+  border: 4px solid var(--frame);
+  border-radius: 0;
+  box-shadow:
+    inset 0 0 0 2px #000,
+    inset 0 0 0 4px var(--nes-inner),
+    0 0 0 2px #000;
+}
+
+/* Labels: uppercase, white like the NES HUD. Sizes stay on the 8 px grid
+   of the pixel font (8/16/24/32), so the pixels stay crisp. */
+.stage.nes :is(.label, .next span, .cell span, .pace span, .versus .label) {
+  font-size: 16px;
+  letter-spacing: 0;
+  color: var(--text);
+}
+
+.stage.nes :is(.box b, .cell b) {
+  font-size: 24px;
+  font-weight: 400;
+}
+.stage.nes .side .box {
+  padding: 8px 10px;
+  gap: 6px;
+}
+.stage.nes .box .big,
+.stage.nes .stats .score {
+  font-size: 24px;
+  line-height: 1.2;
+}
+.stage.nes .stats .score {
+  font-size: 32px;
+}
+.stage.nes .versus .pace b {
+  font-size: 16px;
+}
+.stage.nes .gap {
+  font-size: 16px;
+}
+.stage.nes .gap small,
+.stage.nes .versus small,
+.stage.nes .tetrises {
+  font-size: 12px;
+}
+.stage.nes .versus .diff {
+  font-size: 40px;
+}
+.stage.nes .versus .who {
+  font-size: 16px;
+}
+
+/* ---- name box: name centred, hearts below (as in NestrisChamps) */
+.stage.nes .tag:is(.left, .right) {
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+}
+.stage.nes .tag .nick {
+  font-size: 24px;
+  max-width: 100%;
+}
+.stage.nes .tag:is(.left, .right) .extra {
+  flex-direction: row;
+}
+.stage.nes .tag .round {
+  font-size: 12px;
+}
+.stage.nes .tag.compact .nick {
+  font-size: 16px;
+}
+.stage.nes .result {
+  font-size: 12px;
+  border-radius: 0;
+  padding: 4px 6px;
+}
+
+/* ---- headers */
+.stage.nes :is(header, .center .title) {
+  letter-spacing: 0;
+}
+.stage.nes :is(header .title, .center .title .name) {
+  font-size: 24px;
+  color: var(--accent);
+  padding: 10px 16px;
+}
+.stage.nes :is(header .round, header .mode, .center .title .round) {
+  font-size: 16px;
+  padding: 10px 14px;
+}
+.stage.nes .vs {
+  font-size: 16px;
+  color: var(--accent);
+}
+
+/* ---- playfield: square NES frame, no glow */
+.stage.nes .stamp {
+  border-radius: 0;
+  font-size: calc(var(--cell) * 0.7);
+  letter-spacing: 0;
+}
+.stage.nes .overlay {
+  font-size: calc(var(--cell) * 0.6);
+  letter-spacing: 0;
+}
+
+/* ---- classic layouts (Stats component) */
+.stage.nes .stats .name {
+  font-size: 24px;
+}
+.stage.nes .stats .cell b {
+  font-size: 16px;
+}
+.stage.nes .stats .rank {
+  border-radius: 0;
+  font-size: 16px;
+}
+
+/* ---- compact (2x1v1 with cameras) */
+.stage.nes .compact .label {
+  font-size: 8px;
+}
+.stage.nes .side.compact .box {
+  padding: 6px 8px;
+  gap: 4px;
+}
+.stage.nes .compact .box b {
+  font-size: 16px;
+}
+.stage.nes .compact .box .big {
+  font-size: 16px;
+}
+.stage.nes .compact .gap {
+  font-size: 12px;
+}
+.stage.nes .compact .gap small {
+  font-size: 8px;
+}
+
+/* ---- diff graph: NES colours */
+.stage.nes svg .zero {
+  stroke: #fcfcfc;
+  stroke-dasharray: 4 4;
+}
+.stage.nes svg .line {
+  stroke: #fcfcfc;
+}

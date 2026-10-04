@@ -1,6 +1,6 @@
 <script lang="ts">
   // Head-to-head centre: score difference, lead in tetrises, pace, catch-up hint.
-  import { fmt, signed, tetrises, text, type Lang } from "../lib/format";
+  import { fmt, signed, tetrises, hud, text, type Lang } from "../lib/format";
   import type { SlotView } from "../lib/view";
   import Num from "./Num.svelte";
 
@@ -32,7 +32,7 @@
 
 {#if active}
   <div class="versus">
-    <div class="label">{text(lang, "diff")}</div>
+    <div class="label">{hud(lang, "diff")}</div>
     <div class="diff" class:a={diff > 0} class:b={diff < 0}>
       {#if diff === 0}{text(lang, "even")}{:else}<Num value={Math.abs(diff)} />{/if}
     </div>
@@ -53,7 +53,7 @@
       </div>
     {/if}
     <div class="pace">
-      <span>{text(lang, "pace")}</span>
+      <span>{hud(lang, "pace")}</span>
       <b class:a={paceDiff > 0} class:b={paceDiff < 0}>{signed(paceDiff)}</b>
       <small>{fmt(a.pace)} : {fmt(b.pace)}</small>
     </div>

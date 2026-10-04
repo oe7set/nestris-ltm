@@ -127,6 +127,17 @@ camera; `2x1v1_cam` gives every player a quadrant (top pair, bottom pair).
 In OBS put the camera sources *below* the browser source, positioned in
 those areas (*Szenen* → *Rahmen für Kamerabereiche zeigen* draws frames around them).
 
+### NES style
+
+*Szenen* → *Stil* → *NES (wie NestrisChamps)* (or `?style=nes` in the URL)
+gives every layout the NES look: pixel font, black boxes with the NES frame,
+numbers like `181,290`, the game's HUD words (LINES, LV, NEXT, TRT, DRT),
+green lead / red deficit. Best with `1v1_cam` and `2x1v1_cam`. The font is
+"Press Start 2P" (bundled, SIL Open Font License). If the font
+"NES Tetris" is installed on the PC that runs OBS, the overlay uses it
+instead; it is not shipped with NestrisLTM because its licence allows
+non-commercial use only.
+
 ## Command line (`nestris-ltm.exe` in the install folder)
 
 ```text

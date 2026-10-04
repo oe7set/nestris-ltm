@@ -30,7 +30,7 @@
     layout: string;
     mode: string;
     auto_round: boolean;
-    settings: { lang?: string; background?: string; camera_frames?: boolean; title?: string };
+    settings: { lang?: string; background?: string; camera_frames?: boolean; title?: string; style?: string };
     slots: Slot[];
     round: number | null;
     rounds?: number[];
@@ -69,6 +69,7 @@
       auto_round: false,
       lang: "de",
       background: "transparent",
+      style: "modern",
       camera_frames: false,
       title: "",
       slots: [] as Slot[],
@@ -165,6 +166,7 @@
       auto_round: scene.auto_round,
       lang: scene.settings.lang ?? "de",
       background: scene.settings.background ?? "transparent",
+      style: scene.settings.style ?? "modern",
       camera_frames: scene.settings.camera_frames ?? false,
       title: scene.settings.title ?? "",
       slots: slotsFor(layouts.find((l) => l.id === scene.layout)?.slots ?? 2, scene.slots),
@@ -186,6 +188,7 @@
       settings: {
         lang: form.lang,
         background: form.background,
+        style: form.style,
         camera_frames: form.camera_frames,
         ...(form.title.trim() ? { title: form.title.trim() } : {}),
       },
@@ -410,6 +413,13 @@
         <select bind:value={form.background}>
           <option value="transparent">{t("scenes.bg_transparent")}</option>
           <option value="dark">{t("scenes.bg_dark")}</option>
+        </select>
+      </label>
+      <label class="field">
+        {t("scenes.style")}
+        <select bind:value={form.style}>
+          <option value="modern">{t("scenes.style_modern")}</option>
+          <option value="nes">{t("scenes.style_nes")}</option>
         </select>
       </label>
     </div>

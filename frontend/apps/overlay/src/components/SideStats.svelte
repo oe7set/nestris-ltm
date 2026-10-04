@@ -2,7 +2,7 @@
   // Narrow stats column between camera and playfield (camera layouts):
   // score, lead over the opponent, lines/level/tetris rate, next piece, pace.
   import { NextPiece } from "@nestris-ltm/nes";
-  import { fmt, pct, tetrises, text, type Lang } from "../lib/format";
+  import { fmt, pct, tetrises, hud, text, type Lang } from "../lib/format";
   import type { SlotView } from "../lib/view";
   import Num from "./Num.svelte";
 
@@ -32,22 +32,22 @@
     {/if}
   </div>
   <div class="row">
-    <div class="box"><span class="label">{text(lang, "lines")}</span><b>{fmt(view.lines)}</b></div>
-    <div class="box"><span class="label">{text(lang, "level")}</span><b>{fmt(view.level)}</b></div>
+    <div class="box"><span class="label">{hud(lang, "lines")}</span><b>{fmt(view.lines)}</b></div>
+    <div class="box"><span class="label">{hud(lang, "level")}</span><b>{fmt(view.level)}</b></div>
   </div>
   <div class="box next">
-    <span class="label">{text(lang, "next")}</span>
+    <span class="label">{hud(lang, "next")}</span>
     <NextPiece piece={view.next_piece} level={view.level} cell={compact ? 16 : 24} />
   </div>
   <div class="row">
-    <div class="box"><span class="label">TRT</span><b>{pct(view.tetris_rate)}</b></div>
+    <div class="box"><span class="label">{hud(lang, "trt")}</span><b>{pct(view.tetris_rate)}</b></div>
     <div class="box" class:alarm={droughtAlarm}>
-      <span class="label">DRT</span><b>{view.status === "playing" ? fmt(view.drought) : fmt(view.max_drought)}</b>
+      <span class="label">{hud(lang, "drought")}</span><b>{view.status === "playing" ? fmt(view.drought) : fmt(view.max_drought)}</b>
     </div>
   </div>
   {#if !compact}
-    <div class="box"><span class="label">{text(lang, "pace")}</span><b>{fmt(view.pace)}</b></div>
-    <div class="box"><span class="label">{text(lang, "burn")}</span><b>{fmt(view.burn)}</b></div>
+    <div class="box"><span class="label">{hud(lang, "pace")}</span><b>{fmt(view.pace)}</b></div>
+    <div class="box"><span class="label">{hud(lang, "burn")}</span><b>{fmt(view.burn)}</b></div>
   {/if}
 </div>
 

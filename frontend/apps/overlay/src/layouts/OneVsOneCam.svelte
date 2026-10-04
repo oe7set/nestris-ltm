@@ -9,6 +9,7 @@
   import SideStats from "../components/SideStats.svelte";
   import Versus from "../components/Versus.svelte";
   import { text, type Lang } from "../lib/format";
+  import { look } from "../lib/look.svelte";
   import { scene } from "../lib/scene.svelte";
   import type { SceneState } from "../lib/types";
   import type { SlotView } from "../lib/view";
@@ -18,15 +19,16 @@
   const b = $derived(views[1]);
   const framed = $derived(state.scene.settings.camera_frames ?? false);
   const match = $derived(state.matches?.[0]);
-  const CAM_W = 340;
-  const CELL = 34;
+  // The pixel font of the NES style needs wider stats columns.
+  const camW = $derived(look.nes ? 290 : 340);
+  const cell = $derived(look.nes ? 32 : 34);
 </script>
 
 {#if a && b}
-  <div class="stage">
+  <div class="stage" class:nes={look.nes}>
     <div class="cam left">
       <NameTag view={a} {lang} />
-      <Camera width={CAM_W} height={880} {framed} />
+      <Camera width={camW} height={880} {framed} />
     </div>
     <SideStats view={a} {lang} />
     <div class="center">
@@ -35,9 +37,9 @@
         <span class="round">{text(lang, "round")} {a.round ?? state.round}</span>
       </div>
       <div class="boards">
-        <Board view={a} cell={CELL} {lang} showNext={false} />
+        <Board view={a} {cell} {lang} showNext={false} />
         <span class="vs">VS</span>
-        <Board view={b} cell={CELL} {lang} showNext={false} />
+        <Board view={b} {cell} {lang} showNext={false} />
       </div>
       <div class="bottom">
         <Versus {a} {b} {lang} />
@@ -47,7 +49,7 @@
     <SideStats view={b} {lang} align="right" />
     <div class="cam right">
       <NameTag view={b} {lang} align="right" />
-      <Camera width={CAM_W} height={880} {framed} />
+      <Camera width={camW} height={880} {framed} />
     </div>
   </div>
 {/if}
@@ -57,9 +59,12 @@
     position: absolute;
     inset: 20px;
     display: grid;
-    grid-template-columns: 340px 200px 1fr 200px 340px;
+    grid-template-columns: 340px 200px minmax(0, 1fr) 200px 340px;
     gap: 12px;
     align-items: start;
+  }
+  .stage.nes {
+    grid-template-columns: 290px 260px minmax(0, 1fr) 260px 290px;
   }
   .cam {
     display: grid;

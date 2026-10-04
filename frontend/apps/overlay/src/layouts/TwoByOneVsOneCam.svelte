@@ -8,6 +8,7 @@
   import NameTag from "../components/NameTag.svelte";
   import SideStats from "../components/SideStats.svelte";
   import type { Lang } from "../lib/format";
+  import { look } from "../lib/look.svelte";
   import type { SceneState } from "../lib/types";
   import type { SlotView } from "../lib/view";
 
@@ -25,10 +26,10 @@
 <div class="grid">
   {#each quadrants as q, i (i)}
     {#if q.view}
-      <section class="quad {q.align}">
+      <section class="quad {q.align}" class:nes={look.nes}>
         <div class="cam">
           <NameTag view={q.view} {lang} align={q.align} compact showRound />
-          <Camera width={500} height={452} {framed} />
+          <Camera width={look.nes ? 460 : 500} height={look.nes ? 430 : 452} {framed} />
         </div>
         <SideStats view={q.view} {lang} align={q.align} compact />
         <Board view={q.view} cell={CELL} {lang} showNext={false} />
@@ -55,6 +56,12 @@
   }
   .quad.right {
     grid-template-columns: auto 160px 1fr;
+  }
+  .quad.nes {
+    grid-template-columns: minmax(0, 1fr) 200px auto;
+  }
+  .quad.nes.right {
+    grid-template-columns: auto 200px minmax(0, 1fr);
   }
   /* Mirror the order on the right: board | stats | camera. */
   .quad.right .cam {

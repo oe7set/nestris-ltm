@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from "svelte";
   // Playfield with frame, NEXT box, status overlays and the tetris flash.
-  import { text, type Lang } from "../lib/format";
+  import { hud, text, type Lang } from "../lib/format";
   import { clearedLines, type SlotView } from "../lib/view";
   import { NextPiece, Playfield } from "@nestris-ltm/nes";
 
@@ -54,7 +54,7 @@
   </div>
   {#if showNext}
     <div class="next">
-      <span>{text(lang, "next")}</span>
+      <span>{hud(lang, "next")}</span>
       <NextPiece piece={view.next_piece} level={view.level} cell={Math.round(cell * 0.75)} />
     </div>
   {/if}

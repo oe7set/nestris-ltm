@@ -1,10 +1,14 @@
 // Number formatting and texts for the overlays.
 
+import { look } from "./look.svelte";
+
 export type Lang = "de" | "en";
 
+/** Thousands grouped by a space, or by commas in the NES style ("181,290"). */
 export function fmt(n: number | null | undefined): string {
   if (n === null || n === undefined) return "–";
-  return Math.round(n).toLocaleString("en-US").replace(/,/g, " ");
+  const text = Math.round(n).toLocaleString("en-US");
+  return look.nes ? text : text.replace(/,/g, " ");
 }
 
 export function signed(n: number): string {
@@ -89,4 +93,21 @@ export type TextKey = keyof (typeof TEXT)["de"];
 
 export function text(lang: Lang | undefined, key: TextKey): string {
   return TEXT[lang === "en" ? "en" : "de"][key];
+}
+
+// The NES style uses the game's own short HUD words (as NestrisChamps does).
+const NES_HUD: Partial<Record<TextKey, string>> = {
+  lines: "LINES",
+  level: "LV",
+  next: "NEXT",
+  trt: "TRT",
+  burn: "BURN",
+  drought: "DRT",
+  pace: "PACE",
+  diff: "DIFF",
+};
+
+/** A stat label: NES HUD word in the NES style, the localized text otherwise. */
+export function hud(lang: Lang | undefined, key: TextKey): string {
+  return (look.nes && NES_HUD[key]) || text(lang, key);
 }

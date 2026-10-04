@@ -2,6 +2,7 @@
   // OBS browser source: a 1920x1080 stage scaled to the source size.
   import { onMount, type Component } from "svelte";
   import { text, type Lang } from "./lib/format";
+  import { look } from "./lib/look.svelte";
   import { scene, sceneSlug } from "./lib/scene.svelte";
   import type { SceneState } from "./lib/types";
   import { slotView, type SlotView } from "./lib/view";
@@ -37,6 +38,11 @@
   const views = $derived(current ? current.slots.map((s) => slotView(s, scene.frames[s.slot])) : []);
   const Layout = $derived(current ? LAYOUTS[current.scene.layout] : undefined);
   const dark = $derived(params.get("bg") === "dark" || current?.scene.settings.background === "dark");
+  // NES style (NestrisChamps-like): pixel font, NES frames (nes.css).
+  const nes = $derived((params.get("style") ?? current?.scene.settings.style) === "nes");
+  $effect(() => {
+    look.nes = nes;
+  });
 
   function fit(): void {
     scale = Math.min(innerWidth / W, innerHeight / H);
@@ -50,7 +56,7 @@
   });
 </script>
 
-<div class="stage" class:dark style:transform="scale({scale})">
+<div class="stage" class:dark class:nes style:transform="scale({scale})">
   {#if !slug || scene.missing}
     <div class="notice">{text(lang, "no_scene")}: {slug ?? "?"}</div>
   {:else if current && Layout}

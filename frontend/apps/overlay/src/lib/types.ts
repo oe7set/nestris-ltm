@@ -62,6 +62,7 @@ export interface SceneSettings {
   background?: "transparent" | "dark";
   camera_frames?: boolean;
   title?: string;
+  style?: "modern" | "nes";
 }
 
 export interface RoundGroup {
