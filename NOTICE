@@ -1,0 +1,24 @@
+Retroverse NES Tetris Tournament Software
+Copyright 2026 Erwin Spitaler (OE7SET) – Retroverse
+
+This product was developed by Erwin Spitaler (OE7SET) for Retroverse.
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This product includes third-party material:
+
+Share Tech Mono font (src/nestris_ltm/kiosk/static/fonts/)
+  Copyright (c) 2012, Carrois Type Design, Ralph du Carrois, with Reserved
+  Font Name 'Share'. Licensed under the SIL Open Font License, Version 1.1
+  (OFL.txt next to the font file).
+
+Twemoji graphics (src/nestris_ltm/kiosk/static/icons/)
+  Copyright 2019 Twitter, Inc and other contributors.
+  Licensed under CC BY 4.0: https://creativecommons.org/licenses/by/4.0/
+  Source: https://github.com/twitter/twemoji
+
+Binary distributions (installer, portable folder) additionally bundle
+third-party components under their own licenses, among them: Python (PSF
+License), Qt for Python / PySide6 and Qt, including Qt WebEngine and its
+Chromium components (LGPL-3.0 and others; dynamically linked), and the Python
+packages listed in pyproject.toml / uv.lock (MIT, BSD, Apache-2.0 and similar).

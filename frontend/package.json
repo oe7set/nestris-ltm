@@ -1,6 +1,7 @@
 {
   "name": "nestris-ltm-frontend",
   "private": true,
+  "license": "Apache-2.0",
   "type": "module",
   "packageManager": "pnpm@11.6.0",
   "scripts": {

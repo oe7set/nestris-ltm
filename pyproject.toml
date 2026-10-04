@@ -3,6 +3,8 @@ name = "nestris-ltm"
 version = "0.1.0"
 description = "NestrisLTM: local tournament manager for Retroverse (MQTT ingest, PostgreSQL, admin, OBS overlays)"
 readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.115",

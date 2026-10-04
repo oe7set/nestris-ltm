@@ -44,6 +44,9 @@ Operations guide: `docs/OPERATIONS.md`.
 
 - Code comments, docstrings and docs in **English**. The admin UI is de/en.
 - **Commit messages never mention Claude** (no Co-Authored-By trailer).
+- License: Apache-2.0 (`LICENSE`), attribution and third-party material in `NOTICE`.
+  New third-party assets (fonts, icons, copied code) get an entry there and keep
+  their own license file next to them; LICENSE and NOTICE ship with every build.
 - `core/` is pure domain logic (no I/O, no framework imports) and unit-tested.
 - Every schema change is a new Alembic revision in `src/nestris_ltm/db/migrations/versions/`
   (`NNNN_slug.py`); `tests/test_db_bootstrap.py::test_migrations_match_models`

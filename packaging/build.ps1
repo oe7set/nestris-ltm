@@ -27,6 +27,9 @@ if ($LASTEXITCODE) { throw "uv sync failed" }
 uv run --group packaging pyinstaller --noconfirm --clean --distpath dist --workpath build packaging\nestris-ltm.spec
 if ($LASTEXITCODE) { throw "PyInstaller failed" }
 
+# Apache-2.0: LICENSE and NOTICE travel with every distribution.
+Copy-Item LICENSE, NOTICE dist\NestrisLTM\
+
 # Smoke test: the CLI must start and find its bundled files.
 & dist\NestrisLTM\nestris-ltm.exe --version
 if ($LASTEXITCODE) { throw "the built CLI does not start" }
