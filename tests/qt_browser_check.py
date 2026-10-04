@@ -1,11 +1,19 @@
-"""Checks of the embedded admin browser, run in a separate process by
+"""Checks of the desktop app's embedded browser, run in a separate process by
 ``test_shell_window.py`` (QtWebEngine must not share a process with the
 other Qt tests). Prints one JSON object with the results.
 
-- A ``target="_blank"`` link and a link to another site are handed to the
-  system-browser opener (real mouse clicks = a user gesture, as in the app).
+Uses the real ``MainWindow`` (not just its page class), so the checks cover
+what the app actually shows:
+
+- the window's view really uses the app's page (a garbage-collected page
+  once made the view fall back to a default page, silently dropping all of
+  the following);
+- every request to the local server carries the shell token (automatic
+  admin login in the desktop app);
+- a ``target="_blank"`` link and a link to another site are handed to the
+  system browser (real mouse clicks = a user gesture, as in the app);
 - ``navigator.clipboard.writeText`` succeeds; a plain QWebEnginePage (the
-  state before the fix) is rejected with NotAllowedError.
+  state before the fix) does not.
 
 Offscreen platform: the clipboard is an isolated in-process one, never the
 user's real clipboard.
@@ -13,6 +21,7 @@ user's real clipboard.
 
 from __future__ import annotations
 
+import gc
 import json
 import os
 import threading
@@ -28,8 +37,9 @@ from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWidgets import QApplication
 
-from nestris_ltm.shell.window import _Page
+from nestris_ltm.shell.window import SHELL_TOKEN_HEADER, MainWindow
 
+TOKEN = "test-shell-token"
 COPIED = "http://127.0.0.1:7990/o/main"
 PAGE = f"""<!doctype html><html><body style="margin:0">
 <a id="view" href="/view/highscore" target="_blank" rel="noopener"
@@ -40,9 +50,12 @@ PAGE = f"""<!doctype html><html><body style="margin:0">
   .then(() => document.title = 'ok', e => document.title = 'err:' + e)">copy</button>
 </body></html>""".encode()
 
+seen_tokens: list[str | None] = []
+
 
 class _Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
+        seen_tokens.append(self.headers.get(SHELL_TOKEN_HEADER.decode()))
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.end_headers()
@@ -67,23 +80,6 @@ def main() -> None:
                 return True
         return False
 
-    def load(page: QWebEnginePage) -> QWebEngineView:
-        view = QWebEngineView()
-        view.setPage(page)
-        view.resize(400, 300)
-        view.show()
-        done: list[bool] = []
-        page.loadFinished.connect(done.append)
-        page.setUrl(origin)
-        wait_for(lambda: done)
-        return view
-
-    def click(view: QWebEngineView, x: int, y: int) -> None:
-        target = view.focusProxy() or view
-        QTest.mouseClick(
-            target, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, QPoint(x, y)
-        )
-
     def focus(view: QWebEngineView) -> None:
         # In the app the click on the copy button focuses the document.
         view.activateWindow()
@@ -91,29 +87,54 @@ def main() -> None:
         wait_for(lambda: False, 300)
 
     def copy(page: QWebEnginePage, view: QWebEngineView) -> str:
+        # The offscreen platform does not deliver mouse input to the button
+        # reliably; the handler is triggered from script.
         focus(view)
         page.runJavaScript("document.getElementById('copy').click()")
         wait_for(lambda: page.title() == "ok" or page.title().startswith("err"))
         return page.title()
 
+    def click(view: QWebEngineView, x: int, y: int) -> None:
+        target = view.focusProxy() or view
+        QTest.mouseClick(
+            target, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, QPoint(x, y)
+        )
+
     out: dict[str, object] = {"origin": origin.toString()}
-    opened: list[str] = []
-    profile = QWebEngineProfile()
 
     # A plain page first: the state before the fix.
-    plain = QWebEnginePage(profile)
-    plain_view = load(plain)
+    plain_profile = QWebEngineProfile()
+    plain = QWebEnginePage(plain_profile)
+    plain_view = QWebEngineView()
+    plain_view.setPage(plain)
+    plain_view.resize(400, 300)
+    plain_view.show()
+    loaded: list[bool] = []
+    plain.loadFinished.connect(loaded.append)
+    plain.setUrl(origin)
+    wait_for(lambda: loaded)
     out["plain_copy_result"] = copy(plain, plain_view)
     plain_view.hide()
+    seen_tokens.clear()
 
-    page = _Page(profile, origin, opener=lambda url: opened.append(url.toString()))
-    view = load(page)
+    # The real window.
+    window = MainWindow(origin.toString().rstrip("/"), TOKEN)
+    opened: list[str] = []
+    window._page._opener = lambda url: opened.append(url.toString())
+    window.resize(800, 500)
+    window.show()
+    gc.collect()  # a page without a live reference would be gone now
+    view = window._view
+    out["view_uses_app_page"] = view.page() is window._page
+    loaded.clear()
+    view.page().loadFinished.connect(loaded.append)
+    window.load_app("/")
+    wait_for(lambda: loaded)
+    out["tokens_seen"] = list(seen_tokens)
     out["opened_on_load"] = list(opened)
 
-    # The offscreen platform does not deliver mouse input to the button
-    # reliably; the handler is triggered from script.
     app.clipboard().clear()
-    out["copy_result"] = copy(page, view)
+    out["copy_result"] = copy(view.page(), view)
     wait_for(lambda: app.clipboard().text() == COPIED, 3000)
     out["clipboard"] = app.clipboard().text()
 
@@ -126,7 +147,6 @@ def main() -> None:
     print("RESULT " + json.dumps(out), flush=True)
     httpd.shutdown()
     # Skip Qt/Chromium teardown: the result is out, the process just ends.
-    view.hide()
     os._exit(0)
 
 

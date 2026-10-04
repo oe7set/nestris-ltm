@@ -40,6 +40,15 @@ def result() -> dict[str, object]:
     return data
 
 
+def test_window_uses_its_page_and_sends_the_shell_token(result: dict[str, object]) -> None:
+    # The view must keep the app's page; a default page has no token, no
+    # link handling and no clipboard access (the desktop app asked for the
+    # password and its buttons did nothing).
+    assert result["view_uses_app_page"] is True
+    tokens = result["tokens_seen"]
+    assert isinstance(tokens, list) and tokens and set(tokens) == {"test-shell-token"}
+
+
 def test_new_window_links_open_in_the_system_browser(result: dict[str, object]) -> None:
     origin = str(result["origin"])
     assert result["opened_on_load"] == []  # the app's own page stays in the app

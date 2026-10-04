@@ -135,7 +135,12 @@ class MainWindow(QMainWindow):
         self._profile.setUrlRequestInterceptor(self._interceptor)
 
         self._view = QWebEngineView(self)
-        self._view.setPage(_Page(self._profile, self._base))
+        # Keep a reference: QWebEngineView.setPage() does not take ownership.
+        # A temporary page is garbage-collected at once and the view silently
+        # falls back to a default page (no shell token, no link/clipboard
+        # handling).
+        self._page = _Page(self._profile, self._base)
+        self._view.setPage(self._page)
 
         self._placeholder = QLabel("NestrisLTM startet …")
         self._placeholder.setStyleSheet(
