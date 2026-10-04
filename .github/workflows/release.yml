@@ -1,7 +1,8 @@
 # Release: push a tag "v<version>" (the version in pyproject.toml), e.g.
 #   git tag v0.2.0 && git push origin v0.2.0
 # Builds the admin UI, the PyInstaller folder and the Inno Setup installer on
-# Windows and publishes them as a GitHub release (tags with "-", e.g.
+# Windows, signs SHA256SUMS.txt (secret RELEASE_SIGNING_KEY, see
+# docs/UPDATES.md in nestris-ltm) and publishes them as a GitHub release (tags with "-", e.g.
 # v0.2.0-rc1, become pre-releases).
 name: Release
 
@@ -64,6 +65,11 @@ jobs:
           } | Set-Content -Encoding ascii dist\SHA256SUMS.txt
           Get-Content dist\SHA256SUMS.txt
 
+      - name: Sign checksums
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: uv run --script .github/scripts/sign_release.py sign dist/SHA256SUMS.txt
+
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG }}
@@ -74,3 +80,4 @@ jobs:
             dist/NestrisLTM-Setup-*.exe
             dist/NestrisLTM-*-portable.zip
             dist/SHA256SUMS.txt
+            dist/SHA256SUMS.txt.sig

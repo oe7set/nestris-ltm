@@ -30,6 +30,27 @@ same release only protects against broken downloads; the signature also
 protects against a manipulated release (e.g. a stolen GitHub session),
 because the private key never leaves the repository secrets.
 
+## Signing key
+
+| | |
+|---|---|
+| Algorithm | Ed25519, raw 32-byte keys in base64 |
+| **Public key** (compiled into every app) | `CQqYvIf/DIFS0ctwZaWQEK2wCdG7Oy3jN+YkF7nRgNQ=` |
+| Private key | maintainer's PC: `%USERPROFILE%\.retroverse\release-signing\release-signing-key.private.txt` (created 2026-10-04) |
+| GitHub | repository secret **`RELEASE_SIGNING_KEY`** (the private key's one line) in `nestris-ltm`, `nestris-terminal`, `nestris-core`, `nestris-rfid-reader` |
+| Tool | `.github/scripts/sign_release.py` (same file in every repository): `sign`, `verify`, `keygen` |
+
+- The release workflows run `sign_release.py sign dist/SHA256SUMS.txt` and
+  publish `SHA256SUMS.txt.sig`; without the secret the workflow fails instead
+  of publishing an unsigned release.
+- **Back up the private key** (password manager / offline). It must never
+  be committed. Lost key = new key pair, and every app needs an update with
+  the new public key before it accepts new releases.
+- Rotation: apps hold a *list* of accepted public keys. Add the new key to
+  the apps first, release, then switch the secret.
+- Check a release by hand:
+  `uv run --script .github/scripts/sign_release.py verify SHA256SUMS.txt CQqYvIf/DIFS0ctwZaWQEK2wCdG7Oy3jN+YkF7nRgNQ=`
+
 ## Checking
 
 - `GET https://api.github.com/repos/oe7set/<repo>/releases` (unauthenticated,
@@ -127,7 +148,7 @@ reader firmware in a header of their API calls (`X-Terminal-Version`,
 
 | Phase | Content |
 |---|---|
-| U1 | Signing key, `sign` step in all release workflows, release workflows for `nestris-core` (.deb) and `nestris-rfid-reader` |
+| U1 ✅ | Signing key, `sign` step in all release workflows, station `.deb` (amd64 + arm64, built on Debian 12) in the `nestris-core` release, reader firmware release |
 | U2 | NestrisLTM: update service + admin page + tray, DB backup, installer `/update=1` restart |
 | U3 | Terminal: update service + *Updates* tab, installer restart, reader flashing (`esptool`) |
 | U4 | Station: version in `status`, `control` topic, `.deb` updater with root helper, reader flashing; NestrisLTM station buttons and *Geräte* page |
