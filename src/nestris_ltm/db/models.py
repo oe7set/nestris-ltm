@@ -438,10 +438,16 @@ class ScenePairMatch(Base):
 
 class SceneRound(Base):
     __tablename__ = "scene_rounds"
-    __table_args__ = (UniqueConstraint("scene_id", "number", name="uq_scene_rounds_scene_number"),)
+    __table_args__ = (
+        UniqueConstraint(
+            "scene_id", "group_index", "number", name="uq_scene_rounds_scene_group_number"
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
     scene_id: Mapped[int] = mapped_column(ForeignKey("scenes.id", ondelete="CASCADE"))
+    # Head-to-head pairs play their own rounds (pair index); otherwise 0.
+    group_index: Mapped[int] = mapped_column(SmallInteger, server_default=text("0"))
     number: Mapped[int] = mapped_column(Integer)
     started_at: Mapped[datetime] = mapped_column(server_default=func.now())
     ended_at: Mapped[datetime | None]

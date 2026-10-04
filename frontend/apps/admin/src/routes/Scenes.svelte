@@ -33,6 +33,7 @@
     settings: { lang?: string; background?: string; camera_frames?: boolean; title?: string };
     slots: Slot[];
     round: number | null;
+    rounds?: number[];
     clients: number;
   }
   interface SlotState {
@@ -240,8 +241,9 @@
     return l ? (i18n.locale === "en" ? l.title_en : l.title_de) : id;
   }
 
-  function newRound(slug: string): void {
-    void run(() => api(`/api/scenes/${slug}/rounds`, { method: "POST" }), t("scenes.round_started"));
+  function newRound(slug: string, group?: number): void {
+    const query = group === undefined ? undefined : { group: String(group) };
+    void run(() => api(`/api/scenes/${slug}/rounds`, { method: "POST", query }), t("scenes.round_started"));
   }
 
   function resetSlot(slug: string, slot: number): void {
@@ -284,7 +286,7 @@
         {#if s.mode !== "none"}<span class="badge accent">{tDynamic(`scenes.mode.${s.mode}`, s.mode)}</span>{/if}
         {#if s.auto_round}<span class="badge">{t("scenes.auto_round_short")}</span>{/if}
         <span class="spacer"></span>
-        <span class="muted small">{t("scenes.round")} {s.round ?? "–"} · OBS {s.clients}</span>
+        <span class="muted small">{t("scenes.round")} {s.rounds?.length ? s.rounds.join(" · ") : (s.round ?? "–")} · OBS {s.clients}</span>
       </div>
       <div class="row url">
         <code class="mono">{origin}/o/{s.slug}</code>
@@ -332,6 +334,11 @@
       {/if}
       <div class="row">
         <button class="primary" onclick={() => newRound(s.slug)}>{t("scenes.new_round")}</button>
+        {#if (layouts.find((l) => l.id === s.layout)?.pairs.length ?? 0) > 1}
+          {#each layouts.find((l) => l.id === s.layout)?.pairs ?? [] as pair, index (index)}
+            <button onclick={() => newRound(s.slug, index)}>{t("scenes.new_round_pair", { a: pair[0] + 1, b: pair[1] + 1 })}</button>
+          {/each}
+        {/if}
         <button onclick={() => openEdit(s)}>{t("common.edit")}</button>
         <span class="spacer"></span>
         <button class="danger" onclick={() => remove(s)}>{t("common.delete")}</button>

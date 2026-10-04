@@ -766,7 +766,7 @@ wheels = [
 
 [[package]]
 name = "nestris-ltm"
-version = "0.2.0b2"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiomqtt" },

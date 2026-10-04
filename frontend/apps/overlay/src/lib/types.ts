@@ -11,6 +11,8 @@ export type Outcome = "advanced" | "eliminated" | "winner" | null;
 
 export interface SlotState {
   slot: number;
+  group?: number; // round group (head-to-head pair)
+  round?: number; // round of that group
   station_id: string | null;
   label: string | null;
   name: string | null;
@@ -62,7 +64,15 @@ export interface SceneSettings {
   title?: string;
 }
 
+export interface RoundGroup {
+  group: number;
+  slots: number[];
+  round: number;
+  complete: boolean;
+}
+
 export interface SceneState {
+  groups?: RoundGroup[];
   matches?: PairMatch[];
   scene: SceneInfo;
   round: number;

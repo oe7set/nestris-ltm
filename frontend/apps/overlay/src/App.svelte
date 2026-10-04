@@ -7,10 +7,12 @@
   import { slotView, type SlotView } from "./lib/view";
   import FourPlayers from "./layouts/FourPlayers.svelte";
   import OneVsOne from "./layouts/OneVsOne.svelte";
+  import OneVsOneCam from "./layouts/OneVsOneCam.svelte";
   import Replay from "./layouts/Replay.svelte";
   import Single from "./layouts/Single.svelte";
   import SingleCompact from "./layouts/SingleCompact.svelte";
   import TwoByOneVsOne from "./layouts/TwoByOneVsOne.svelte";
+  import TwoByOneVsOneCam from "./layouts/TwoByOneVsOneCam.svelte";
 
   type LayoutProps = { state: SceneState; views: SlotView[]; lang: Lang };
   const LAYOUTS: Record<string, Component<LayoutProps>> = {
@@ -18,6 +20,8 @@
     single_compact: SingleCompact,
     "1v1": OneVsOne,
     "2x1v1": TwoByOneVsOne,
+    "1v1_cam": OneVsOneCam,
+    "2x1v1_cam": TwoByOneVsOneCam,
     "4p": FourPlayers,
     replay: Replay,
   };

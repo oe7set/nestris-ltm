@@ -2,8 +2,9 @@
 
 - ``/api/tournament/matches*``, ``/api/tournament/lives/*``: admin UI.
 - ``/api/scenes/{scene_id}/pairs/{pair}/match``: which match a scene pair shows.
-- ``/api/control/scenes/{slug}/slots/{slot}/lives/*``: remote controls such
-  as the Stream Deck (token scope ``control``). They act on the match bound
+- ``/api/control/scenes/{slug}/slots/{slot}/lives/*`` and
+  ``/api/control/scenes/{slug}/rounds``: remote controls such as the Stream
+  Deck (token scope ``control``). They act on the match bound
   to the slot's pair, so a key keeps one fixed URL ("stage, left player").
 """
 
@@ -132,6 +133,20 @@ def _slot_view(service: MatchLives, match_id: str, player_id: int) -> dict[str, 
         "max": view.get("max_lives"),
         "winner_id": view.get("winner_id"),
     }
+
+
+@router.post("/api/control/scenes/{slug}/rounds")
+async def control_new_round(
+    slug: str, request: Request, p: ControlDep, group: int | None = None
+) -> dict[str, Any]:
+    """Next round from the Stream Deck (``?group=N`` = one pair of ``2x1v1``)."""
+    try:
+        numbers = await get_runtime(request).scenes.new_round(slug, group)
+    except KeyError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"no scene {slug!r}") from exc
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    return {"ok": True, "rounds": numbers, "by": p.actor}
 
 
 @router.get("/api/control/scenes/{slug}/slots/{slot}/lives")

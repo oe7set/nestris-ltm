@@ -1,5 +1,6 @@
 <script lang="ts">
   import { text, type Lang } from "../lib/format";
+  import { groupsOf } from "../lib/scene.svelte";
   import type { SceneState } from "../lib/types";
 
   let { state, lang = "de" }: { state: SceneState; lang?: Lang } = $props();
@@ -8,7 +9,8 @@
 
 <header>
   <span class="title">{state.scene.settings.title ?? state.scene.name}</span>
-  <span class="round">{text(lang, "round")} {state.round}</span>
+  <!-- 2x1v1: each match plays its own rounds -->
+  <span class="round">{text(lang, "round")} {groupsOf(state).map((g) => g.round).join(" · ")}</span>
   {#if mode}<span class="mode">{mode}</span>{/if}
 </header>
 

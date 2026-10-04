@@ -172,6 +172,9 @@ async def list_scenes(request: Request, _: AdminDep, session: SessionDep) -> lis
         data = await _scene_out(session, row)
         runtime = engine.scenes.get(row.slug)
         data["round"] = runtime.round.number if runtime else None
+        data["rounds"] = (
+            [runtime.group_round(g).number for g in runtime.groups()] if runtime else []
+        )
         data["clients"] = runtime.channel.subscriber_count if runtime else 0
         out.append(data)
     return out
@@ -254,13 +257,21 @@ async def delete_scene(
 
 
 @router.post("/{slug}/rounds")
-async def new_round(slug: str, request: Request, p: ScenesDep) -> dict[str, Any]:
-    """Start the next round (frozen results are cleared). Stream-Deck friendly."""
+async def new_round(
+    slug: str, request: Request, p: ScenesDep, group: int | None = None
+) -> dict[str, Any]:
+    """Start the next round (frozen results are cleared). Stream-Deck friendly.
+
+    ``?group=N`` restarts only one head-to-head pair (``2x1v1``: 0 = slots 1/2,
+    1 = slots 3/4); without it every group starts its next round.
+    """
     try:
-        number = await _engine(request).new_round(slug)
+        numbers = await _engine(request).new_round(slug, group)
     except KeyError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "scene not found") from exc
-    return {"ok": True, "round": number, "by": p.actor}
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    return {"ok": True, "round": min(numbers.values()), "rounds": numbers, "by": p.actor}
 
 
 @router.post("/{slug}/reset-slot")

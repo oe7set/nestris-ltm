@@ -75,6 +75,11 @@ bracket (kiosk, console and overlays update); giving the heart back removes
 that winner again. FIX, reset and unseed start all hearts over.
 
 - *Matches*: − / + per player, hearts per match, history with *Rückgängig*.
+- *Verlierer automatisch erkennen* (off by default): when both players of a
+  pair finished their game, the lower score loses a heart at once (tie:
+  nobody); undo it in the history. Every pair of a scene plays its own
+  rounds (`2x1v1`: top and bottom match separately; *Neue Runde 1/2* and
+  *3/4* on *Szenen*, `POST /api/scenes/<scene>/rounds?group=0|1`).
 - Overlays (`1v1`, `2x1v1`) show the hearts of the match bound to each pair
   of the scene. *Szenen*: per pair *Match* = automatic (the cards on the two
   stations belong to the two players of an open match) or chosen by hand (a
@@ -95,13 +100,32 @@ URLs name the scene and the slot (slot 0 = left player of the first pair):
 | `POST …/lives/undo` | undo the last change of that match |
 | `GET  …/lives` | `{"player", "lives", "max", "winner_id", …}` |
 
-With the *3 Stage Button* of the Multi-Stage-Button plugin: one key per
-player, three stages titled `♥♥`, `♥`, `–`, each with an HTTP action
-(`POST`, the header above): stage 1 → `…/lives/set/2`, stage 2 →
-`…/lives/set/1`, stage 3 → `…/lives/set/0`. Each stage sets a fixed value,
-so the count is never wrong; the key's picture can differ when hearts were
-changed elsewhere (press until it matches). `409` = no match bound to that
-pair yet.
+**Recommended: the action *NestrisLTM Herzen*** of the Retroverse plugin
+(`StreamDeck/multistagebutton`, from version 0.2): one key per player,
+settings NestrisLTM address, token, scene and slot. The key shows the
+player's name and pixel hearts as NestrisLTM has them (polled every second,
+so it never drifts), *RAUS*/*SIEG* when the match is decided, and a short
+message on problems (`kein Match`, `Token?`, `offline`). Short press: 2 → 1
+→ 0 → 2; long press (0.6 s): undo the last change.
+
+Alternatively the *Multi Stage Button* / *3 Stage Button* of the same plugin
+(the 2/3/4-stage variants work since version 0.2): three stages titled
+`♥♥`, `♥`, `–`, each with an HTTP action (`POST`, the header above): stage
+1 → `…/lives/set/2`, stage 2 → `…/lives/set/1`, stage 3 → `…/lives/set/0`.
+Each stage sets a fixed value, so the count is never wrong; the key's
+picture can differ when hearts were changed elsewhere.
+
+Next round from the Stream Deck: `POST /api/control/scenes/<scene>/rounds`
+(`?group=0|1` for one pair of a `2x1v1` scene). `409` = no match bound to
+that pair yet.
+
+### Camera layouts (16:9)
+
+`1v1_cam` and `2x1v1_cam` keep transparent areas for the player cameras:
+camera | stats | board ‖ board | stats | camera, name and hearts above each
+camera; `2x1v1_cam` gives every player a quadrant (top pair, bottom pair).
+In OBS put the camera sources *below* the browser source, positioned in
+those areas (*Szenen* → *Rahmen für Kamerabereiche zeigen* draws frames around them).
 
 ## Command line (`nestris-ltm.exe` in the install folder)
 

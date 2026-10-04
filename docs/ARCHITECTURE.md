@@ -58,7 +58,7 @@ Qt shell: tray icon, window = QWebEngineView(admin), autostart, single instance
 `events`, `players` (+ `player_cards`), `stations`, `games` (+ `game_frames`, `game_recordings`,
 `game_cheats`), `event_player_flags`, `event_hidden_stations`,
 `event_hidden_games`, `tournaments` (+ `match_series`, `match_life_events`),
-`scenes` (+ `scene_slots`, `scene_rounds`, `scene_round_entries`, `scene_pair_matches`), `admin_users`, `api_tokens`,
+`scenes` (+ `scene_slots`, `scene_rounds` per group, `scene_round_entries`, `scene_pair_matches`), `admin_users`, `api_tokens`,
 `settings`, `audit_log`. Source of truth: `src/nestris_ltm/db/models.py`.
 
 A game belongs to an event when its `started_at` lies in the event window;
@@ -90,9 +90,17 @@ change wipe the events. Scene pairs (`Layout.pairs`) are bound to a match in
 `scene_pair_matches`, manually or from the player ids of the cards on the
 pair's stations (`StationState.player_id`); `SceneEngine.compute_state` adds
 `lives` per slot and `matches` per pair. Remote controls use the token scope
-`control` (`/api/control/...`). Planned: rounds per pair and automatic
-deduction (`tournaments.auto_deduct`), 16:9 camera layouts, a Stream Deck
-action that shows the real count.
+`control` (`/api/control/...`).
+
+Every head-to-head pair of a scene plays its own rounds
+(`scene_rounds.group_index`, `SceneRuntime.rounds`); other layouts have one
+group. When all slots of a pair finished, `SceneEngine` calls
+`MatchLives.round_complete`, which with `tournaments.auto_deduct` takes the
+lower score's heart (`source = auto`, unique per scene/round/pair, a tie
+costs nothing). Camera layouts `1v1_cam` / `2x1v1_cam` leave transparent
+camera areas. The Stream Deck action *NestrisLTM Herzen*
+(`../StreamDeck/multistagebutton/src/actions/nestris-hearts.ts`) polls
+`GET /api/control/.../lives` and cycles/undoes.
 
 ## Roadmap
 

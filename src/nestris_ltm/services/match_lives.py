@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Any
 import structlog
 from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import IntegrityError
 
 from nestris_ltm.core import lives as core
 from nestris_ltm.core.bracket import Bracket, Match, MatchKind, find_match
@@ -265,6 +266,7 @@ class MatchLives:
         *,
         source: core.Source = "admin",
         actor: str = "admin",
+        scene: tuple[str, int, int] | None = None,  # (slug, round, pair) of an auto deduction
     ) -> dict[str, Any]:
         async with self._lock:
             await self._ensure_loaded()
@@ -292,6 +294,9 @@ class MatchLives:
                     value=value,
                     source=source,
                     actor=actor[:64],
+                    scene_slug=scene[0] if scene else None,
+                    scene_round=scene[1] if scene else None,
+                    pair=scene[2] if scene else None,
                 )
                 session.add(row)
                 await session.flush()
@@ -305,6 +310,40 @@ class MatchLives:
             await self._settle(match_id, actor)
         self._changed()
         return self.match_view(match_id) or {}
+
+    async def round_complete(
+        self, runtime: SceneRuntime, pair: int, round_number: int, scores: dict[int, int | None]
+    ) -> None:
+        """A pair finished a round: with ``auto_deduct`` the lower score loses a heart.
+
+        A tie costs nobody a heart. Each scene round deducts at most once (unique
+        index on scene, round and pair), also after a restart.
+        """
+        if not self.settings.auto_deduct:
+            return
+        info = self.pair_info(runtime, pair)
+        if info is None or info["winner_id"] is not None:
+            return
+        a, b = runtime.layout.pairs[pair]
+        side = core.loser_of_round(scores.get(a), scores.get(b))
+        if side is None:
+            log.info("round tied, no heart lost", scene=runtime.slug, pair=pair, round=round_number)
+            return
+        loser_slot = (a, b)[side]
+        player_id = info["slots"][loser_slot]["player_id"]
+        try:
+            await self.apply(
+                info["match_id"], player_id, "lose", source="auto", actor="auto",
+                scene=(runtime.slug, round_number, pair),
+            )  # fmt: skip
+        except IntegrityError:
+            log.info("round already counted", scene=runtime.slug, pair=pair, round=round_number)
+            return
+        except ValueError as exc:
+            log.warning("automatic heart not taken", error=str(exc))
+            return
+        log.info("heart taken automatically", scene=runtime.slug, pair=pair,
+                 round=round_number, player=player_id)  # fmt: skip
 
     async def undo(self, event_id: int, actor: str) -> dict[str, Any]:
         async with self._lock:
@@ -456,6 +495,7 @@ class MatchLives:
 
     async def auto_bind(self) -> None:
         """Bind pairs whose two stations hold the cards of an open match's players."""
+        await self._ensure_loaded()
         if not self.settings.auto_bind or self.scenes is None:
             return
         bracket = self._bracket()

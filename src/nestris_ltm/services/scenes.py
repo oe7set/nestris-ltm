@@ -6,6 +6,8 @@ latency) and
 
 - binds running games to slots, freezes results on game end
   (``core/rounds.py``), optionally starts the next round automatically;
+  every head-to-head pair of a layout (``Layout.pairs``, e.g. both matches
+  of ``2x1v1``) plays its own rounds ("groups"), other layouts one group;
 - forwards every live frame of a slot's station to the scene's overlay
   clients (``frame`` messages, up to 60 Hz);
 - recomputes the derived numbers (rank, diff, tetrises behind, pace,
@@ -72,18 +74,53 @@ class SceneRuntime:
     auto_round: bool
     settings: dict[str, Any]
     slots: dict[int, SlotConfig]
-    round: RoundState = field(default_factory=RoundState)
-    round_id: int | None = None
+    # Per group: the current round, its database id (None = not stored yet)
+    # and when it started (time axis of the diff graph).
+    rounds: dict[int, RoundState] = field(default_factory=dict)
+    round_ids: dict[int, int | None] = field(default_factory=dict)
     channel: Broadcaster = field(default_factory=Broadcaster)
     frames: dict[int, dict[str, Any]] = field(default_factory=dict)
     history: dict[int, deque[tuple[int, int]]] = field(default_factory=dict)
-    round_started: float = field(default_factory=time.monotonic)
+    round_started: dict[int, float] = field(default_factory=dict)
     last_state: dict[str, Any] | None = None
     dirty: bool = True
     needs_persist: bool = False
 
     def active_slots(self) -> list[int]:
         return [s for s in range(self.layout.slots) if self._station(s)]
+
+    # ---- round groups: one per head-to-head pair, else one for all slots
+
+    def groups(self) -> list[int]:
+        return list(range(len(self.layout.pairs))) or [0]
+
+    def group_of(self, slot: int) -> int:
+        for index, pair in enumerate(self.layout.pairs):
+            if slot in pair:
+                return index
+        return 0
+
+    def group_slots(self, group: int) -> list[int]:
+        if self.layout.pairs and group < len(self.layout.pairs):
+            return list(self.layout.pairs[group])
+        return list(range(self.layout.slots))
+
+    def active_group_slots(self, group: int) -> list[int]:
+        return [s for s in self.group_slots(group) if self._station(s)]
+
+    def group_round(self, group: int) -> RoundState:
+        return self.rounds.setdefault(group, RoundState())
+
+    def round_of(self, slot: int) -> RoundState:
+        return self.group_round(self.group_of(slot))
+
+    @property
+    def round(self) -> RoundState:
+        """The round of group 0 (the only one of single-group layouts)."""
+        return self.group_round(0)
+
+    def started(self, group: int) -> float:
+        return self.round_started.setdefault(group, time.monotonic())
 
     def _station(self, slot: int) -> str | None:
         cfg = self.slots.get(slot)
@@ -100,6 +137,7 @@ class SceneEngine:
         self._loaded = asyncio.Event()
         # Hearts of the bracket match a pair shows (set by the runtime).
         self.lives: MatchLives | None = None
+        self._background: set[asyncio.Task[Any]] = set()
         hub.add_listener(self._on_hub_message)
 
     def mark_all_dirty(self) -> None:
@@ -136,12 +174,15 @@ class SceneEngine:
                     )
                     await self._load_round(session, runtime)
                 else:
+                    relayout = runtime.layout.id != layout.id
                     runtime.name = row.name
                     runtime.layout = layout
                     runtime.mode = row.mode  # type: ignore[assignment]
                     runtime.auto_round = row.auto_round
                     runtime.settings = dict(row.settings)
                     runtime.slots = slots
+                    if relayout:
+                        await self._load_round(session, runtime)
                 runtime.dirty = True
                 fresh[row.slug] = runtime
             for slug, old in self.scenes.items():
@@ -152,14 +193,21 @@ class SceneEngine:
         self._loaded.set()
 
     async def _load_round(self, session: AsyncSession, runtime: SceneRuntime) -> None:
+        runtime.rounds, runtime.round_ids = {}, {}
+        for group in runtime.groups():
+            await self._load_group_round(session, runtime, group)
+
+    async def _load_group_round(
+        self, session: AsyncSession, runtime: SceneRuntime, group: int
+    ) -> None:
         row = await session.scalar(
             select(SceneRound)
-            .where(SceneRound.scene_id == runtime.id)
+            .where(SceneRound.scene_id == runtime.id, SceneRound.group_index == group)
             .order_by(SceneRound.number.desc())
             .limit(1)
         )
         if row is None:
-            row = SceneRound(scene_id=runtime.id, number=1)
+            row = SceneRound(scene_id=runtime.id, group_index=group, number=1)
             session.add(row)
             await session.flush()
             await session.commit()
@@ -178,8 +226,8 @@ class SceneEngine:
                 finished_at=e.finished_at,
                 outcome=e.outcome,  # type: ignore[arg-type]
             )
-        runtime.round = state
-        runtime.round_id = row.id
+        runtime.rounds[group] = state
+        runtime.round_ids[group] = row.id
 
     def _index(self) -> None:
         index: dict[str, list[tuple[str, int]]] = {}
@@ -215,7 +263,7 @@ class SceneEngine:
             bound = False
             if game_id and frame.get("game_state") in ACTIVE_STATES:
                 bound = self._bind(runtime, slot, game_id, frame)
-            entry = runtime.round.entry(slot)
+            entry = runtime.round_of(slot).entry(slot)
             if bound and not entry.finished:
                 entry.score = frame.get("score")
                 entry.lines = frame.get("lines")
@@ -231,19 +279,20 @@ class SceneEngine:
     def _bind(
         self, runtime: SceneRuntime, slot: int, game_id: str, frame: dict[str, Any] | None
     ) -> bool:
-        entry = runtime.round.entry(slot)
+        group = runtime.group_of(slot)
+        entry = runtime.group_round(group).entry(slot)
         if entry.game_id == game_id:
             return True
         if (
             entry.finished
             and runtime.auto_round
-            and runtime.round.all_finished(runtime.active_slots())
+            and runtime.group_round(group).all_finished(runtime.active_group_slots(group))
         ):
-            # Everybody is done and a new game starts: next round.
-            self._start_new_round(runtime, reason="auto")
-        if not runtime.round.accepts(slot, game_id):
+            # Everybody of this group is done and a new game starts: next round.
+            self._start_new_round(runtime, group, reason="auto")
+        if not runtime.group_round(group).accepts(slot, game_id):
             return False
-        entry = runtime.round.entry(slot)
+        entry = runtime.group_round(group).entry(slot)
         entry.player_name = self._player_name(runtime, slot, frame)
         runtime.history[slot] = deque(maxlen=HISTORY_MAX)
         runtime.needs_persist = True
@@ -260,11 +309,12 @@ class SceneEngine:
             runtime = self.scenes.get(slug)
             if runtime is None:
                 continue
+            rnd = runtime.round_of(slot)
             if kind == "game_start":
                 if self._bind(runtime, slot, game_id, None):
-                    runtime.round.entry(slot).start_level = data.get("start_level")
+                    runtime.round_of(slot).entry(slot).start_level = data.get("start_level")
             elif kind == "game_end":
-                done = runtime.round.finish(
+                done = rnd.finish(
                     slot,
                     game_id,
                     score=data.get("score"),
@@ -273,9 +323,12 @@ class SceneEngine:
                     start_level=data.get("start_level"),
                 )
                 if done:
-                    self._sample(runtime, slot, runtime.round.entry(slot).score, force=True)
+                    self._sample(runtime, slot, rnd.entry(slot).score, force=True)
                     runtime.needs_persist = True
                     log.info("scene slot finished", scene=slug, slot=slot, game=game_id)
+                    group = runtime.group_of(slot)
+                    if rnd.all_finished(runtime.active_group_slots(group)):
+                        self._round_complete(runtime, group)
             runtime.dirty = True
 
     def _sample(
@@ -283,7 +336,7 @@ class SceneEngine:
     ) -> None:
         if score is None:
             return
-        t_ms = int((time.monotonic() - runtime.round_started) * 1000)
+        t_ms = int((time.monotonic() - runtime.started(runtime.group_of(slot))) * 1000)
         series = runtime.history.setdefault(slot, deque(maxlen=HISTORY_MAX))
         if force or not series or t_ms - series[-1][0] >= HISTORY_INTERVAL_MS:
             series.append((t_ms, score))
@@ -307,28 +360,47 @@ class SceneEngine:
 
     # ------------------------------------------------------------ rounds
 
-    def _start_new_round(self, runtime: SceneRuntime, *, reason: str) -> None:
-        runtime.round = RoundState(number=runtime.round.number + 1)
-        runtime.round_id = None  # created on the next persist
-        runtime.history = {}
-        runtime.frames = {}
-        runtime.round_started = time.monotonic()
+    def _start_new_round(self, runtime: SceneRuntime, group: int, *, reason: str) -> None:
+        number = runtime.group_round(group).number + 1
+        runtime.rounds[group] = RoundState(number=number)
+        runtime.round_ids[group] = None  # created on the next persist
+        for slot in runtime.group_slots(group):
+            runtime.history.pop(slot, None)
+            runtime.frames.pop(slot, None)
+        runtime.round_started[group] = time.monotonic()
         runtime.needs_persist = True
         runtime.dirty = True
         log.info(
-            "scene round started", scene=runtime.slug, round=runtime.round.number, reason=reason
+            "scene round started", scene=runtime.slug, group=group, round=number, reason=reason
         )
 
-    async def new_round(self, slug: str) -> int:
+    def _round_complete(self, runtime: SceneRuntime, group: int) -> None:
+        """Every slot of a group finished: the hearts may take the loser's heart."""
+        if self.lives is None or not runtime.layout.pairs:
+            return
+        rnd = runtime.group_round(group)
+        scores = {slot: rnd.entry(slot).score for slot in runtime.group_slots(group)}
+        task = asyncio.get_running_loop().create_task(
+            self.lives.round_complete(runtime, group, rnd.number, scores)
+        )
+        self._background.add(task)
+        task.add_done_callback(self._background.discard)
+
+    async def new_round(self, slug: str, group: int | None = None) -> dict[int, int]:
+        """Next round for one group or (``None``) all; returns {group: round}."""
         runtime = self._get(slug)
-        self._start_new_round(runtime, reason="manual")
+        groups = runtime.groups() if group is None else [group]
+        if any(g not in runtime.groups() for g in groups):
+            raise ValueError(f"the layout has no group {group}")
+        for g in groups:
+            self._start_new_round(runtime, g, reason="manual")
         await self._persist(runtime)
-        return runtime.round.number
+        return {g: runtime.group_round(g).number for g in groups}
 
     async def reset_slot(self, slug: str, slot: int) -> None:
         """Let one slot play again in the current round."""
         runtime = self._get(slug)
-        runtime.round.unfreeze(slot)
+        runtime.round_of(slot).unfreeze(slot)
         runtime.history.pop(slot, None)
         runtime.frames.pop(slot, None)
         runtime.needs_persist = True
@@ -344,15 +416,15 @@ class SceneEngine:
     # ------------------------------------------------------------ derived state
 
     def compute_state(self, runtime: SceneRuntime) -> dict[str, Any]:
-        state = runtime.round
         layout = runtime.layout
         slots_out: list[dict[str, Any]] = []
-        standings: list[Standing] = []
+        standings_by_group: dict[int, list[Standing]] = {g: [] for g in runtime.groups()}
         values: dict[int, dict[str, Any]] = {}
 
         for slot in range(layout.slots):
             cfg = runtime.slots.get(slot) or SlotConfig(slot)
-            entry = state.entries.get(slot)
+            group = runtime.group_of(slot)
+            entry = runtime.group_round(group).entries.get(slot)
             frame = runtime.frames.get(slot) or {}
             station = self.hub.station(cfg.station_id) if cfg.station_id else None
             if cfg.station_id is None:
@@ -379,12 +451,14 @@ class SceneEngine:
             )
             values[slot] = {"score": score or 0, "level": level, "status": status}
             if status in ("playing", "finished"):
-                standings.append(Standing(slot, score or 0, status == "finished"))
+                standings_by_group[group].append(Standing(slot, score or 0, status == "finished"))
             start_level = entry.start_level if entry and entry.start_level is not None else level
             tetris_rate = frame.get("tetris_rate") if status == "playing" else None
             slots_out.append(
                 {
                     "slot": slot,
+                    "group": group,
+                    "round": runtime.group_round(group).number,
                     "station_id": cfg.station_id,
                     "label": cfg.label,
                     "name": name,
@@ -409,19 +483,25 @@ class SceneEngine:
                 }
             )
 
-        outcomes = rounds.decide_outcomes(runtime.mode, standings)
-        if outcomes != {e.slot: e.outcome for e in state.entries.values() if e.outcome}:
-            for slot, entry in state.entries.items():
-                new = outcomes.get(slot)
-                if entry.outcome != new:
-                    entry.outcome = new
+        outcomes: dict[int, rounds.Outcome] = {}
+        rank_of: dict[int, int] = {}
+        leaders: dict[int, Standing] = {}
+        for group, standings in standings_by_group.items():
+            decided = rounds.decide_outcomes(runtime.mode, standings)
+            outcomes.update(decided)
+            for slot, entry in runtime.group_round(group).entries.items():
+                if entry.outcome != decided.get(slot):
+                    entry.outcome = decided.get(slot)
                     runtime.needs_persist = True
+            ranked = sorted(standings, key=lambda s: (-s.score, s.slot))
+            rank_of.update({s.slot: i + 1 for i, s in enumerate(ranked)})
+            if ranked:
+                leaders[group] = ranked[0]
 
-        ranked = sorted(standings, key=lambda s: (-s.score, s.slot))
-        rank_of = {s.slot: i + 1 for i, s in enumerate(ranked)}
-        leader = ranked[0] if ranked else None
         for out in slots_out:
             slot = out["slot"]
+            standings = standings_by_group[out["group"]]
+            leader = leaders.get(out["group"])
             out["rank"] = rank_of.get(slot)
             out["outcome"] = outcomes.get(slot)
             score = out["score"] or 0
@@ -438,6 +518,16 @@ class SceneEngine:
             target = rounds.score_to_beat(runtime.mode, standings, slot)
             if target is not None and out["status"] == "playing":
                 out["to_advance"] = {"score": target, **_gap_dict(rounds.gap(score, target, level))}
+
+        groups_out = [
+            {
+                "group": g,
+                "slots": runtime.group_slots(g),
+                "round": runtime.group_round(g).number,
+                "complete": runtime.group_round(g).all_finished(runtime.active_group_slots(g)),
+            }
+            for g in runtime.groups()
+        ]
 
         # Hearts: the bracket match bound to each head-to-head pair.
         matches: list[dict[str, Any]] = []
@@ -466,9 +556,10 @@ class SceneEngine:
                 "settings": runtime.settings,
                 "pairs": [list(p) for p in layout.pairs],
             },
-            "round": state.number,
-            "complete": state.all_finished(runtime.active_slots()),
-            "leader": leader.slot if leader else None,
+            "round": runtime.round.number,
+            "groups": groups_out,
+            "complete": all(g["complete"] for g in groups_out),
+            "leader": leaders[0].slot if 0 in leaders else None,
             "slots": slots_out,
         }
 
@@ -511,22 +602,10 @@ class SceneEngine:
     async def _persist(self, runtime: SceneRuntime) -> None:
         runtime.needs_persist = False
         async with self.db.session() as session, session.begin():
-            if runtime.round_id is None:
-                await session.execute(
-                    update(SceneRound)
-                    .where(SceneRound.scene_id == runtime.id, SceneRound.ended_at.is_(None))
-                    .values(ended_at=func.now())
-                )
-                row = SceneRound(scene_id=runtime.id, number=runtime.round.number)
-                session.add(row)
-                await session.flush()
-                runtime.round_id = row.id
-            await session.execute(
-                delete(SceneRoundEntry).where(SceneRoundEntry.round_id == runtime.round_id)
-            )
             game_ids = {
                 e.game_id
-                for e in runtime.round.entries.values()
+                for rnd in runtime.rounds.values()
+                for e in rnd.entries.values()
                 if e.game_id is not None and e.finished
             }
             known = (
@@ -540,24 +619,47 @@ class SceneEngine:
                 if game_ids
                 else {}
             )
-            for entry in runtime.round.entries.values():
-                if entry.game_id is None:
-                    continue
-                session.add(
-                    SceneRoundEntry(
-                        round_id=runtime.round_id,
-                        slot=entry.slot,
-                        game_id=known.get(entry.game_id),
-                        game_external_id=entry.game_id,
-                        player_name=(entry.player_name or "")[:64] or None,
-                        frozen_score=entry.score if entry.finished else None,
-                        frozen_lines=entry.lines if entry.finished else None,
-                        frozen_level=entry.level if entry.finished else None,
-                        frozen_start_level=entry.start_level,
-                        finished_at=entry.finished_at,
-                        outcome=entry.outcome,
-                    )
+            for group in runtime.groups():
+                await self._persist_group(session, runtime, group, known)
+
+    async def _persist_group(
+        self, session: AsyncSession, runtime: SceneRuntime, group: int, known: dict[Any, int]
+    ) -> None:
+        rnd = runtime.group_round(group)
+        round_id = runtime.round_ids.get(group)
+        if round_id is None:
+            await session.execute(
+                update(SceneRound)
+                .where(
+                    SceneRound.scene_id == runtime.id,
+                    SceneRound.group_index == group,
+                    SceneRound.ended_at.is_(None),
                 )
+                .values(ended_at=func.now())
+            )
+            row = SceneRound(scene_id=runtime.id, group_index=group, number=rnd.number)
+            session.add(row)
+            await session.flush()
+            round_id = runtime.round_ids[group] = row.id
+        await session.execute(delete(SceneRoundEntry).where(SceneRoundEntry.round_id == round_id))
+        for entry in rnd.entries.values():
+            if entry.game_id is None:
+                continue
+            session.add(
+                SceneRoundEntry(
+                    round_id=round_id,
+                    slot=entry.slot,
+                    game_id=known.get(entry.game_id),
+                    game_external_id=entry.game_id,
+                    player_name=(entry.player_name or "")[:64] or None,
+                    frozen_score=entry.score if entry.finished else None,
+                    frozen_lines=entry.lines if entry.finished else None,
+                    frozen_level=entry.level if entry.finished else None,
+                    frozen_start_level=entry.start_level,
+                    finished_at=entry.finished_at,
+                    outcome=entry.outcome,
+                )
+            )
 
     async def close(self) -> None:
         for runtime in self.scenes.values():

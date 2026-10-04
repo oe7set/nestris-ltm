@@ -1,6 +1,6 @@
 // Live connection to one scene: derived state, 60 Hz frames and score history.
 
-import type { Frame, History, Message, SceneState } from "./types";
+import type { Frame, History, Message, RoundGroup, SceneState } from "./types";
 
 export const HISTORY_INTERVAL_MS = 1000;
 
@@ -19,8 +19,9 @@ class SceneConnection {
   #slug = "";
   #socket: WebSocket | null = null;
   #retry = 1000;
-  #roundStart = performance.now();
-  #round = 0;
+  // Per round group (every head-to-head pair plays its own rounds).
+  #roundStart: Record<number, number> = {};
+  #rounds: Record<number, number> = {};
 
   start(slug: string): void {
     this.#slug = slug;
@@ -57,18 +58,25 @@ class SceneConnection {
           Object.entries(msg.data.frames).map(([k, v]) => [Number(k), v]),
         );
         this.history = msg.data.history;
-        this.#round = msg.data.state.round;
-        // Continue the server's time axis.
-        const last = Math.max(0, ...Object.values(msg.data.history).flat().map((p) => p[0]));
-        this.#roundStart = performance.now() - last;
+        for (const g of groupsOf(msg.data.state)) {
+          this.#rounds[g.group] = g.round;
+          // Continue the server's time axis.
+          const last = Math.max(0, ...g.slots.flatMap((s) => (msg.data.history[String(s)] ?? []).map((p) => p[0])));
+          this.#roundStart[g.group] = performance.now() - last;
+        }
         break;
       }
       case "state":
-        if (msg.data.round !== this.#round) {
-          this.#round = msg.data.round;
-          this.history = {};
-          this.frames = {};
-          this.#roundStart = performance.now();
+        for (const g of groupsOf(msg.data)) {
+          if (this.#rounds[g.group] !== undefined && this.#rounds[g.group] !== g.round) {
+            // A new round of this group: only its slots start over.
+            for (const s of g.slots) {
+              delete this.history[String(s)];
+              delete this.frames[s];
+            }
+            this.#roundStart[g.group] = performance.now();
+          }
+          this.#rounds[g.group] = g.round;
         }
         this.state = msg.data;
         break;
@@ -85,13 +93,20 @@ class SceneConnection {
 
   #sample(slot: number, score: number | null): void {
     if (score === null) return;
-    const t = Math.round(performance.now() - this.#roundStart);
+    const group = this.state?.slots[slot]?.group ?? 0;
+    const start = this.#roundStart[group] ?? (this.#roundStart[group] = performance.now());
+    const t = Math.round(performance.now() - start);
     const key = String(slot);
     const series = this.history[key] ?? (this.history[key] = []);
     const last = series[series.length - 1];
     if (!last || t - last[0] >= HISTORY_INTERVAL_MS) series.push([t, score]);
     else if (last[1] !== score) series[series.length - 1] = [last[0], score];
   }
+}
+
+/** Round groups of a state (older servers: one group with every slot). */
+export function groupsOf(state: SceneState): RoundGroup[] {
+  return state.groups ?? [{ group: 0, slots: state.slots.map((s) => s.slot), round: state.round, complete: state.complete }];
 }
 
 export const scene = new SceneConnection();

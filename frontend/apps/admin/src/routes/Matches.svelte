@@ -121,9 +121,9 @@
       <input type="checkbox" checked={info.settings.auto_bind} onchange={(e) => saveSettings({ auto_bind: e.currentTarget.checked })} />
       {t("matches.auto_bind")}
     </label>
-    <label class="check muted" title={t("matches.auto_deduct_later")}>
-      <input type="checkbox" checked={info.settings.auto_deduct} disabled />
-      {t("matches.auto_deduct")} ({t("matches.later")})
+    <label class="check" title={t("matches.auto_deduct_hint")}>
+      <input type="checkbox" checked={info.settings.auto_deduct} onchange={(e) => saveSettings({ auto_deduct: e.currentTarget.checked })} />
+      {t("matches.auto_deduct")}
     </label>
   </section>
 

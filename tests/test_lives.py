@@ -202,3 +202,124 @@ async def test_hearts_flow(runtime: Runtime) -> None:
         r1 = next(m for m in state["matches"] if m["match_id"] == mid)
         assert r1["events"] == [] and r1["max_lives"] == 2 and r1["winner_id"] is None
         assert rt.lives.binding(scene.id, 0) is None
+
+
+# ---------------------------------------------------------------- rounds per pair, auto deduction
+
+
+async def _settle_background(rt: Runtime) -> None:
+    import asyncio
+
+    while rt.scenes._background:
+        await asyncio.gather(*list(rt.scenes._background))
+
+
+@pytest.mark.db
+async def test_pairs_play_their_own_rounds(runtime: Runtime) -> None:
+    from tests.test_scenes_db import end, live
+
+    rt = runtime
+    await _seed(rt)
+    transport = httpx.ASGITransport(app=create_app(rt), client=("192.168.1.50", 5000))
+    shell = {"X-NestrisLTM-Shell-Token": rt.shell_token}
+    async with httpx.AsyncClient(transport=transport, base_url="http://t", headers=shell) as client:
+        r = await client.post("/api/scenes", json={
+            "name": "Vier", "slug": "vier", "layout": "2x1v1", "auto_round": True,
+            "slots": [{"slot": i, "station_id": f"st-{i + 1}"} for i in range(4)],
+        })  # fmt: skip
+        assert r.status_code == 201, r.text
+        await rt.scenes.load()
+        scene = rt.scenes.scenes["vier"]
+        for st, game in (("st-1", "a1"), ("st-2", "b1"), ("st-3", "c1"), ("st-4", "d1")):
+            live(rt, st, game, 1000)
+        end(rt, "st-1", "a1", 50_000)
+        end(rt, "st-2", "b1", 60_000)  # pair 0 done, pair 1 still playing
+        live(rt, "st-1", "a2", 10)  # auto round: only pair 0 starts over
+        state = rt.scenes.compute_state(scene)
+        assert [g["round"] for g in state["groups"]] == [2, 1]
+        assert state["slots"][2]["status"] == "playing" and state["slots"][0]["status"] == "playing"
+        assert state["slots"][1]["status"] == "waiting"
+        # Ranks and leaders per pair, not across all four.
+        assert {s["slot"]: s["rank"] for s in state["slots"] if s["rank"]} == {0: 1, 2: 1, 3: 2}
+
+        r = await client.post("/api/scenes/vier/rounds?group=1")
+        assert r.status_code == 200 and r.json()["rounds"] == {"1": 2}
+        assert (await client.post("/api/scenes/vier/rounds?group=5")).status_code == 400
+        # Survives a reload from the database.
+        await rt.scenes._persist(scene)
+        rt.scenes.scenes = {}
+        await rt.scenes.load()
+        scene = rt.scenes.scenes["vier"]
+        assert [scene.group_round(g).number for g in scene.groups()] == [2, 2]
+        assert scene.group_round(0).entry(0).game_id == "a2"
+
+
+@pytest.mark.db
+async def test_automatic_deduction(runtime: Runtime) -> None:
+    from tests.test_scenes_db import end, live
+
+    rt = runtime
+    ids = await _seed(rt)
+    transport = httpx.ASGITransport(app=create_app(rt), client=("192.168.1.50", 5000))
+    shell = {"X-NestrisLTM-Shell-Token": rt.shell_token}
+    async with httpx.AsyncClient(transport=transport, base_url="http://t", headers=shell) as client:
+        await client.post("/api/tournament/active-count", json={"count": 4})
+        await client.post("/api/tournament/fix")
+        await client.post("/api/scenes", json={
+            "name": "Bühne", "slug": "buehne", "layout": "1v1",
+            "slots": [{"slot": 0, "station_id": "st-1"}, {"slot": 1, "station_id": "st-2"}],
+        })  # fmt: skip
+        await rt.scenes.load()
+        scene = rt.scenes.scenes["buehne"]
+        rt.hub.set_player_nickname("st-1", "Alice", ids["Alice"])
+        rt.hub.set_player_nickname("st-2", "Dan", ids["Dan"])
+        await rt.lives.auto_bind()
+        info = rt.lives.pair_info(scene, 0)
+        assert info is not None
+        mid = info["match_id"]
+
+        def hearts() -> dict[str, int]:
+            view = rt.lives.match_view(mid) or {}
+            return {p["nickname"]: p["lives"] for p in view["players"]}
+
+        async def play(round_no: int, alice: int, dan: int) -> None:
+            live(rt, "st-1", f"a{round_no}", 10)
+            live(rt, "st-2", f"d{round_no}", 10)
+            end(rt, "st-1", f"a{round_no}", alice)
+            end(rt, "st-2", f"d{round_no}", dan)
+            await _settle_background(rt)
+
+        # Switched off (default): nothing happens.
+        await play(1, 100_000, 50_000)
+        assert hearts() == {"Alice": 2, "Dan": 2}
+
+        r = await client.put("/api/tournament/lives/settings", json={"auto_deduct": True})
+        assert r.json()["settings"]["auto_deduct"] is True
+        await client.post("/api/scenes/buehne/rounds")
+        await play(2, 120_000, 80_000)  # Dan lower: loses a heart
+        assert hearts() == {"Alice": 2, "Dan": 1}
+        event = (rt.lives.match_view(mid) or {})["events"][-1]
+        assert event["source"] == "auto" and event["actor"] == "auto"
+
+        # The same round reported again (e.g. after a restart): no second heart.
+        rnd = scene.group_round(0)
+        await rt.lives.round_complete(scene, 0, rnd.number, {0: 120_000, 1: 80_000})
+        assert hearts() == {"Alice": 2, "Dan": 1}
+
+        await client.post("/api/scenes/buehne/rounds")
+        await play(3, 90_000, 90_000)  # tie: nobody
+        assert hearts() == {"Alice": 2, "Dan": 1}
+
+        await client.post("/api/scenes/buehne/rounds")
+        await play(4, 70_000, 200_000)  # Alice lower now
+        assert hearts() == {"Alice": 1, "Dan": 1}
+
+        await client.post("/api/scenes/buehne/rounds")
+        await play(5, 300_000, 10_000)  # Dan out: Alice wins the match
+        assert hearts() == {"Alice": 1, "Dan": 0}
+        assert (rt.lives.match_view(mid) or {})["winner_id"] == ids["Alice"]
+
+        # Decided: further rounds take no more hearts.
+        await client.post("/api/scenes/buehne/rounds")
+        await play(6, 1, 2)
+        assert hearts() == {"Alice": 1, "Dan": 0}
