@@ -33,7 +33,8 @@ SESSION_TTL_S = 30 * 24 * 3600
 SHORT_SESSION_TTL_S = 12 * 3600
 SESSION_SECRET_KEY = "session_secret"
 TOKEN_PREFIX = "nltm_"
-SCOPES = ("admin", "players:write", "games:write", "stations", "scenes", "terminal")
+# control: remote controls such as the Stream Deck (hearts, rounds).
+SCOPES = ("admin", "players:write", "games:write", "stations", "scenes", "terminal", "control")
 
 _hasher = PasswordHasher()
 

@@ -39,19 +39,32 @@ async def find_by_nickname(session: AsyncSession, nickname: str) -> Player | Non
 
 async def card_nickname(session: AsyncSession, uid: str | None, name: str | None) -> str | None:
     """Display name for a card without creating anything (read-only)."""
+    return (await card_player(session, uid, name))[1]
+
+
+async def card_player(
+    session: AsyncSession, uid: str | None, name: str | None
+) -> tuple[int | None, str | None]:
+    """(player id, display name) for a card without creating anything (read-only).
+
+    The id is ``None`` for a card nobody is known by yet; the name then is the
+    one written on the card.
+    """
     if uid:
         result = await session.execute(
-            select(Player.nickname)
+            select(Player.id, Player.nickname)
             .join(PlayerCard, PlayerCard.player_id == Player.id)
             .where(PlayerCard.uid == uid.strip().upper(), Player.deleted_at.is_(None))
         )
-        nickname = result.scalar_one_or_none()
-        if nickname is not None:
-            return nickname
+        row = result.first()
+        if row is not None:
+            return int(row[0]), str(row[1])
     if not name:
-        return None
+        return None, None
     player = await find_by_nickname(session, normalize_nickname(name))
-    return player.nickname if player else normalize_nickname(name)
+    if player is not None:
+        return player.id, player.nickname
+    return None, normalize_nickname(name)
 
 
 async def resolve_card(session: AsyncSession, uid: str | None, name: str | None) -> int | None:

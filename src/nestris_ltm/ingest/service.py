@@ -141,13 +141,14 @@ class IngestService:
         if card is None or not self.db.is_ready:
             self.hub.set_player_nickname(station, card.name if card else None)
             return
+        player_id: int | None = None
         try:
             async with self.db.session() as session:
-                nickname = await players.card_nickname(session, card.uid, card.name)
+                player_id, nickname = await players.card_player(session, card.uid, card.name)
         except Exception as exc:
             log.debug("card lookup failed", error=repr(exc))
             nickname = card.name
-        self.hub.set_player_nickname(station, nickname)
+        self.hub.set_player_nickname(station, nickname, player_id)
         await self._greet_on_reader(station, card.uid, card.name)
 
     async def _greet_on_reader(self, station: str, uid: str, name: str | None) -> None:

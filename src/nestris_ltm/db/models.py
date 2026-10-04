@@ -47,6 +47,9 @@ GAME_SOURCES = ("station", "manual", "ngf_import", "self_reported")
 END_REASONS = ("game_over", "reset", "signal_lost", "shutdown")
 SCENE_MODES = ("none", "top2_advance", "worst_out", "winner_only")
 ROUND_OUTCOMES = ("advanced", "eliminated", "winner")
+LIFE_KINDS = ("lose", "gain", "set")
+LIFE_SOURCES = ("admin", "api", "auto")
+PAIR_BINDINGS = ("manual", "auto")
 
 
 def _in(column: str, values: tuple[str, ...]) -> str:
@@ -330,6 +333,62 @@ class Tournament(TimestampMixin, Base):
     # {match_id: player_id}
     winners: Mapped[dict[str, Any]] = mapped_column(server_default=text("'{}'::jsonb"))
     seeded_at: Mapped[datetime | None]
+    # Hearts per player in a 1-vs-1 match (core/lives.py); per match adjustable.
+    default_lives: Mapped[int] = mapped_column(SmallInteger, server_default=text("2"))
+    # Bind scene pairs to the bracket match of the players on their stations.
+    auto_bind: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
+    # Take a heart from the loser of a round automatically (phase H4).
+    auto_deduct: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+
+
+class MatchSeries(TimestampMixin, Base):
+    """Per-match settings of the hearts series; the hearts come from the events."""
+
+    __tablename__ = "match_series"
+    __table_args__ = (
+        CheckConstraint("max_lives IS NULL OR max_lives BETWEEN 1 AND 9", name="max_lives"),
+    )
+
+    tournament_id: Mapped[int] = mapped_column(
+        ForeignKey("tournaments.id", ondelete="CASCADE"), primary_key=True
+    )
+    match_id: Mapped[str] = mapped_column(String(16), primary_key=True)
+    # None = the tournament's default_lives.
+    max_lives: Mapped[int | None] = mapped_column(SmallInteger)
+    # Set when the hearts decided the match (the bracket winner came from them).
+    decided_by_lives: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+
+
+class MatchLifeEvent(Base):
+    """One change of a player's hearts (lose / gain / set); undo marks it."""
+
+    __tablename__ = "match_life_events"
+    __table_args__ = (
+        CheckConstraint(_in("kind", LIFE_KINDS), name="kind"),
+        CheckConstraint(_in("source", LIFE_SOURCES), name="source"),
+        Index("ix_match_life_events_match", "tournament_id", "match_id", "id"),
+        # An automatic deduction happens at most once per scene round and pair.
+        Index(
+            "uq_match_life_events_auto",
+            "tournament_id", "scene_slug", "scene_round", "pair",
+            unique=True,
+            postgresql_where=text("source = 'auto' AND undone_at IS NULL"),
+        ),
+    )  # fmt: skip
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    tournament_id: Mapped[int] = mapped_column(ForeignKey("tournaments.id", ondelete="CASCADE"))
+    match_id: Mapped[str] = mapped_column(String(16))
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String(8))
+    value: Mapped[int | None] = mapped_column(SmallInteger)
+    source: Mapped[str] = mapped_column(String(8))
+    actor: Mapped[str | None] = mapped_column(String(64))
+    scene_slug: Mapped[str | None] = mapped_column(String(64))
+    scene_round: Mapped[int | None] = mapped_column(Integer)
+    pair: Mapped[int | None] = mapped_column(SmallInteger)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    undone_at: Mapped[datetime | None]
 
 
 # ---------------------------------------------------------------- scenes (OBS overlays)
@@ -358,6 +417,23 @@ class SceneSlot(Base):
     station_id: Mapped[str | None] = mapped_column(ForeignKey("stations.id", ondelete="SET NULL"))
     label_override: Mapped[str | None] = mapped_column(String(64))
     name_override: Mapped[str | None] = mapped_column(String(64))
+
+
+class ScenePairMatch(Base):
+    """Which bracket match a head-to-head pair of a scene shows (hearts in the overlay)."""
+
+    __tablename__ = "scene_pair_matches"
+    __table_args__ = (CheckConstraint(_in("bound_by", PAIR_BINDINGS), name="bound_by"),)
+
+    scene_id: Mapped[int] = mapped_column(
+        ForeignKey("scenes.id", ondelete="CASCADE"), primary_key=True
+    )
+    pair: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    tournament_id: Mapped[int] = mapped_column(ForeignKey("tournaments.id", ondelete="CASCADE"))
+    match_id: Mapped[str] = mapped_column(String(16))
+    # manual (admin) wins over auto (detected from the players on the stations).
+    bound_by: Mapped[str] = mapped_column(String(8))
+    bound_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
 class SceneRound(Base):

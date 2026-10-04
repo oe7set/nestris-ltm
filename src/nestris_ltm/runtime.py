@@ -25,6 +25,7 @@ from nestris_ltm.ingest.service import IngestService
 from nestris_ltm.ingest.spool import EventSpool
 from nestris_ltm.live.hub import LiveHub
 from nestris_ltm.services.devices import DeviceUpdates
+from nestris_ltm.services.match_lives import MatchLives
 from nestris_ltm.services.scenes import SceneEngine
 from nestris_ltm.services.tournament import TournamentService
 from nestris_ltm.services.updates import UpdateService, running_live_games
@@ -56,6 +57,11 @@ class Runtime:
         self.ingest.command_sink = self.mqtt.publish_command
         self.tournament = TournamentService(self.db, self.hub)
         self.scenes = SceneEngine(self.db, self.hub)
+        # Hearts of the 1-vs-1 matches; shown by the scenes' overlays.
+        self.lives = MatchLives(self.db, self.tournament, self.hub)
+        self.lives.scenes = self.scenes
+        self.scenes.lives = self.lives
+        self.lives.add_listener(self.scenes.mark_all_dirty)
         self.updates = UpdateService(
             settings,
             live_games=lambda: running_live_games(self.hub.stations()),
@@ -103,6 +109,7 @@ class Runtime:
         self.spawn(self.frames.run(), name="frame-buffer")
         self.spawn(self.tournament.run(), name="kiosk")
         self.spawn(self.scenes.run(), name="scenes")
+        self.spawn(self.lives.run(), name="hearts")
         self.spawn(self.updates.run(), name="updates")
         self.spawn(self.devices.run(), name="device-updates")
 

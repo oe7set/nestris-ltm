@@ -65,6 +65,44 @@ stay.
   down, nothing is lost: results are stored when it is back. Results sent
   while NestrisLTM itself is down are queued by Mosquitto (persistent session).
 
+## Hearts in the 1 vs 1 (*Matches*)
+
+Once the bracket is fixed (*Turnier* → FIX), every match between two players
+is played for hearts: both start with 2 (admin page *Matches* → *Herzen pro
+Spieler*; per match e.g. 3 for the final). The loser of a round loses a heart;
+a tie costs nobody one. At 0 hearts the opponent is set as the winner in the
+bracket (kiosk, console and overlays update); giving the heart back removes
+that winner again. FIX, reset and unseed start all hearts over.
+
+- *Matches*: − / + per player, hearts per match, history with *Rückgängig*.
+- Overlays (`1v1`, `2x1v1`) show the hearts of the match bound to each pair
+  of the scene. *Szenen*: per pair *Match* = automatic (the cards on the two
+  stations belong to the two players of an open match) or chosen by hand (a
+  manual choice always wins).
+
+### Stream Deck
+
+Create an API token with the scope `control` (*Einstellungen* → API-Tokens).
+Every request sends it as the header `Authorization: Bearer <token>`. The
+URLs name the scene and the slot (slot 0 = left player of the first pair):
+
+| Request | Effect |
+|---|---|
+| `POST /api/control/scenes/<scene>/slots/<slot>/lives/lose` | take a heart |
+| `POST …/lives/gain` | give one back |
+| `POST …/lives/set/<n>` | set to n (idempotent) |
+| `POST …/lives/cycle` | 2 → 1 → 0 → 2 |
+| `POST …/lives/undo` | undo the last change of that match |
+| `GET  …/lives` | `{"player", "lives", "max", "winner_id", …}` |
+
+With the *3 Stage Button* of the Multi-Stage-Button plugin: one key per
+player, three stages titled `♥♥`, `♥`, `–`, each with an HTTP action
+(`POST`, the header above): stage 1 → `…/lives/set/2`, stage 2 →
+`…/lives/set/1`, stage 3 → `…/lives/set/0`. Each stage sets a fixed value,
+so the count is never wrong; the key's picture can differ when hearts were
+changed elsewhere (press until it matches). `409` = no match bound to that
+pair yet.
+
 ## Command line (`nestris-ltm.exe` in the install folder)
 
 ```text

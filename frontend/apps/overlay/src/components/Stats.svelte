@@ -2,6 +2,7 @@
   // Name, score and the per-player numbers.
   import { fmt, pct, text, type Lang } from "../lib/format";
   import type { SlotView } from "../lib/view";
+  import Hearts from "./Hearts.svelte";
   import Num from "./Num.svelte";
 
   interface Props {
@@ -21,6 +22,14 @@
     {#if view.rank}<span class="rank">{view.rank}</span>{/if}
     <span class="nick">{view.name ?? "—"}</span>
   </div>
+  {#if view.lives}
+    <div class="lives">
+      <Hearts current={view.lives.current} max={view.lives.max} size={compact ? 2 : 3} {align} />
+      {#if view.match_result}
+        <span class="result {view.match_result}">{text(lang, view.match_result === "won" ? "winner" : "eliminated")}</span>
+      {/if}
+    </div>
+  {/if}
   <div class="score"><Num value={view.score} /></div>
   <div class="grid">
     <div class="cell"><span>{text(lang, "lines")}</span><b>{fmt(view.lines)}</b></div>
@@ -61,6 +70,30 @@
   }
   .right .name {
     flex-direction: row-reverse;
+  }
+  .lives {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: -2px;
+  }
+  .right .lives {
+    flex-direction: row-reverse;
+  }
+  .result {
+    flex: none;
+    font-size: 16px;
+    letter-spacing: 2px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    color: #000;
+  }
+  .result.won {
+    background: var(--accent);
+  }
+  .result.lost {
+    background: #e8203a;
+    color: #fff;
   }
   .nick {
     overflow: hidden;

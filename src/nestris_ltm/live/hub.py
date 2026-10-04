@@ -43,6 +43,8 @@ class StationState:
     live_at: datetime | None = None
     # Display name of the player resolved from the card (set by the ingest).
     player_nickname: str | None = None
+    # The player of that card, if known (binds scene pairs to bracket matches).
+    player_id: int | None = None
     # Last update progress the station reported (``<base>/update``).
     update: UpdatePayload | None = None
     messages: int = 0
@@ -73,6 +75,7 @@ class StationState:
             ),
             "card_present": bool(self.player and self.player.present),
             "player_nickname": self.player_nickname,
+            "player_id": self.player_id,
             "update": self.update.model_dump(mode="json") if self.update else None,
             "live": self.live.model_dump(mode="json") if self.live else None,
             "live_at": _iso(self.live_at),
@@ -137,6 +140,7 @@ class LiveHub(Broadcaster):
         state.player_at = self._touch(state)
         if not payload.present:
             state.player_nickname = None
+            state.player_id = None
         self._publish_station(state)
 
     def update_update(self, station_id: str, payload: UpdatePayload) -> None:
@@ -145,10 +149,13 @@ class LiveHub(Broadcaster):
         self._touch(state)
         self._publish_station(state)
 
-    def set_player_nickname(self, station_id: str, nickname: str | None) -> None:
+    def set_player_nickname(
+        self, station_id: str, nickname: str | None, player_id: int | None = None
+    ) -> None:
         state = self.station(station_id)
-        if state.player_nickname != nickname:
+        if state.player_nickname != nickname or state.player_id != player_id:
             state.player_nickname = nickname
+            state.player_id = player_id
             self._publish_station(state)
 
     def update_live(self, station_id: str, payload: LivePayload) -> None:

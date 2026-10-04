@@ -31,6 +31,18 @@ export interface SlotState {
   to_leader?: Gap;
   vs_partner?: Gap;
   to_advance?: Gap & { score: number };
+  // Hearts of the bracket match bound to this slot's pair (if any).
+  lives?: { current: number | null; max: number };
+  match_result?: "won" | "lost" | null;
+}
+
+export interface PairMatch {
+  pair: number;
+  match_id: string;
+  round_name: string;
+  max_lives: number;
+  bound_by: "manual" | "auto";
+  winner_id: number | null;
 }
 
 export interface SceneInfo {
@@ -51,6 +63,7 @@ export interface SceneSettings {
 }
 
 export interface SceneState {
+  matches?: PairMatch[];
   scene: SceneInfo;
   round: number;
   complete: boolean;

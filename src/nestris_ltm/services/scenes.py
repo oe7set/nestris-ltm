@@ -29,7 +29,7 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 from sqlalchemy import delete, func, select, update
@@ -42,6 +42,9 @@ from nestris_ltm.db.manager import DatabaseManager
 from nestris_ltm.db.models import Game, Scene, SceneRound, SceneRoundEntry, SceneSlot
 from nestris_ltm.live.broadcast import Broadcaster
 from nestris_ltm.live.hub import LiveHub
+
+if TYPE_CHECKING:
+    from nestris_ltm.services.match_lives import MatchLives
 
 log = structlog.get_logger(__name__)
 
@@ -95,7 +98,14 @@ class SceneEngine:
         self._by_station: dict[str, list[tuple[str, int]]] = {}
         self._lock = asyncio.Lock()
         self._loaded = asyncio.Event()
+        # Hearts of the bracket match a pair shows (set by the runtime).
+        self.lives: MatchLives | None = None
         hub.add_listener(self._on_hub_message)
+
+    def mark_all_dirty(self) -> None:
+        """Recompute every scene's state (e.g. hearts changed)."""
+        for runtime in self.scenes.values():
+            runtime.dirty = True
 
     # ------------------------------------------------------------ loading
 
@@ -429,7 +439,24 @@ class SceneEngine:
             if target is not None and out["status"] == "playing":
                 out["to_advance"] = {"score": target, **_gap_dict(rounds.gap(score, target, level))}
 
+        # Hearts: the bracket match bound to each head-to-head pair.
+        matches: list[dict[str, Any]] = []
+        if self.lives is not None:
+            for index in range(len(layout.pairs)):
+                info = self.lives.pair_info(runtime, index)
+                if info is None:
+                    continue
+                matches.append({k: v for k, v in info.items() if k != "slots"})
+                for slot, side in info["slots"].items():
+                    if slot < len(slots_out):
+                        slots_out[slot]["lives"] = {
+                            "current": side["lives"],
+                            "max": info["max_lives"],
+                        }
+                        slots_out[slot]["match_result"] = side["result"]
+
         return {
+            "matches": matches,
             "scene": {
                 "slug": runtime.slug,
                 "name": runtime.name,

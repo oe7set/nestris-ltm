@@ -24,14 +24,22 @@ from typing import Any
 
 import structlog
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from nestris_ltm.core.bracket import Bracket, BracketState
+from nestris_ltm.core.bracket import Bracket, BracketState, next_pow2
 from nestris_ltm.core.score_train import compute_train
 from nestris_ltm.db.manager import DatabaseManager
-from nestris_ltm.db.models import Event, EventPlayerFlags, Setting, Tournament
+from nestris_ltm.db.models import (
+    Event,
+    EventPlayerFlags,
+    MatchLifeEvent,
+    MatchSeries,
+    ScenePairMatch,
+    Setting,
+    Tournament,
+)
 from nestris_ltm.live.broadcast import Broadcaster
 from nestris_ltm.live.hub import LiveHub
 from nestris_ltm.services import audit, events, highscore
@@ -41,6 +49,8 @@ log = structlog.get_logger(__name__)
 POLL_INTERVAL_S = 1.0
 VIEW_SETTINGS_KEY = "kiosk.view"
 CELEBRATION_KEY = "kiosk.celebration"
+# Bracket operations after which the hearts of every match start over.
+RESET_ACTIONS = frozenset({"fix", "reset", "unseed"})
 
 
 class NoActiveEventError(RuntimeError):
@@ -71,6 +81,12 @@ class TournamentService(Broadcaster):
         self.celebration_enabled = True
         self._last: dict[str, Any] = {}
         self._loaded = False
+        # Called after the hearts were wiped (services/match_lives.py).
+        self.on_reset: list[Callable[[], None]] = []
+
+    @property
+    def tournament_id(self) -> int | None:
+        return self._tournament_id
 
     # ------------------------------------------------------------ loading
 
@@ -188,7 +204,16 @@ class TournamentService(Broadcaster):
                 current = await self._refresh(session)
                 if self._event_id is None:
                     raise NoActiveEventError("create and activate an event first")
+                capacity = next_pow2(self.state.active_count)
                 fn(self.state)  # may raise ValueError -> 400
+                wipe = action in RESET_ACTIONS or (
+                    action == "size" and next_pow2(self.state.active_count) != capacity
+                )
+                if wipe and self._tournament_id is not None:
+                    for model in (MatchLifeEvent, MatchSeries, ScenePairMatch):
+                        await session.execute(
+                            delete(model).where(model.tournament_id == self._tournament_id)
+                        )
                 await self._persist(session)
                 await audit.record(
                     session,
@@ -200,6 +225,9 @@ class TournamentService(Broadcaster):
                 )
             current["bracket"] = self._bracket_payload(self.state.bracket())
             self._publish_changes(current)
+            if wipe:
+                for callback in self.on_reset:
+                    callback()
             bracket: dict[str, Any] = current["bracket"]
             return bracket
 

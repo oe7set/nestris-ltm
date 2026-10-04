@@ -15,6 +15,7 @@
     description_de: string;
     description_en: string;
     supports_modes: boolean;
+    pairs: [number, number][];
   }
   interface Slot {
     slot: number;
@@ -40,6 +41,20 @@
     status: string;
     score: number | null;
     outcome: string | null;
+    lives?: { current: number | null; max: number };
+    match_result?: "won" | "lost" | null;
+  }
+  interface PairMatch {
+    pair: number;
+    match_id: string;
+    round_name: string;
+    bound_by: "manual" | "auto";
+  }
+  interface MatchOption {
+    match_id: string;
+    round_name: string;
+    players: { nickname: string }[];
+    winner_id: number | null;
   }
 
   const MODES = ["none", "top2_advance", "worst_out", "winner_only"] as const;
@@ -63,6 +78,8 @@
   let layouts = $state<Layout[]>([]);
   let stations = $state<StationRow[]>([]);
   let live = $state<Record<string, SlotState[]>>({});
+  let pairMatches = $state<Record<string, PairMatch[]>>({});
+  let matchOptions = $state<MatchOption[]>([]);
   let editing = $state<Scene | null>(null);
   let open = $state(false);
   let form = $state(blank());
@@ -82,13 +99,35 @@
     } catch (e) {
       toasts.error(e);
     }
+    await loadMatches();
+  }
+
+  async function loadMatches(): Promise<void> {
+    try {
+      matchOptions = (await api<{ matches: MatchOption[] }>("/api/tournament/matches")).matches;
+    } catch {
+      matchOptions = []; // no active event / bracket not fixed
+    }
+  }
+
+  function matchLabel(m: MatchOption): string {
+    return `${m.round_name}: ${m.players.map((p) => p.nickname).join(" vs ")}`;
+  }
+
+  async function bindPair(scene: Scene, pair: number, matchId: string): Promise<void> {
+    await run(
+      () => api(`/api/scenes/${scene.id}/pairs/${pair}/match`, { method: "PUT", body: { match_id: matchId || null } }),
+      t("scenes.match_saved"),
+    );
+    await pollLive();
   }
 
   async function pollLive(): Promise<void> {
     for (const s of scenes) {
       try {
-        const r = await api<{ state: { slots: SlotState[] } }>(`/api/scenes/${s.slug}/state`);
+        const r = await api<{ state: { slots: SlotState[]; matches?: PairMatch[] } }>(`/api/scenes/${s.slug}/state`);
         live[s.slug] = r.state.slots;
+        pairMatches[s.slug] = r.state.matches ?? [];
       } catch {
         // the scene may just have been deleted
       }
@@ -221,7 +260,11 @@
       .then((m) => (origin = m.base_urls[1] ?? m.base_urls[0] ?? location.origin))
       .catch(() => {});
     const timer = setInterval(pollLive, 1500);
-    return () => clearInterval(timer);
+    const matchTimer = setInterval(() => void loadMatches(), 5000);
+    return () => {
+      clearInterval(timer);
+      clearInterval(matchTimer);
+    };
   });
 </script>
 
@@ -254,6 +297,11 @@
           <div class="slot">
             <span class="muted small">{t("scenes.slot")} {st.slot + 1} · {cfg?.station_id ?? "–"}</span>
             <span>{st.name ?? "–"}</span>
+            {#if st.lives}
+              <span class="hearts" title="{st.lives.current}/{st.lives.max}">
+                {#each Array.from({ length: st.lives.max }, (_, i) => i) as i (i)}<span class:empty={i >= (st.lives.current ?? 0)}>♥</span>{/each}
+              </span>
+            {/if}
             <span class="badge {st.status === 'playing' ? 'ok' : st.status === 'finished' ? 'accent' : ''}">
               {tDynamic(`scenes.status.${st.status}`, st.status)}{st.score !== null ? ` · ${st.score.toLocaleString()}` : ""}
             </span>
@@ -266,6 +314,19 @@
           </div>
         {/each}
       </div>
+      {#each layouts.find((l) => l.id === s.layout)?.pairs ?? [] as pair, index (index)}
+        {@const bound = (pairMatches[s.slug] ?? []).find((p) => p.pair === index)}
+        <div class="row pair">
+          <span class="muted small">{t("scenes.match_for", { a: pair[0] + 1, b: pair[1] + 1 })}</span>
+          <select value={bound?.match_id ?? ""} onchange={(e) => bindPair(s, index, e.currentTarget.value)}>
+            <option value="">{t("scenes.match_none")}</option>
+            {#each matchOptions.filter((m) => m.winner_id === null || m.match_id === bound?.match_id) as m (m.match_id)}
+              <option value={m.match_id}>{matchLabel(m)}</option>
+            {/each}
+          </select>
+          {#if bound}<span class="badge {bound.bound_by === 'manual' ? 'accent' : ''}">{bound.bound_by === "manual" ? t("scenes.match_manual") : t("scenes.match_auto")}</span>{/if}
+        </div>
+      {/each}
       {#if previewSlug === s.slug}
         <div class="preview"><iframe src={`/o/${s.slug}?bg=dark`} title={s.name}></iframe></div>
       {/if}
@@ -395,5 +456,21 @@
   }
   .slot-no {
     width: 60px;
+  }
+  .pair {
+    gap: 10px;
+    align-items: center;
+  }
+  .pair select {
+    max-width: 360px;
+  }
+  .hearts {
+    color: #e5343a;
+    font-size: 16px;
+    letter-spacing: 1px;
+  }
+  .hearts .empty {
+    color: transparent;
+    -webkit-text-stroke: 1px #777;
   }
 </style>

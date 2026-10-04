@@ -57,8 +57,8 @@ Qt shell: tray icon, window = QWebEngineView(admin), autostart, single instance
 
 `events`, `players` (+ `player_cards`), `stations`, `games` (+ `game_frames`, `game_recordings`,
 `game_cheats`), `event_player_flags`, `event_hidden_stations`,
-`event_hidden_games`, `tournaments`, `scenes` (+ `scene_slots`,
-`scene_rounds`, `scene_round_entries`), `admin_users`, `api_tokens`,
+`event_hidden_games`, `tournaments` (+ `match_series`, `match_life_events`),
+`scenes` (+ `scene_slots`, `scene_rounds`, `scene_round_entries`, `scene_pair_matches`), `admin_users`, `api_tokens`,
 `settings`, `audit_log`. Source of truth: `src/nestris_ltm/db/models.py`.
 
 A game belongs to an event when its `started_at` lies in the event window;
@@ -77,6 +77,22 @@ there is no foreign key, so changing the window re-scopes the data.
 
 All versus numbers are computed server-side in `SceneState` and pushed per
 scene, so every layout shows identical values.
+
+## Hearts (1 vs 1 series)
+
+After FIX every real bracket match is a series with hearts
+(`core/lives.py`, `services/match_lives.py`). The hearts are folded from the
+event log `match_life_events` (lose / gain / set, undo marks an event), so the
+bracket port stays untouched: at zero hearts `MatchLives` sets the bracket
+winner through `TournamentService.mutate`, and clears it again when the heart
+comes back (`match_series.decided_by_lives`). FIX / reset / unseed / a capacity
+change wipe the events. Scene pairs (`Layout.pairs`) are bound to a match in
+`scene_pair_matches`, manually or from the player ids of the cards on the
+pair's stations (`StationState.player_id`); `SceneEngine.compute_state` adds
+`lives` per slot and `matches` per pair. Remote controls use the token scope
+`control` (`/api/control/...`). Planned: rounds per pair and automatic
+deduction (`tournaments.auto_deduct`), 16:9 camera layouts, a Stream Deck
+action that shows the real count.
 
 ## Roadmap
 
