@@ -1,0 +1,134 @@
+"""Checks of the embedded admin browser, run in a separate process by
+``test_shell_window.py`` (QtWebEngine must not share a process with the
+other Qt tests). Prints one JSON object with the results.
+
+- A ``target="_blank"`` link and a link to another site are handed to the
+  system-browser opener (real mouse clicks = a user gesture, as in the app).
+- ``navigator.clipboard.writeText`` succeeds; a plain QWebEnginePage (the
+  state before the fix) is rejected with NotAllowedError.
+
+Offscreen platform: the clipboard is an isolated in-process one, never the
+user's real clipboard.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import threading
+from collections.abc import Callable
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+os.environ["QT_QPA_PLATFORM"] = "offscreen"
+os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu")
+
+from PySide6.QtCore import QElapsedTimer, QPoint, Qt, QUrl
+from PySide6.QtTest import QTest
+from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile
+from PySide6.QtWebEngineWidgets import QWebEngineView
+from PySide6.QtWidgets import QApplication
+
+from nestris_ltm.shell.window import _Page
+
+COPIED = "http://127.0.0.1:7990/o/main"
+PAGE = f"""<!doctype html><html><body style="margin:0">
+<a id="view" href="/view/highscore" target="_blank" rel="noopener"
+   style="position:absolute;left:0;top:0;width:100px;height:40px;display:block">open</a>
+<a id="ext" href="https://retroverse.at/"
+   style="position:absolute;left:0;top:50px;width:100px;height:40px;display:block">site</a>
+<button id="copy" onclick="navigator.clipboard.writeText('{COPIED}')
+  .then(() => document.title = 'ok', e => document.title = 'err:' + e)">copy</button>
+</body></html>""".encode()
+
+
+class _Handler(BaseHTTPRequestHandler):
+    def do_GET(self) -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.end_headers()
+        self.wfile.write(PAGE)
+
+    def log_message(self, *args: object) -> None:
+        pass
+
+
+def main() -> None:
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    origin = QUrl(f"http://127.0.0.1:{httpd.server_address[1]}/")
+    app = QApplication([])
+
+    def wait_for(check: Callable[[], object], ms: int = 10_000) -> bool:
+        timer = QElapsedTimer()
+        timer.start()
+        while timer.elapsed() < ms:
+            app.processEvents()
+            if check():
+                return True
+        return False
+
+    def load(page: QWebEnginePage) -> QWebEngineView:
+        view = QWebEngineView()
+        view.setPage(page)
+        view.resize(400, 300)
+        view.show()
+        done: list[bool] = []
+        page.loadFinished.connect(done.append)
+        page.setUrl(origin)
+        wait_for(lambda: done)
+        return view
+
+    def click(view: QWebEngineView, x: int, y: int) -> None:
+        target = view.focusProxy() or view
+        QTest.mouseClick(
+            target, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, QPoint(x, y)
+        )
+
+    def focus(view: QWebEngineView) -> None:
+        # In the app the click on the copy button focuses the document.
+        view.activateWindow()
+        (view.focusProxy() or view).setFocus()
+        wait_for(lambda: False, 300)
+
+    def copy(page: QWebEnginePage, view: QWebEngineView) -> str:
+        focus(view)
+        page.runJavaScript("document.getElementById('copy').click()")
+        wait_for(lambda: page.title() == "ok" or page.title().startswith("err"))
+        return page.title()
+
+    out: dict[str, object] = {"origin": origin.toString()}
+    opened: list[str] = []
+    profile = QWebEngineProfile()
+
+    # A plain page first: the state before the fix.
+    plain = QWebEnginePage(profile)
+    plain_view = load(plain)
+    out["plain_copy_result"] = copy(plain, plain_view)
+    plain_view.hide()
+
+    page = _Page(profile, origin, opener=lambda url: opened.append(url.toString()))
+    view = load(page)
+    out["opened_on_load"] = list(opened)
+
+    # The offscreen platform does not deliver mouse input to the button
+    # reliably; the handler is triggered from script.
+    app.clipboard().clear()
+    out["copy_result"] = copy(page, view)
+    wait_for(lambda: app.clipboard().text() == COPIED, 3000)
+    out["clipboard"] = app.clipboard().text()
+
+    click(view, 20, 20)  # target="_blank" to the app's own host
+    wait_for(lambda: opened)
+    click(view, 20, 70)  # plain link to another site
+    wait_for(lambda: len(opened) >= 2)
+    out["opened"] = list(opened)
+
+    print("RESULT " + json.dumps(out), flush=True)
+    httpd.shutdown()
+    # Skip Qt/Chromium teardown: the result is out, the process just ends.
+    view.hide()
+    os._exit(0)
+
+
+if __name__ == "__main__":
+    main()

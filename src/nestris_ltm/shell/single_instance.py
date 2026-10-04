@@ -9,6 +9,7 @@ from __future__ import annotations
 import getpass
 import re
 
+import shiboken6
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 
@@ -66,10 +67,16 @@ class InstanceServer(QObject):
             self._read(socket)
 
     def _read_and_close(self, socket: QLocalSocket) -> None:
+        if not shiboken6.isValid(socket):
+            return
         self._read(socket)
         socket.deleteLater()
 
     def _read(self, socket: QLocalSocket) -> None:
+        # A late signal (e.g. while the app quits) may refer to a socket Qt
+        # has already deleted.
+        if not shiboken6.isValid(socket):
+            return
         while socket.canReadLine():
             command = bytes(socket.readLine().data()).decode("ascii", "replace").strip()
             if command in COMMANDS:
