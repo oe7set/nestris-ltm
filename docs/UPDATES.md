@@ -113,8 +113,14 @@ Common steps, done by a small shared module in each app
   installer restarts the kiosk.
 - Reader firmware: close the reader port, flash the **app image at
   `0x10000`** (offset from the release manifest; keeps the reader's settings)
-  with `esptool` (bundled), wait for `hello`, compare `fw`, reopen. Readers
+  with `esptool`, wait for `hello`, compare `fw`, reopen. Readers
   still on the v1 sketch need the factory image once (`0x0`).
+- esptool is GPL-2.0-or-later: the Windows build ships it as a **separate
+  program** `esptool.exe` (own PyInstaller analysis, license file next to it,
+  listed in NOTICE) that the terminal runs as a child process; terminal code
+  never imports it. The station's `espflash` (MIT/Apache-2.0) has no such issue.
+- Implemented in `nestris-terminal/src/nestris_terminal/updates/`
+  (`service.py`, `github.py`, `releases.py` = copy of `core/releases.py` here).
 
 ### Station
 
@@ -150,7 +156,7 @@ reader firmware in a header of their API calls (`X-Terminal-Version`,
 |---|---|
 | U1 ✅ | Signing key, `sign` step in all release workflows, station `.deb` (amd64 + arm64, built on Debian 12) in the `nestris-core` release, reader firmware release |
 | U2 ✅ | NestrisLTM: update service (`services/updates.py`), admin page *Updates*, tray balloon + menu, `pg_dump` backup, installer `/update=1` restart |
-| U3 | Terminal: update service + *Updates* tab, installer restart, reader flashing (`esptool`) |
+| U3 ✅ | Terminal: update service + *Updates* tab, installer restart, reader flashing (`esptool`). Open: flashing a real reader through the updater, a real `/update=1` run of the terminal setup |
 | U4 | Station: version in `status`, `control` topic, `.deb` updater with root helper, reader flashing; NestrisLTM station buttons and *Geräte* page |
 | U5 | End-to-end test: publish test releases `v0.x.y` on GitHub and update every part from one release to the next and back |
 

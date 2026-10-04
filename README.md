@@ -18,6 +18,14 @@ It replaces the old `NestrisLTM/` desktop app and `TournamentHigscore/`.
 > roadmap: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). **Installing and
 > running it at an event: [docs/OPERATIONS.md](docs/OPERATIONS.md).**
 
+## Download
+
+**[Latest release](https://github.com/oe7set/nestris-ltm/releases/latest)**: run
+`NestrisLTM-Setup-<version>.exe` on the host PC (tournament server) (or unpack the portable zip).
+Every release is signed (`SHA256SUMS.txt` + `.sig`, see
+`nestris-ltm/docs/UPDATES.md`). Beta versions are listed under
+[all releases](https://github.com/oe7set/nestris-ltm/releases).
+
 ## Install and update (Windows)
 
 Download `NestrisLTM-Setup-<version>.exe` from the GitHub releases and run
