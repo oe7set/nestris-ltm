@@ -74,9 +74,13 @@ jobs:
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
         run: uv run --script .github/scripts/sign_release.py sign dist/SHA256SUMS.txt
 
+      - name: Release notes from CHANGELOG.md
+        run: uv run --script .github/scripts/release_notes.py ${{ steps.version.outputs.version }} CHANGELOG.md dist/RELEASE_NOTES.md
+
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG }}
+          body_path: dist/RELEASE_NOTES.md
           name: NestrisLTM ${{ steps.version.outputs.version }}
           prerelease: ${{ steps.version.outputs.prerelease == 'true' }}
           generate_release_notes: true
