@@ -39,7 +39,8 @@
   const Layout = $derived(current ? LAYOUTS[current.scene.layout] : undefined);
   const dark = $derived(params.get("bg") === "dark" || current?.scene.settings.background === "dark");
   // NES style (NestrisChamps-like): pixel font, NES frames (nes.css).
-  const nes = $derived((params.get("style") ?? current?.scene.settings.style) === "nes");
+  // NES is the standard style; "modern" only when the scene (or ?style=) says so.
+  const nes = $derived((params.get("style") ?? current?.scene.settings.style ?? "nes") === "nes");
   $effect(() => {
     look.nes = nes;
   });

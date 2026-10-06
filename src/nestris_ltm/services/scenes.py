@@ -40,10 +40,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from nestris_ltm.core import rounds, scoring
 from nestris_ltm.core.layouts import LAYOUTS, Layout
 from nestris_ltm.core.rounds import Entry, RoundState, Standing
+from nestris_ltm.core.scene_settings import normalize as normalize_settings
 from nestris_ltm.db.manager import DatabaseManager
 from nestris_ltm.db.models import Game, Scene, SceneRound, SceneRoundEntry, SceneSlot
 from nestris_ltm.live.broadcast import Broadcaster
 from nestris_ltm.live.hub import LiveHub
+from nestris_ltm.services import overlay_layouts
 
 if TYPE_CHECKING:
     from nestris_ltm.services.match_lives import MatchLives
@@ -74,6 +76,8 @@ class SceneRuntime:
     auto_round: bool
     settings: dict[str, Any]
     slots: dict[int, SlotConfig]
+    # Own layouts: "<uuid>:<version>"; overlays fetch the definition when it changes.
+    layout_rev: str | None = None
     # Per group: the current round, its database id (None = not stored yet)
     # and when it started (time axis of the diff graph).
     rounds: dict[int, RoundState] = field(default_factory=dict)
@@ -151,10 +155,20 @@ class SceneEngine:
         """(Re)load all scenes, slots and their latest round from the database."""
         async with self._lock, self.db.session() as session:
             rows = (await session.scalars(select(Scene).order_by(Scene.id))).all()
+            known = await overlay_layouts.all_layouts(session)
+            revs = await overlay_layouts.revisions(session)
             fresh: dict[str, SceneRuntime] = {}
             for row in rows:
                 runtime = self.scenes.get(row.slug)
-                layout = LAYOUTS.get(row.layout) or LAYOUTS["1v1"]
+                layout = known.get(row.layout)
+                if layout is None:
+                    log.warning(
+                        "scene layout missing, showing 1v1", scene=row.slug, layout=row.layout
+                    )
+                    layout = LAYOUTS["1v1"]
+                settings, dropped = normalize_settings(row.settings)
+                if dropped:
+                    log.warning("scene settings ignored", scene=row.slug, keys=dropped)
                 slots = {
                     s.slot: SlotConfig(s.slot, s.station_id, s.label_override, s.name_override)
                     for s in await session.scalars(
@@ -169,8 +183,9 @@ class SceneEngine:
                         layout=layout,
                         mode=row.mode,  # type: ignore[arg-type]
                         auto_round=row.auto_round,
-                        settings=dict(row.settings),
+                        settings=settings.stored(),
                         slots=slots,
+                        layout_rev=revs.get(row.layout),
                     )
                     await self._load_round(session, runtime)
                 else:
@@ -179,7 +194,8 @@ class SceneEngine:
                     runtime.layout = layout
                     runtime.mode = row.mode  # type: ignore[assignment]
                     runtime.auto_round = row.auto_round
-                    runtime.settings = dict(row.settings)
+                    runtime.settings = settings.stored()
+                    runtime.layout_rev = revs.get(row.layout)
                     runtime.slots = slots
                     if relayout:
                         await self._load_round(session, runtime)
@@ -554,6 +570,7 @@ class SceneEngine:
                 "mode": runtime.mode,
                 "auto_round": runtime.auto_round,
                 "settings": runtime.settings,
+                "layout_rev": runtime.layout_rev,
                 "pairs": [list(p) for p in layout.pairs],
             },
             "round": runtime.round.number,

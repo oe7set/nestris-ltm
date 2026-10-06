@@ -22,9 +22,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from nestris_ltm.api.auth import AdminDep, Principal, require_scope
 from nestris_ltm.api.deps import SessionDep, get_runtime
-from nestris_ltm.core.layouts import LAYOUTS
+from nestris_ltm.core.layouts import LAYOUTS, Layout
+from nestris_ltm.core.scene_settings import from_client, normalize
 from nestris_ltm.db.models import SCENE_MODES, Game, Player, Scene, SceneSlot, Station
-from nestris_ltm.services import audit, recordings
+from nestris_ltm.services import audit, overlay_layouts, recordings
 from nestris_ltm.services.scenes import SceneEngine
 
 router = APIRouter(prefix="/api/scenes", tags=["scenes"])
@@ -35,9 +36,16 @@ _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 
 
 def _check_layout(value: str) -> str:
-    if value not in LAYOUTS:
-        raise ValueError(f"unknown layout, choose one of {sorted(LAYOUTS)}")
+    # Built-in id or "custom:<uuid>"; whether the own layout exists is checked
+    # against the database in the route (_layout_of).
+    if not overlay_layouts.is_known_syntax(value):
+        raise ValueError(f"unknown layout, choose one of {sorted(LAYOUTS)} or custom:<id>")
     return value
+
+
+def _check_settings(value: dict[str, Any] | None) -> dict[str, Any] | None:
+    # Strict: unknown keys or invalid values are a 422 (core/scene_settings.py).
+    return None if value is None else from_client(value).stored()
 
 
 def _check_mode(value: str) -> str:
@@ -80,6 +88,11 @@ class SceneIn(BaseModel):
     def _mode(cls, value: str) -> str:
         return _check_mode(value)
 
+    @field_validator("settings")
+    @classmethod
+    def _settings(cls, value: dict[str, Any]) -> dict[str, Any]:
+        return _check_settings(value) or {}
+
 
 class ScenePatch(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=128)
@@ -88,11 +101,18 @@ class ScenePatch(BaseModel):
     auto_round: bool | None = None
     settings: dict[str, Any] | None = None
     slots: list[SlotIn] | None = None
+    # Optimistic locking: the updated_at the editor loaded; 409 when it changed.
+    expected_updated_at: str | None = None
 
     @field_validator("layout")
     @classmethod
     def _layout(cls, value: str | None) -> str | None:
         return None if value is None else _check_layout(value)
+
+    @field_validator("settings")
+    @classmethod
+    def _settings(cls, value: dict[str, Any] | None) -> dict[str, Any] | None:
+        return _check_settings(value)
 
     @field_validator("mode")
     @classmethod
@@ -119,10 +139,17 @@ def overlay_dist() -> Path:
     return Path(str(resources.files("nestris_ltm"))) / "web" / "overlay"
 
 
+async def _layout_of(session: AsyncSession, key: str) -> Layout:
+    layout = await overlay_layouts.resolve(session, key)
+    if layout is None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"unknown layout {key!r}")
+    return layout
+
+
 async def _write_slots(
-    session: AsyncSession, scene_id: int, layout: str, slots: list[SlotIn]
+    session: AsyncSession, scene_id: int, layout: Layout, slots: list[SlotIn]
 ) -> None:
-    max_slots = LAYOUTS[layout].slots
+    max_slots = layout.slots
     stations = {s for s in (x.station_id for x in slots) if s}
     if stations:
         known = set(await session.scalars(select(Station.id).where(Station.id.in_(stations))))
@@ -152,15 +179,23 @@ async def _scene_out(session: AsyncSession, scene: Scene) -> dict[str, Any]:
             select(SceneSlot).where(SceneSlot.scene_id == scene.id).order_by(SceneSlot.slot)
         )
     ).all()
-    return {**audit.snapshot(scene), "slots": [audit.snapshot(s) for s in slots]}
+    out = {**audit.snapshot(scene), "slots": [audit.snapshot(s) for s in slots]}
+    out["settings"] = normalize(scene.settings)[0].stored()
+    return out
 
 
 # ---------------------------------------------------------------- management
 
 
 @router.get("/layouts")
-async def layouts() -> list[dict[str, Any]]:
-    return [layout.as_dict() for layout in LAYOUTS.values()]
+async def layouts(session: SessionDep) -> list[dict[str, Any]]:
+    """Built-in layouts and the own ones of the layout builder (``custom: true``)."""
+    out = [{**layout.as_dict(), "custom": False} for layout in LAYOUTS.values()]
+    known = await overlay_layouts.all_layouts(session)
+    for key, layout in known.items():
+        if key not in LAYOUTS:
+            out.append({**layout.as_dict(), "custom": True})
+    return out
 
 
 @router.get("")
@@ -187,6 +222,7 @@ async def create_scene(
     async with session.begin():
         if await session.scalar(select(Scene.id).where(Scene.slug == body.slug)) is not None:
             raise HTTPException(status.HTTP_409_CONFLICT, f"slug {body.slug!r} already exists")
+        layout = await _layout_of(session, body.layout)
         scene = Scene(
             slug=body.slug,
             name=body.name,
@@ -197,7 +233,7 @@ async def create_scene(
         )
         session.add(scene)
         await session.flush()
-        await _write_slots(session, scene.id, body.layout, body.slots)
+        await _write_slots(session, scene.id, layout, body.slots)
         await audit.record(
             session, actor=p.actor, action="create", entity="scene", entity_id=scene.id,
             after=body.model_dump(),
@@ -218,11 +254,23 @@ async def update_scene(
         if scene is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "scene not found")
         before = await _scene_out(session, scene)
+        if body.expected_updated_at is not None and body.expected_updated_at != before.get(
+            "updated_at"
+        ):
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                {"code": "stale", "message": "the scene was changed in the meantime"},
+            )
+        layout = await _layout_of(session, body.layout or scene.layout)
+        if body.settings is not None:
+            # The replay state belongs to the scene, not to the editor.
+            replay = (scene.settings or {}).get("replay")
+            changes["settings"] = from_client(body.settings, keep_replay=replay).stored()
         for key in ("name", "layout", "mode", "auto_round", "settings"):
             if changes.get(key) is not None:
                 setattr(scene, key, changes[key])
         if body.slots is not None:
-            await _write_slots(session, scene.id, scene.layout, body.slots)
+            await _write_slots(session, scene.id, layout, body.slots)
         await session.flush()
         await session.refresh(scene)
         after = await _scene_out(session, scene)
@@ -234,6 +282,66 @@ async def update_scene(
             )  # fmt: skip
     await _engine(request).load()
     return after
+
+
+class DuplicateIn(BaseModel):
+    slug: str | None = Field(default=None, max_length=64)
+    name: str | None = Field(default=None, min_length=1, max_length=128)
+
+
+async def free_slug(session: AsyncSession, wanted: str) -> str:
+    """``wanted`` or ``wanted-2``, ``wanted-3`` … (max 64 characters)."""
+    base = wanted[:60].rstrip("-") or "scene"
+    candidate, n = base, 1
+    while await session.scalar(select(Scene.id).where(Scene.slug == candidate)) is not None:
+        n += 1
+        candidate = f"{base}-{n}"
+    return candidate
+
+
+@router.post("/{scene_id}/duplicate", status_code=status.HTTP_201_CREATED)
+async def duplicate_scene(
+    scene_id: int, body: DuplicateIn, request: Request, p: AdminDep, session: SessionDep
+) -> dict[str, Any]:
+    """A copy with a new URL: layout, settings and station slots."""
+    async with session.begin():
+        src = await session.get(Scene, scene_id)
+        if src is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "scene not found")
+        wanted = body.slug.strip().lower() if body.slug else f"{src.slug}-kopie"
+        if not _SLUG_RE.match(wanted):
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid slug")
+        settings, _ = normalize(src.settings)
+        settings.replay = None
+        copy = Scene(
+            slug=await free_slug(session, wanted),
+            name=(body.name or f"{src.name} (Kopie)")[:128],
+            layout=src.layout,
+            mode=src.mode,
+            auto_round=src.auto_round,
+            settings=settings.stored(),
+        )
+        session.add(copy)
+        await session.flush()
+        for slot in await session.scalars(select(SceneSlot).where(SceneSlot.scene_id == src.id)):
+            session.add(
+                SceneSlot(
+                    scene_id=copy.id,
+                    slot=slot.slot,
+                    station_id=slot.station_id,
+                    label_override=slot.label_override,
+                    name_override=slot.name_override,
+                )
+            )
+        await audit.record(
+            session, actor=p.actor, action="create", entity="scene", entity_id=copy.id,
+            after={"duplicate_of": src.slug, "slug": copy.slug},
+        )  # fmt: skip
+        await session.flush()
+        await session.refresh(copy)
+        out = await _scene_out(session, copy)
+    await _engine(request).load()
+    return out
 
 
 @router.delete("/{scene_id}")

@@ -401,10 +401,25 @@ class Scene(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
     slug: Mapped[str] = mapped_column(String(64), unique=True)
     name: Mapped[str] = mapped_column(String(128))
-    layout: Mapped[str] = mapped_column(String(32))
+    # A built-in layout id or "custom:<uuid>" (overlay_layouts).
+    layout: Mapped[str] = mapped_column(String(64))
     mode: Mapped[str] = mapped_column(String(16), server_default=text("'none'"))
     auto_round: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     settings: Mapped[dict[str, Any]] = mapped_column(server_default=text("'{}'::jsonb"))
+
+
+class OverlayLayout(TimestampMixin, Base):
+    """An own overlay layout from the layout builder (core/overlay_layout.py)."""
+
+    __tablename__ = "overlay_layouts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)  # uuid4
+    name: Mapped[str] = mapped_column(String(64))
+    description: Mapped[str] = mapped_column(String(500), server_default=text("''"))
+    definition: Mapped[dict[str, Any]] = mapped_column()
+    schema_version: Mapped[int] = mapped_column(SmallInteger, server_default=text("1"))
+    # Optimistic locking: every save must name the version it started from.
+    version: Mapped[int] = mapped_column(Integer, server_default=text("1"))
 
 
 class SceneSlot(Base):
