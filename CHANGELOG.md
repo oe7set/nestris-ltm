@@ -3,6 +3,13 @@
 The section of a version is the text of its GitHub release and what the
 built-in updater shows before installing (`.github/scripts/release_notes.py`).
 
+## Unreleased
+
+- **Qualifying scenes**: a scene's flow can be *Quali*: every slot always
+  shows the current game of its station (board, score, stats, difference);
+  after game over the result stays until the next game starts there. No
+  rounds, no hearts; the overlay shows QUALI instead of the round.
+
 ## 0.2.0
 
 First stable release of the new NestrisLTM, the host app of the Retroverse

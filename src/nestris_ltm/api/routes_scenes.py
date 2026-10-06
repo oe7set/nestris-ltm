@@ -67,6 +67,7 @@ class SceneIn(BaseModel):
     layout: str
     mode: str = "none"
     auto_round: bool = False
+    qualifying: bool = False
     settings: dict[str, Any] = Field(default_factory=dict)
     slots: list[SlotIn] = Field(default_factory=list)
 
@@ -99,6 +100,7 @@ class ScenePatch(BaseModel):
     layout: str | None = None
     mode: str | None = None
     auto_round: bool | None = None
+    qualifying: bool | None = None
     settings: dict[str, Any] | None = None
     slots: list[SlotIn] | None = None
     # Optimistic locking: the updated_at the editor loaded; 409 when it changed.
@@ -229,6 +231,7 @@ async def create_scene(
             layout=body.layout,
             mode=body.mode,
             auto_round=body.auto_round,
+            qualifying=body.qualifying,
             settings=body.settings,
         )
         session.add(scene)
@@ -266,7 +269,7 @@ async def update_scene(
             # The replay state belongs to the scene, not to the editor.
             replay = (scene.settings or {}).get("replay")
             changes["settings"] = from_client(body.settings, keep_replay=replay).stored()
-        for key in ("name", "layout", "mode", "auto_round", "settings"):
+        for key in ("name", "layout", "mode", "auto_round", "qualifying", "settings"):
             if changes.get(key) is not None:
                 setattr(scene, key, changes[key])
         if body.slots is not None:
@@ -319,6 +322,7 @@ async def duplicate_scene(
             layout=src.layout,
             mode=src.mode,
             auto_round=src.auto_round,
+            qualifying=src.qualifying,
             settings=settings.stored(),
         )
         session.add(copy)

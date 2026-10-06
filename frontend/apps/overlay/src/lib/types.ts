@@ -53,6 +53,8 @@ export interface SceneInfo {
   layout: string;
   mode: "none" | "top2_advance" | "worst_out" | "winner_only";
   auto_round: boolean;
+  /** Qualifying: no rounds, every slot shows the current game. */
+  qualifying?: boolean;
   settings: SceneSettings;
   pairs: [number, number][];
   // Own layouts: "<uuid>:<version>"; the definition is fetched when it changes.

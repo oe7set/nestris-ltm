@@ -9,6 +9,7 @@
     lang?: Lang;
     align?: "left" | "right";
     compact?: boolean;
+    /** Shows the round (hidden in qualifying scenes: there are no rounds). */
     showRound?: boolean;
   }
   let { view, lang = "de", align = "left", compact = false, showRound = false }: Props = $props();

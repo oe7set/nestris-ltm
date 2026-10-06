@@ -28,7 +28,7 @@
     {#if q.view}
       <section class="quad {q.align}" class:nes={look.nes}>
         <div class="cam">
-          <NameTag view={q.view} {lang} align={q.align} compact showRound />
+          <NameTag view={q.view} {lang} align={q.align} compact showRound={!state.scene.qualifying} />
           <Camera width={look.nes ? 460 : 500} height={look.nes ? 430 : 452} {framed} />
         </div>
         <SideStats view={q.view} {lang} align={q.align} compact />

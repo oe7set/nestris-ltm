@@ -8,7 +8,7 @@
   import NameTag from "../components/NameTag.svelte";
   import SideStats from "../components/SideStats.svelte";
   import Versus from "../components/Versus.svelte";
-  import { text, type Lang } from "../lib/format";
+  import { roundLabel, text, type Lang } from "../lib/format";
   import { look } from "../lib/look.svelte";
   import { scene } from "../lib/scene.svelte";
   import type { SceneState } from "../lib/types";
@@ -34,7 +34,7 @@
     <div class="center">
       <div class="title">
         <span class="name">{state.scene.settings.title ?? match?.round_name ?? state.scene.name}</span>
-        <span class="round">{text(lang, "round")} {a.round ?? state.round}</span>
+        <span class="round">{roundLabel(lang, state.scene.qualifying, a.round ?? state.round)}</span>
       </div>
       <div class="boards">
         <Board view={a} {cell} {lang} showNext={false} />

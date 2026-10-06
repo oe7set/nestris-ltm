@@ -152,6 +152,11 @@ for running them (rounds, hearts, slots).
   piece) and the stations per slot. The large preview follows every change
   before saving; *Live* shows the real data of the saved scene. Saving checks
   that nobody else saved the scene in the meantime (else: reload).
+- **Flow** (scene editor → *Ablauf*): *Runden* (one game per slot and
+  round; the next round by button, Stream Deck or automatically once
+  everyone finished) or *Quali*: every slot always shows the current game of
+  its station, a new game replaces the finished one at once; no rounds, no
+  hearts, the overlay shows QUALI instead of the round.
 - **Export / import** (`*.nltm-scenes.json`, format `nestrisltm/scenes` v1)
   carries only the look: layout, mode, style, colours, blocks and the own
   layouts the scenes use. No stations, no player names. Import first shows

@@ -45,12 +45,20 @@
   let layout = $state("1v1");
   let mode = $state("none");
   let autoRound = $state(false);
+  let qualifying = $state(false);
+  // One choice in the editor for both flags.
+  type Flow = "manual" | "auto" | "quali";
+  const flow = $derived<Flow>(qualifying ? "quali" : autoRound ? "auto" : "manual");
+  function setFlow(next: Flow): void {
+    qualifying = next === "quali";
+    autoRound = next === "auto";
+  }
   let settings = $state<SceneSettings>(defaultSettings());
   let slots = $state<SlotRow[]>([]);
   let saved = $state("");
 
   function snapshot(): string {
-    return JSON.stringify({ name, layout, mode, autoRound, settings: cleanSettings(settings), slots });
+    return JSON.stringify({ name, layout, mode, autoRound, qualifying, settings: cleanSettings(settings), slots });
   }
   const dirty = $derived(scene !== null && snapshot() !== saved);
 
@@ -60,6 +68,7 @@
     layout = s.layout;
     mode = s.mode;
     autoRound = s.auto_round;
+    qualifying = s.qualifying ?? false;
     settings = { ...defaultSettings(), ...s.settings, theme: { ...s.settings.theme }, show: { ...defaultSettings().show, ...s.settings.show } };
     slots = slotsFor(info?.slots ?? s.slots.length, s.slots);
     saved = snapshot();
@@ -118,6 +127,7 @@
           layout,
           mode,
           auto_round: autoRound,
+          qualifying,
           settings: cleanSettings(settings),
           slots: slots.map((s) => ({
             slot: s.slot,
@@ -167,7 +177,7 @@
   const preview = $derived(
     scene
       ? previewOf(
-          { slug: scene.slug, name, layout, mode, auto_round: autoRound, settings },
+          { slug: scene.slug, name, layout, mode, auto_round: autoRound, qualifying, settings },
           info,
           {
             names: slots.map((s) => s.name_override?.trim() || null),
@@ -223,7 +233,16 @@
             {info ? (i18n.locale === "en" ? info.title_en : info.title_de) : layout} — {t("studio.change")}
           </button>
         </div>
-        {#if info?.supports_modes}
+        <label class="field">
+          {t("studio.flow")}
+          <select value={flow} onchange={(e) => setFlow(e.currentTarget.value as Flow)}>
+            <option value="manual">{t("studio.flow_manual")}</option>
+            <option value="auto">{t("studio.flow_auto")}</option>
+            <option value="quali">{t("studio.flow_quali")}</option>
+          </select>
+        </label>
+        <p class="muted small">{t(flow === "quali" ? "studio.flow_quali_hint" : "studio.flow_rounds_hint")}</p>
+        {#if info?.supports_modes && !qualifying}
           <label class="field">
             {t("scenes.mode")}
             <select bind:value={mode}>
@@ -231,7 +250,6 @@
             </select>
           </label>
         {/if}
-        <label class="check"><input type="checkbox" bind:checked={autoRound} /> {t("scenes.auto_round")}</label>
       </section>
 
       <section class="panel block">

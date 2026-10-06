@@ -2,7 +2,7 @@
   // One element of an own layout (layout builder), filling its box w x h.
   import { NextPiece } from "@nestris-ltm/nes";
   import { boardCell, fitFont, heartPixel } from "../lib/fit";
-  import { fmt, hud, pct, text, type Lang, type TextKey } from "../lib/format";
+  import { fmt, hud, pct, roundLabel, text, type Lang, type TextKey } from "../lib/format";
   import type { LayoutElement, StatField } from "../lib/layoutdef";
   import { look } from "../lib/look.svelte";
   import { scene } from "../lib/scene.svelte";
@@ -65,7 +65,7 @@
     }
     return state.round;
   });
-  const roundText = $derived(`${text(lang, "round")} ${roundOf}`);
+  const roundText = $derived(roundLabel(lang, state.scene.qualifying, roundOf));
   const titleText = $derived(
     (p.text as string | undefined) ?? state.scene.settings.title ?? state.matches?.[0]?.round_name ?? state.scene.name,
   );
@@ -115,7 +115,7 @@
           {#if view?.match_result}<span class="result {view.match_result}">{text(lang, view.match_result === "won" ? "winner" : "eliminated")}</span>{/if}
         </span>
       {/if}
-      {#if p.show_round}<span class="small">{roundText}</span>{/if}
+      {#if p.show_round && !state.scene.qualifying}<span class="small">{roundText}</span>{/if}
     </div>
   {:else if el.type === "camera"}
     <Camera width={el.w} height={el.h} framed={p.framed !== false} />

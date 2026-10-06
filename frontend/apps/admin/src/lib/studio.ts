@@ -45,6 +45,8 @@ export interface SceneRow {
   layout: string;
   mode: string;
   auto_round: boolean;
+  /** Qualifying: always the current game of each station, no rounds. */
+  qualifying?: boolean;
   settings: SceneSettings;
   slots: SlotRow[];
   round: number | null;
@@ -115,6 +117,7 @@ export interface PreviewConfig {
     layout: string;
     mode: string;
     auto_round: boolean;
+    qualifying?: boolean;
     settings: Partial<SceneSettings>;
     pairs: [number, number][];
   };
@@ -149,7 +152,7 @@ export function cleanSettings(s: SceneSettings): Omit<SceneSettings, "replay"> {
 }
 
 export function previewOf(
-  scene: { slug: string; name: string; layout: string; mode: string; auto_round: boolean; settings: SceneSettings },
+  scene: { slug: string; name: string; layout: string; mode: string; auto_round: boolean; qualifying?: boolean; settings: SceneSettings },
   layout: { slots: number; pairs: [number, number][] } | undefined,
   extra: Partial<PreviewConfig> = {},
 ): PreviewConfig {
@@ -160,6 +163,7 @@ export function previewOf(
       layout: scene.layout,
       mode: scene.mode,
       auto_round: scene.auto_round,
+      qualifying: scene.qualifying ?? false,
       settings: cleanSettings(scene.settings),
       pairs: layout?.pairs ?? [],
     },

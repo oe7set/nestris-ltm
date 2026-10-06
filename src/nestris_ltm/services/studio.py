@@ -4,7 +4,7 @@ File format (``*.nltm-scenes.json``)::
 
     {"format": "nestrisltm/scenes", "version": 1, "app_version": "0.2.0",
      "exported_at": "...",
-     "scenes":  [{"slug", "name", "layout", "mode", "auto_round", "settings"}],
+     "scenes":  [{"slug", "name", "layout", "mode", "auto_round", "qualifying", "settings"}],
      "layouts": [{"id", "name", "description", "definition"}]}
 
 Only the look travels: no stations, no player names, no replay state. A
@@ -68,6 +68,7 @@ class SceneEntry(_Loose):
     layout: str = Field(min_length=1, max_length=64)
     mode: str = "none"
     auto_round: bool = False
+    qualifying: bool = False  # missing in files of older versions
     settings: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -98,6 +99,7 @@ def _scene_look(scene: Scene) -> dict[str, Any]:
         "layout": scene.layout,
         "mode": scene.mode,
         "auto_round": scene.auto_round,
+        "qualifying": scene.qualifying,
         "settings": settings.appearance(),
     }
 
@@ -300,6 +302,7 @@ async def apply(
             existing.layout = layout
             existing.mode = item.mode
             existing.auto_round = item.auto_round
+            existing.qualifying = item.qualifying
             existing.settings = from_client(item.settings, keep_replay=keep_replay).stored()
             await session.flush()
             target_id, slug = existing.id, existing.slug
@@ -308,7 +311,8 @@ async def apply(
             if existing is not None or slug in taken:
                 slug = await _free_slug(session, item.slug, taken)
             scene = Scene(slug=slug, name=item.name, layout=layout, mode=item.mode,
-                          auto_round=item.auto_round, settings=settings.stored())  # fmt: skip
+                          auto_round=item.auto_round, qualifying=item.qualifying,
+                          settings=settings.stored())  # fmt: skip
             session.add(scene)
             await session.flush()
             target_id = scene.id

@@ -405,6 +405,8 @@ class Scene(TimestampMixin, Base):
     layout: Mapped[str] = mapped_column(String(64))
     mode: Mapped[str] = mapped_column(String(16), server_default=text("'none'"))
     auto_round: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    # Qualifying: every slot always shows the current game of its station (no rounds).
+    qualifying: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     settings: Mapped[dict[str, Any]] = mapped_column(server_default=text("'{}'::jsonb"))
 
 

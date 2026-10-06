@@ -22,6 +22,11 @@
     label_override: string | null;
     name_override: string | null;
   }
+  /** Pairs that can be bound to a bracket match (none in qualifying: no hearts). */
+  function matchPairs(s: Scene): [number, number][] {
+    return s.qualifying ? [] : (layouts.find((l) => l.id === s.layout)?.pairs ?? []);
+  }
+
   interface Scene {
     id: number;
     slug: string;
@@ -29,6 +34,7 @@
     layout: string;
     mode: string;
     auto_round: boolean;
+    qualifying?: boolean;
     settings: { lang?: string; background?: string; camera_frames?: boolean; title?: string; style?: string };
     slots: Slot[];
     round: number | null;
@@ -181,9 +187,16 @@
         <strong>{s.name}</strong>
         <span class="badge">{layoutTitle(s.layout)}</span>
         {#if s.mode !== "none"}<span class="badge accent">{tDynamic(`scenes.mode.${s.mode}`, s.mode)}</span>{/if}
-        {#if s.auto_round}<span class="badge">{t("scenes.auto_round_short")}</span>{/if}
+        {#if s.qualifying}
+          <span class="badge accent">{t("studio.quali_badge")}</span>
+        {:else if s.auto_round}
+          <span class="badge">{t("scenes.auto_round_short")}</span>
+        {/if}
         <span class="spacer"></span>
-        <span class="muted small">{t("scenes.round")} {s.rounds?.length ? s.rounds.join(" · ") : (s.round ?? "–")} · OBS {s.clients}</span>
+        <span class="muted small">
+          {#if !s.qualifying}{t("scenes.round")} {s.rounds?.length ? s.rounds.join(" · ") : (s.round ?? "–")} ·{/if}
+          OBS {s.clients}
+        </span>
       </div>
       <div class="row url">
         <code class="mono">{origin}/o/{s.slug}</code>
@@ -213,7 +226,8 @@
           </div>
         {/each}
       </div>
-      {#each layouts.find((l) => l.id === s.layout)?.pairs ?? [] as pair, index (index)}
+      <!-- Qualifying has no rounds and no hearts: no match binding. -->
+      {#each matchPairs(s) as pair, index (index)}
         {@const bound = (pairMatches[s.slug] ?? []).find((p) => p.pair === index)}
         <div class="row pair">
           <span class="muted small">{t("scenes.match_for", { a: pair[0] + 1, b: pair[1] + 1 })}</span>
@@ -230,8 +244,10 @@
         <div class="preview"><iframe src={`/o/${s.slug}?bg=dark`} title={s.name}></iframe></div>
       {/if}
       <div class="row">
-        <button class="primary" onclick={() => newRound(s.slug)}>{t("scenes.new_round")}</button>
-        {#if (layouts.find((l) => l.id === s.layout)?.pairs.length ?? 0) > 1}
+        {#if !s.qualifying}
+          <button class="primary" onclick={() => newRound(s.slug)}>{t("scenes.new_round")}</button>
+        {/if}
+        {#if !s.qualifying && (layouts.find((l) => l.id === s.layout)?.pairs.length ?? 0) > 1}
           {#each layouts.find((l) => l.id === s.layout)?.pairs ?? [] as pair, index (index)}
             <button onclick={() => newRound(s.slug, index)}>{t("scenes.new_round_pair", { a: pair[0] + 1, b: pair[1] + 1 })}</button>
           {/each}

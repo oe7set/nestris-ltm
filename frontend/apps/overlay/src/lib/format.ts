@@ -51,6 +51,7 @@ const TEXT = {
     eliminated: "RAUS",
     winner: "SIEGER",
     round: "RUNDE",
+    quali: "QUALI",
     no_scene: "Szene nicht gefunden",
     offline: "keine Verbindung",
     rank: "PLATZ",
@@ -86,6 +87,7 @@ const TEXT = {
     eliminated: "OUT",
     winner: "WINNER",
     round: "ROUND",
+    quali: "QUALIFYING",
     no_scene: "Scene not found",
     offline: "no connection",
     rank: "RANK",
@@ -101,6 +103,11 @@ export type TextKey = keyof (typeof TEXT)["de"];
 
 export function text(lang: Lang | undefined, key: TextKey): string {
   return TEXT[lang === "en" ? "en" : "de"][key];
+}
+
+/** "RUNDE 3", or "QUALI" for a qualifying scene (no rounds). */
+export function roundLabel(lang: Lang | undefined, qualifying: boolean | undefined, round: number | string): string {
+  return qualifying ? text(lang, "quali") : `${text(lang, "round")} ${round}`;
 }
 
 // The NES style uses the game's own short HUD words (as NestrisChamps does).

@@ -162,6 +162,50 @@ async def test_auto_round_and_reset_slot(runtime: Runtime, client: httpx.AsyncCl
     assert scene.round.entry(0).game_id is None
 
 
+async def test_qualifying_always_shows_the_current_game(
+    runtime: Runtime, client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    scene_out = await make_scene(
+        client, slug="quali", name="Quali", layout="1v1", qualifying=True, mode="top2_advance",
+        slots=[{"slot": 0, "station_id": "st-1"}, {"slot": 1, "station_id": "st-2"}],
+    )  # fmt: skip
+    assert scene_out["qualifying"] is True
+    scene = runtime.scenes.scenes["quali"]
+    completed: list[int] = []
+    monkeypatch.setattr(runtime.scenes, "_round_complete", lambda rt, g: completed.append(g))
+
+    live(runtime, "st-1", "a1", 80_000, name="Erv")
+    live(runtime, "st-2", "b1", 10_000)
+    end(runtime, "st-1", "a1", 90_000)
+    end(runtime, "st-2", "b1", 20_000)
+    st = state_of(runtime, "quali")
+    assert [s["status"] for s in st["slots"]] == ["finished", "finished"]
+    assert st["scene"]["qualifying"] is True
+    assert all(s["outcome"] is None for s in st["slots"])  # no rounds: nobody advances
+    assert st["matches"] == []  # no hearts either
+
+    # The next game on station 1 replaces the result at once, no new round.
+    live(runtime, "st-1", "a2", 1_000)
+    st = state_of(runtime, "quali")
+    a, b = st["slots"]
+    assert a["status"] == "playing" and a["score"] == 1_000
+    assert b["status"] == "finished" and a["vs_partner"]["points"] == 19_000  # behind
+    assert scene.frames[0]["game_id"] == "a2" and scene.round.number == 1
+    assert [t for t, _ in scene.history[0]] == [0]  # graph restarts with the new game
+
+    # Restored after a restart: the latest game of each slot.
+    await runtime.scenes._persist(scene)
+    runtime.scenes.scenes.clear()
+    await runtime.scenes.load()
+    restored = runtime.scenes.scenes["quali"]
+    assert restored.qualifying and restored.round.entry(0).game_id == "a2"
+
+    # Switching back to rounds via the API.
+    r = await client.patch(f"/api/scenes/{scene_out['id']}", json={"qualifying": False})
+    assert r.status_code == 200 and r.json()["qualifying"] is False
+    assert runtime.scenes.scenes["quali"].qualifying is False
+
+
 async def test_scene_api_validation_and_state(runtime: Runtime, client: httpx.AsyncClient) -> None:
     layouts = (await client.get("/api/scenes/layouts")).json()
     assert {lay["id"] for lay in layouts} >= {"single", "1v1", "2x1v1", "4p"}

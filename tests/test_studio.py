@@ -341,7 +341,7 @@ async def test_export_import_round_trip(runtime: Runtime, client: httpx.AsyncCli
         await client.post("/api/overlay-layouts", json={"name": "Eigen", "definition": VALID})
     ).json()
     a = (await client.post("/api/scenes", json={
-        "slug": "buehne", "name": "Bühne", "layout": lay["key"],
+        "slug": "buehne", "name": "Bühne", "layout": lay["key"], "qualifying": True,
         "settings": {"style": "nes", "theme": {"accent": "#ff00ff"}},
         "slots": [{"slot": 0, "station_id": "st-1", "name_override": "Erv"}],
     })).json()  # fmt: skip
@@ -367,6 +367,7 @@ async def test_export_import_round_trip(runtime: Runtime, client: httpx.AsyncCli
     scene = file["scenes"][0]
     assert "replay" not in scene["settings"] and "slots" not in scene  # only the look
     assert scene["settings"]["theme"] == {"accent": "#ff00ff"}
+    assert scene["qualifying"] is True  # the flow travels along
     everything = (await client.get("/api/studio/export")).json()
     assert {s["slug"] for s in everything["scenes"]} == {"buehne", "vier"}
 
@@ -384,6 +385,14 @@ async def test_export_import_round_trip(runtime: Runtime, client: httpx.AsyncCli
     scenes = (await client.get("/api/scenes")).json()
     assert [(s["slug"], s["layout"]) for s in scenes] == [("buehne", lay["key"])]
     assert scenes[0]["slots"] == [] and scenes[0]["settings"]["theme"] == {"accent": "#ff00ff"}
+    assert scenes[0]["qualifying"] is True
+    # A file of an older version (no "qualifying"): a normal round scene.
+    old = {**file, "scenes": [{k: v for k, v in file["scenes"][0].items() if k != "qualifying"}
+                              | {"slug": "alt"}]}  # fmt: skip
+    assert (await _import(client, old, dry_run=False)).status_code == 200
+    alt = next(s for s in (await client.get("/api/scenes")).json() if s["slug"] == "alt")
+    assert alt["qualifying"] is False
+    await client.delete(f"/api/scenes/{alt['id']}")
 
     # Again: the scene is in conflict (default: a renamed copy), the layout identical.
     dry = (await _import(client, file)).json()

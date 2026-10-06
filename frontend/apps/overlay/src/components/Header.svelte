@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { text, type Lang } from "../lib/format";
+  import { roundLabel, text, type Lang } from "../lib/format";
   import { groupsOf } from "../lib/scene.svelte";
   import type { SceneState } from "../lib/types";
 
@@ -10,7 +10,7 @@
 <header>
   <span class="title">{state.scene.settings.title ?? state.scene.name}</span>
   <!-- 2x1v1: each match plays its own rounds -->
-  <span class="round">{text(lang, "round")} {groupsOf(state).map((g) => g.round).join(" · ")}</span>
+  <span class="round">{roundLabel(lang, state.scene.qualifying, groupsOf(state).map((g) => g.round).join(" · "))}</span>
   {#if mode}<span class="mode">{mode}</span>{/if}
 </header>
 

@@ -256,6 +256,7 @@
             <div class="muted small">/o/{s.slug} · {layoutTitle(s.layout)}</div>
           </div>
           <span class="badge {s.settings.style === 'nes' ? 'accent' : ''}">{s.settings.style === "nes" ? "NES" : "Modern"}</span>
+          {#if s.qualifying}<span class="badge ok">{t("studio.quali_badge")}</span>{/if}
         </div>
         <div class="row actions">
           <a class="button primary" href="#/studio/scene/{s.id}">{t("common.edit")}</a>

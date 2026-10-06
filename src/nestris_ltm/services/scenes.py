@@ -6,6 +6,8 @@ latency) and
 
 - binds running games to slots, freezes results on game end
   (``core/rounds.py``), optionally starts the next round automatically;
+  a *qualifying* scene has no rounds: every slot always shows the current
+  game of its station (a new game replaces the finished one at once);
   every head-to-head pair of a layout (``Layout.pairs``, e.g. both matches
   of ``2x1v1``) plays its own rounds ("groups"), other layouts one group;
 - forwards every live frame of a slot's station to the scene's overlay
@@ -76,6 +78,7 @@ class SceneRuntime:
     auto_round: bool
     settings: dict[str, Any]
     slots: dict[int, SlotConfig]
+    qualifying: bool = False
     # Own layouts: "<uuid>:<version>"; overlays fetch the definition when it changes.
     layout_rev: str | None = None
     # Per group: the current round, its database id (None = not stored yet)
@@ -86,6 +89,8 @@ class SceneRuntime:
     frames: dict[int, dict[str, Any]] = field(default_factory=dict)
     history: dict[int, deque[tuple[int, int]]] = field(default_factory=dict)
     round_started: dict[int, float] = field(default_factory=dict)
+    # Qualifying: the diff graph's time axis starts with each slot's game.
+    slot_started: dict[int, float] = field(default_factory=dict)
     last_state: dict[str, Any] | None = None
     dirty: bool = True
     needs_persist: bool = False
@@ -183,6 +188,7 @@ class SceneEngine:
                         layout=layout,
                         mode=row.mode,  # type: ignore[arg-type]
                         auto_round=row.auto_round,
+                        qualifying=row.qualifying,
                         settings=settings.stored(),
                         slots=slots,
                         layout_rev=revs.get(row.layout),
@@ -194,6 +200,7 @@ class SceneEngine:
                     runtime.layout = layout
                     runtime.mode = row.mode  # type: ignore[assignment]
                     runtime.auto_round = row.auto_round
+                    runtime.qualifying = row.qualifying
                     runtime.settings = settings.stored()
                     runtime.layout_rev = revs.get(row.layout)
                     runtime.slots = slots
@@ -299,7 +306,12 @@ class SceneEngine:
         entry = runtime.group_round(group).entry(slot)
         if entry.game_id == game_id:
             return True
-        if (
+        if runtime.qualifying:
+            if entry.finished:
+                # Qualifying: the next game on this station replaces the result.
+                runtime.group_round(group).unfreeze(slot)
+                runtime.frames.pop(slot, None)
+        elif (
             entry.finished
             and runtime.auto_round
             and runtime.group_round(group).all_finished(runtime.active_group_slots(group))
@@ -311,6 +323,8 @@ class SceneEngine:
         entry = runtime.group_round(group).entry(slot)
         entry.player_name = self._player_name(runtime, slot, frame)
         runtime.history[slot] = deque(maxlen=HISTORY_MAX)
+        if runtime.qualifying:
+            runtime.slot_started[slot] = time.monotonic()
         runtime.needs_persist = True
         log.info("scene slot bound", scene=runtime.slug, slot=slot, game=game_id)
         return True
@@ -352,7 +366,11 @@ class SceneEngine:
     ) -> None:
         if score is None:
             return
-        t_ms = int((time.monotonic() - runtime.started(runtime.group_of(slot))) * 1000)
+        if runtime.qualifying:
+            start = runtime.slot_started.setdefault(slot, time.monotonic())
+        else:
+            start = runtime.started(runtime.group_of(slot))
+        t_ms = int((time.monotonic() - start) * 1000)
         series = runtime.history.setdefault(slot, deque(maxlen=HISTORY_MAX))
         if force or not series or t_ms - series[-1][0] >= HISTORY_INTERVAL_MS:
             series.append((t_ms, score))
@@ -392,8 +410,8 @@ class SceneEngine:
 
     def _round_complete(self, runtime: SceneRuntime, group: int) -> None:
         """Every slot of a group finished: the hearts may take the loser's heart."""
-        if self.lives is None or not runtime.layout.pairs:
-            return
+        if self.lives is None or not runtime.layout.pairs or runtime.qualifying:
+            return  # qualifying: no rounds, no hearts
         rnd = runtime.group_round(group)
         scores = {slot: rnd.entry(slot).score for slot in runtime.group_slots(group)}
         task = asyncio.get_running_loop().create_task(
@@ -499,11 +517,13 @@ class SceneEngine:
                 }
             )
 
+        # Qualifying has no rounds: nobody advances or drops out.
+        mode: rounds.Mode = "none" if runtime.qualifying else runtime.mode
         outcomes: dict[int, rounds.Outcome] = {}
         rank_of: dict[int, int] = {}
         leaders: dict[int, Standing] = {}
         for group, standings in standings_by_group.items():
-            decided = rounds.decide_outcomes(runtime.mode, standings)
+            decided = rounds.decide_outcomes(mode, standings)
             outcomes.update(decided)
             for slot, entry in runtime.group_round(group).entries.items():
                 if entry.outcome != decided.get(slot):
@@ -531,7 +551,7 @@ class SceneEngine:
                 and out["status"] in ("playing", "finished")
             ):
                 out["vs_partner"] = _gap_dict(rounds.gap(score, values[partner]["score"], level))
-            target = rounds.score_to_beat(runtime.mode, standings, slot)
+            target = rounds.score_to_beat(mode, standings, slot)
             if target is not None and out["status"] == "playing":
                 out["to_advance"] = {"score": target, **_gap_dict(rounds.gap(score, target, level))}
 
@@ -547,7 +567,7 @@ class SceneEngine:
 
         # Hearts: the bracket match bound to each head-to-head pair.
         matches: list[dict[str, Any]] = []
-        if self.lives is not None:
+        if self.lives is not None and not runtime.qualifying:
             for index in range(len(layout.pairs)):
                 info = self.lives.pair_info(runtime, index)
                 if info is None:
@@ -569,6 +589,7 @@ class SceneEngine:
                 "layout": layout.id,
                 "mode": runtime.mode,
                 "auto_round": runtime.auto_round,
+                "qualifying": runtime.qualifying,
                 "settings": runtime.settings,
                 "layout_rev": runtime.layout_rev,
                 "pairs": [list(p) for p in layout.pairs],

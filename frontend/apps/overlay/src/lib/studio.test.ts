@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { demoData, demoPlayfield, demoScore, rng } from "./demo";
 import { boardCell, fitFont, heartPixel } from "./fit";
+import { roundLabel } from "./format";
 import { host, overlayMode } from "./host.svelte";
 import { customId, paintOrder, type LayoutDefinition } from "./layoutdef";
 import { hiddenBlocks, stageStyle } from "./theme";
@@ -114,5 +115,13 @@ describe("layout definitions", () => {
     expect(paintOrder(def, true).map((e) => e.id)).toEqual(["b", "c", "a"]);
     expect(customId("custom:abc")).toBe("abc");
     expect(customId("1v1")).toBeNull();
+  });
+});
+
+describe("qualifying", () => {
+  it("shows QUALI instead of the round", () => {
+    expect(roundLabel("de", false, 3)).toBe("RUNDE 3");
+    expect(roundLabel("de", true, 3)).toBe("QUALI");
+    expect(roundLabel("en", undefined, "1 · 2")).toBe("ROUND 1 · 2");
   });
 });
