@@ -13,32 +13,48 @@
   import Pages from "./routes/Pages.svelte";
   import PlayerDetail from "./routes/PlayerDetail.svelte";
   import Players from "./routes/Players.svelte";
-  import Scenes from "./routes/Scenes.svelte";
+  import Regie from "./routes/Regie.svelte";
   import Settings from "./routes/Settings.svelte";
-  import Stations from "./routes/Stations.svelte";
+  import StationsHub from "./routes/StationsHub.svelte";
   import Tournament from "./routes/Tournament.svelte";
-  import Devices from "./routes/Devices.svelte";
   import Studio from "./routes/Studio.svelte";
   import StudioLayout from "./routes/StudioLayout.svelte";
   import StudioScene from "./routes/StudioScene.svelte";
-  import Matches from "./routes/Matches.svelte";
   import Updates from "./routes/Updates.svelte";
 
-  const nav: { route: string; href: string; label: MessageKey; also?: string[] }[] = [
-    { route: "dashboard", href: "/", label: "nav.dashboard" },
-    { route: "players", href: "/players", label: "nav.players", also: ["player"] },
-    { route: "games", href: "/games", label: "nav.games", also: ["game", "game-new"] },
-    { route: "events", href: "/events", label: "nav.events" },
-    { route: "tournament", href: "/tournament", label: "nav.tournament" },
-    { route: "matches", href: "/matches", label: "nav.matches" },
-    { route: "scenes", href: "/scenes", label: "nav.scenes" },
-    { route: "studio", href: "/studio", label: "nav.studio", also: ["studio-scene", "studio-layout"] },
-    { route: "stations", href: "/stations", label: "nav.stations" },
-    { route: "devices", href: "/devices", label: "nav.devices" },
-    { route: "audit", href: "/audit", label: "nav.audit" },
-    { route: "settings", href: "/settings", label: "nav.settings" },
-    { route: "updates", href: "/updates", label: "nav.updates" },
-    { route: "pages", href: "/pages", label: "nav.pages" },
+  type NavItem = { route: string; href: string; label: MessageKey; also?: string[] };
+  // Grouped by task: running the event, its data, the look, the system.
+  const navGroups: { label: MessageKey; items: NavItem[] }[] = [
+    {
+      label: "nav.group.live",
+      items: [
+        { route: "dashboard", href: "/", label: "nav.dashboard" },
+        { route: "regie", href: "/regie", label: "nav.regie" },
+        { route: "tournament", href: "/tournament", label: "nav.tournament" },
+      ],
+    },
+    {
+      label: "nav.group.data",
+      items: [
+        { route: "players", href: "/players", label: "nav.players", also: ["player"] },
+        { route: "games", href: "/games", label: "nav.games", also: ["game", "game-new"] },
+        { route: "events", href: "/events", label: "nav.events" },
+      ],
+    },
+    {
+      label: "nav.group.design",
+      items: [{ route: "studio", href: "/studio", label: "nav.studio", also: ["studio-scene", "studio-layout"] }],
+    },
+    {
+      label: "nav.group.system",
+      items: [
+        { route: "stations", href: "/stations", label: "nav.stations_devices" },
+        { route: "audit", href: "/audit", label: "nav.audit" },
+        { route: "updates", href: "/updates", label: "nav.updates" },
+        { route: "settings", href: "/settings", label: "nav.settings" },
+        { route: "pages", href: "/pages", label: "nav.pages" },
+      ],
+    },
   ];
 
   const current = $derived(router.current);
@@ -47,7 +63,7 @@
     void session.refresh();
   });
 
-  function isActive(item: (typeof nav)[number]): boolean {
+  function isActive(item: NavItem): boolean {
     return current.name === item.route || (item.also ?? []).includes(current.name);
   }
 </script>
@@ -61,8 +77,11 @@
     <aside>
       <a class="brand" href="#/">NestrisLTM</a>
       <nav>
-        {#each nav as item (item.route)}
-          <a href={`#${item.href}`} class:active={isActive(item)}>{t(item.label)}</a>
+        {#each navGroups as group (group.label)}
+          <span class="group">{t(group.label)}</span>
+          {#each group.items as item (item.route)}
+            <a href={`#${item.href}`} class:active={isActive(item)}>{t(item.label)}</a>
+          {/each}
         {/each}
       </nav>
       <div class="foot">
@@ -94,18 +113,16 @@
           <Events />
         {:else if current.name === "tournament"}
           <Tournament />
-        {:else if current.name === "scenes"}
-          <Scenes />
+        {:else if current.name === "regie"}
+          <Regie />
         {:else if current.name === "stations"}
-          <Stations />
+          <StationsHub />
         {:else if current.name === "audit"}
           <Audit />
         {:else if current.name === "settings"}
           <Settings />
         {:else if current.name === "updates"}
           <Updates />
-        {:else if current.name === "devices"}
-          <Devices />
         {:else if current.name === "studio"}
           <Studio />
         {:else if current.name === "studio-scene"}
@@ -117,8 +134,6 @@
           {#key current.params.id}
             <StudioLayout id={current.params.id ?? "new"} />
           {/key}
-        {:else if current.name === "matches"}
-          <Matches />
         {:else if current.name === "pages"}
           <Pages />
         {:else}
@@ -179,6 +194,16 @@
     background: var(--panel-2);
     color: var(--accent);
   }
+  nav .group {
+    margin: 12px 10px 2px;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  nav .group:first-child {
+    margin-top: 0;
+  }
   .foot {
     margin-top: auto;
     display: grid;
@@ -215,6 +240,9 @@
     }
     nav {
       grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    }
+    nav .group {
+      grid-column: 1 / -1;
     }
     main {
       padding: 16px;

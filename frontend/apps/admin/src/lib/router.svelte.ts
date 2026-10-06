@@ -1,18 +1,25 @@
 // Minimal hash router: "#/players/12?tab=games" -> { name, params, query }.
 // Hash routing keeps the server simple: every admin URL is "/".
 
-import { matchPath, type Match } from "./routes";
+import { matchPath, redirectFor, type Match } from "./routes";
+
+/** Follow an old address (e.g. #/scenes) without a history entry. */
+function resolve(): Match {
+  const target = redirectFor(location.hash);
+  if (target) history.replaceState(null, "", target);
+  return matchPath(location.hash);
+}
 
 export type { Match } from "./routes";
 
 class Router {
-  current = $state<Match>(matchPath(location.hash));
+  current = $state<Match>(resolve());
   // A page with unsaved changes may veto leaving it (e.g. the scene editor).
   #guard: ((to: Match) => boolean) | null = null;
 
   constructor() {
     window.addEventListener("hashchange", (event) => {
-      const next = matchPath(location.hash);
+      const next = resolve();
       if (this.#guard && !this.#guard(next)) {
         // Stay: restore the old address without a new hashchange event.
         history.replaceState(null, "", new URL(event.oldURL).hash || "#/");

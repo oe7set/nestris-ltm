@@ -1,6 +1,7 @@
 <script lang="ts">
-  // Hearts of the 1-vs-1 matches of the fixed bracket: take/give hearts, hearts
-  // per match, which scene pair shows the match, history with undo.
+  // Hearts of the 1-vs-1 matches of the fixed bracket (Turnier → Matches &
+  // Herzen): take/give hearts, hearts per match, which scene pair shows the
+  // match, history with undo. The defaults live in Einstellungen.
   import { onMount } from "svelte";
   import { api } from "../lib/api";
   import { dateTime } from "../lib/format";
@@ -81,8 +82,6 @@
       }),
     );
   const undo = (e: LifeEvent) => act(() => api(`/api/tournament/lives/undo/${e.id}`, { method: "POST" }));
-  const saveSettings = (change: Record<string, unknown>) =>
-    act(() => api("/api/tournament/lives/settings", { method: "PUT", body: change }));
 
   function name(m: MatchRow, id: number): string {
     return m.players.find((p) => p.id === id)?.nickname ?? String(id);
@@ -106,27 +105,12 @@
   });
 </script>
 
-<h1>{t("matches.title")}</h1>
-<p class="hint">{t("matches.intro")}</p>
+<p class="hint">
+  {t("matches.intro")}
+  <a href="#/settings?tab=tournament">{t("nav.settings")} →</a>
+</p>
 
 {#if info}
-  <section class="panel block settings">
-    <label class="field small-field">
-      {t("matches.default_lives")}
-      <select value={info.settings.default_lives} onchange={(e) => saveSettings({ default_lives: Number(e.currentTarget.value) })}>
-        {#each [1, 2, 3, 4, 5] as n (n)}<option value={n}>{n}</option>{/each}
-      </select>
-    </label>
-    <label class="check">
-      <input type="checkbox" checked={info.settings.auto_bind} onchange={(e) => saveSettings({ auto_bind: e.currentTarget.checked })} />
-      {t("matches.auto_bind")}
-    </label>
-    <label class="check" title={t("matches.auto_deduct_hint")}>
-      <input type="checkbox" checked={info.settings.auto_deduct} onchange={(e) => saveSettings({ auto_deduct: e.currentTarget.checked })} />
-      {t("matches.auto_deduct")}
-    </label>
-  </section>
-
   {#if !info.seeded}
     <p class="info-box">{t("matches.not_seeded")}</p>
   {:else if info.matches.length === 0}
@@ -192,15 +176,6 @@
 {/if}
 
 <style>
-  .settings {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 24px;
-    align-items: end;
-  }
-  .small-field select {
-    width: 80px;
-  }
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));

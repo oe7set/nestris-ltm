@@ -511,6 +511,8 @@ class MatchLives:
         }  # fmt: skip
         changed = False
         for runtime in list(self.scenes.scenes.values()):
+            if runtime.qualifying:
+                continue  # qualifying scenes play no matches (no hearts)
             for index, (a, b) in enumerate(runtime.layout.pairs):
                 id_a, id_b = self._station_player(runtime, a), self._station_player(runtime, b)
                 if id_a is None or id_b is None:

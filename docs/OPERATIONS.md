@@ -65,25 +65,55 @@ stay.
   down, nothing is lost: results are stored when it is back. Results sent
   while NestrisLTM itself is down are queued by Mosquitto (persistent session).
 
-## Hearts in the 1 vs 1 (*Matches*)
+## The event day: qualifying → FIX → rounds
+
+The admin UI is grouped by task: **Betrieb** (Dashboard, *Regie*, *Turnier*),
+**Daten** (Spieler, Spiele, Events), **Gestaltung** (*Szenen-Studio*) and
+**System** (*Stationen & Geräte*, Protokoll, Updates, *Einstellungen*,
+Übersicht). Old addresses (`#/scenes`, `#/matches`, `#/devices`) lead to
+their new place.
+
+1. **Qualifying.** With an active event and the bracket not fixed, the
+   bracket fills live from the highscore. Every scene with flow
+   *Automatisch (Turnierphase)* shows the current game of each station (the
+   overlay says QUALI); a new game replaces the finished one at once.
+2. **FIX.** The banner on *Regie*, *Turnier* and the dashboard shows the
+   phase; *FIX: Turnier starten* freezes the seeding. The scenes switch to
+   rounds by themselves and start round 1 fresh.
+3. **Rounds with hearts.** One game per slot and round. *Regie* has, per
+   scene, the live slots with hearts − / +, the match each pair shows,
+   *Neue Runde* and *Slot zurücksetzen*. *Turnier* → *Matches & Herzen* lists
+   every match with its history and *Rückgängig*.
+4. **UNSEED** (banner) undoes the fix: winners and hearts are lost, the
+   scenes show qualifying again.
+
+Per scene the flow can be overridden on *Regie*: *Immer Quali* (e.g. a
+qualifying screen next to the stage) or *Immer Runden*. Whether the next
+round starts by itself (everyone finished, someone starts again) is one
+global switch: *Regie* or *Einstellungen* → *Turnier & Szenen* → *Neue Runde*
+per Knopf / automatisch.
+
+## Hearts in the 1 vs 1 (*Turnier* → *Matches & Herzen*)
 
 Once the bracket is fixed (*Turnier* → FIX), every match between two players
-is played for hearts: both start with 2 (admin page *Matches* → *Herzen pro
-Spieler*; per match e.g. 3 for the final). The loser of a round loses a heart;
+is played for hearts: both start with 2 (*Einstellungen* → *Turnier &
+Szenen* → *Herzen pro Spieler*, also before FIX; per match e.g. 3 for the
+final under *Turnier* → *Matches & Herzen*). The loser of a round loses a heart;
 a tie costs nobody one. At 0 hearts the opponent is set as the winner in the
 bracket (kiosk, console and overlays update); giving the heart back removes
 that winner again. FIX, reset and unseed start all hearts over.
 
-- *Matches*: − / + per player, hearts per match, history with *Rückgängig*.
+- *Regie*: − / + at each player of a scene; *Turnier* → *Matches & Herzen*:
+  − / + per player, hearts per match, history with *Rückgängig*.
 - *Verlierer automatisch erkennen* (off by default): when both players of a
   pair finished their game, the lower score loses a heart at once (tie:
   nobody); undo it in the history. Every pair of a scene plays its own
   rounds (`2x1v1`: top and bottom match separately; *Neue Runde 1/2* and
-  *3/4* on *Szenen*, `POST /api/scenes/<scene>/rounds?group=0|1`).
+  *3/4* on *Regie*, `POST /api/scenes/<scene>/rounds?group=0|1`).
 - Overlays (`1v1`, `2x1v1`) show the hearts of the match bound to each pair
-  of the scene. *Szenen*: per pair *Match* = automatic (the cards on the two
-  stations belong to the two players of an open match) or chosen by hand (a
-  manual choice always wins).
+  of the scene. *Regie*: per pair *Match* = automatic (the cards on the two
+  stations belong to the two players of an open match; scenes in qualifying
+  are never bound) or chosen by hand (a manual choice always wins).
 
 ### Stream Deck
 
@@ -140,8 +170,8 @@ non-commercial use only.
 
 ### Scene studio and layout builder
 
-*Szenen-Studio* (`/#/studio`) is where scenes are designed; *Szenen* stays
-for running them (rounds, hearts, slots).
+*Szenen-Studio* (`/#/studio`) is where scenes are designed; *Regie* is where
+they run (flow, rounds, hearts, slots).
 
 - **Gallery**: every scene and own layout with a live preview image (demo
   data, so it is never empty). *+ Neue Szene* picks the layout from preview
@@ -152,13 +182,10 @@ for running them (rounds, hearts, slots).
   piece) and the stations per slot. The large preview follows every change
   before saving; *Live* shows the real data of the saved scene. Saving checks
   that nobody else saved the scene in the meantime (else: reload).
-- **Flow** (scene editor → *Ablauf*): *Runden* (one game per slot and
-  round; the next round by button, Stream Deck or automatically once
-  everyone finished) or *Quali*: every slot always shows the current game of
-  its station, a new game replaces the finished one at once; no rounds, no
-  hearts, the overlay shows QUALI instead of the round.
+- **Flow and round mode** are set on *Regie* (see "The event day" above),
+  not in the studio.
 - **Export / import** (`*.nltm-scenes.json`, format `nestrisltm/scenes` v1)
-  carries only the look: layout, mode, style, colours, blocks and the own
+  carries only the look: layout, style, colours, blocks and the own
   layouts the scenes use. No stations, no player names. Import first shows
   what is new, identical or already there; per entry choose *als Kopie
   anlegen* / *überschreiben* / *überspringen* (layouts: *vorhandenes
@@ -230,9 +257,9 @@ release (rollback); if the newer version changed the database, restore its
 backup (below) after going back. Installing only works in the installed app,
 not when started from source.
 
-### Stations, readers and terminals (*Geräte*)
+### Stations, readers and terminals (*Stationen & Geräte* → *Versionen & Updates*)
 
-The admin page *Geräte* lists every station (package version, reader
+The tab *Versionen & Updates* lists every station (package version, reader
 firmware) and every terminal (app version, reader firmware) next to the
 newest releases of `nestris-core`, `nestris-rfid-reader` and
 `nestris-terminal`.

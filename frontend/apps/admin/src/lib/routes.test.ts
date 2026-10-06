@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { matchPath } from "./routes";
+import { matchPath, redirectFor } from "./routes";
 
 describe("matchPath", () => {
   it("matches static and parameter routes", () => {
@@ -35,5 +35,15 @@ describe("studio routes", () => {
     const scene = matchPath("#/studio/scene/12");
     expect([scene.name, scene.params.id]).toEqual(["studio-scene", "12"]);
     expect(matchPath("#/studio/layout/new").name).toBe("studio-layout");
+  });
+});
+
+describe("old addresses", () => {
+  it("lead to the new pages", () => {
+    expect(redirectFor("#/scenes")).toBe("#/regie");
+    expect(redirectFor("#/matches/")).toBe("#/tournament?tab=matches");
+    expect(redirectFor("#/devices?x=1")).toBe("#/stations?tab=devices");
+    expect(redirectFor("#/regie")).toBeNull();
+    expect(matchPath("#/regie").name).toBe("regie");
   });
 });

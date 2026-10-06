@@ -116,179 +116,9 @@
     document.querySelectorAll("[data-size]").forEach((b) =>
         b.addEventListener("click", () => setSize(parseInt(b.dataset.size, 10))));
 
-    // --- View remote-control (public highscore list) ---------------------
-
-    const fontSlider = document.getElementById("font-scale");
-    const fontVal = document.getElementById("font-scale-val");
-    const autoscrollBtn = document.getElementById("btn-autoscroll");
-    const scrollSlider = document.getElementById("scroll-pos");
-    let autoscrollOn = false;
-    let fontTimer = null;
-
-    // Update the SIZE UI for `scale` and (unless `silent`) push it to the server.
-    function setFontScale(scale, silent = false) {
-        const n = Math.min(2.5, Math.max(0.6, Math.round(scale * 10) / 10));
-        fontSlider.value = n;
-        fontVal.textContent = `${n.toFixed(1)}×`;
-        if (silent) return;
-        clearTimeout(fontTimer);
-        fontTimer = setTimeout(
-            () => post("/api/tournament/view/settings", { font_scale: n }),
-            200
-        );
-    }
-
-    function setAutoscrollUI(on) {
-        autoscrollOn = on;
-        autoscrollBtn.textContent = `AUTOSCROLL: ${on ? "ON" : "OFF"}`;
-        autoscrollBtn.classList.toggle("btn-accent", on);
-    }
-
-    fontSlider.addEventListener("input",
-        () => setFontScale(parseFloat(fontSlider.value)));
-    document.getElementById("font-minus").addEventListener("click",
-        () => setFontScale(parseFloat(fontSlider.value) - 0.1));
-    document.getElementById("font-plus").addEventListener("click",
-        () => setFontScale(parseFloat(fontSlider.value) + 0.1));
-
-    autoscrollBtn.addEventListener("click", () => {
-        // Optimistically flip the UI; the server broadcast confirms it.
-        setAutoscrollUI(!autoscrollOn);
-        post("/api/tournament/view/settings", { autoscroll: autoscrollOn });
-    });
-
-    // Scroll position: live drag sends fractional position (debounced lightly).
-    let scrollTimer = null;
-    function sendScroll(pct) {
-        clearTimeout(scrollTimer);
-        scrollTimer = setTimeout(
-            () => post("/api/tournament/view/scroll", { position: pct / 100 }),
-            60
-        );
-    }
-    scrollSlider.addEventListener("input",
-        () => sendScroll(parseInt(scrollSlider.value, 10)));
-    document.getElementById("scroll-top").addEventListener("click", () => {
-        scrollSlider.value = 0;
-        sendScroll(0);
-    });
-    document.getElementById("scroll-bottom").addEventListener("click", () => {
-        scrollSlider.value = 100;
-        sendScroll(100);
-    });
-
-    // Reflect server-pushed view settings (init + other admins' changes).
-    function syncViewSettings(s) {
-        if (!s) return;
-        if (typeof s.font_scale === "number") setFontScale(s.font_scale, true);
-        setAutoscrollUI(!!s.autoscroll);
-        if (typeof s.effects_enabled === "boolean") setEffectsUI(s.effects_enabled);
-        if (typeof s.banners_enabled === "boolean") setBannersUI(s.banners_enabled);
-        if (typeof s.box_opacity === "number") {
-            setBoxTransparency(Math.round((1 - s.box_opacity) * 100), true);
-        }
-    }
-
-    // --- Visual effects toggle (CRT ambiente + bracket victory bursts) ---
-    // Carried on the view_settings message (not a separate endpoint).
-
-    const effectsBtn = document.getElementById("btn-effects");
-    let effectsOn = true;
-
-    function setEffectsUI(on) {
-        effectsOn = on;
-        effectsBtn.querySelector(".lbl").textContent = `EFFEKTE: ${on ? "ON" : "OFF"}`;
-        effectsBtn.classList.toggle("btn-accent", on);
-    }
-
-    effectsBtn.addEventListener("click", () => {
-        setEffectsUI(!effectsOn);
-        post("/api/tournament/view/settings", { effects_enabled: effectsOn });
-    });
-
-    // --- Live-drama banners toggle (independent of EFFEKTE) ---
-
-    const bannersBtn = document.getElementById("btn-banners");
-    let bannersOn = true;
-
-    function setBannersUI(on) {
-        bannersOn = on;
-        bannersBtn.querySelector(".lbl").textContent = `MELDUNGEN: ${on ? "ON" : "OFF"}`;
-        bannersBtn.classList.toggle("btn-accent", on);
-    }
-
-    bannersBtn.addEventListener("click", () => {
-        setBannersUI(!bannersOn);
-        post("/api/tournament/view/settings", { banners_enabled: bannersOn });
-    });
-
-    // --- Box transparency slider (lets the background tetrominoes show through) ---
-    // The slider value is TRANSPARENCY in % (0 = solid); the server stores opacity.
-
-    const boxSlider = document.getElementById("box-opacity");
-    const boxVal = document.getElementById("box-opacity-val");
-    let boxTimer = null;
-
-    function setBoxTransparency(pct, silent = false) {
-        const n = Math.min(75, Math.max(0, Math.round(pct / 5) * 5));
-        boxSlider.value = n;
-        boxVal.textContent = `${n}%`;
-        if (silent) return;
-        clearTimeout(boxTimer);
-        boxTimer = setTimeout(
-            () => post("/api/tournament/view/settings", { box_opacity: 1 - n / 100 }),
-            200
-        );
-    }
-
-    boxSlider.addEventListener("input",
-        () => setBoxTransparency(parseInt(boxSlider.value, 10)));
-
-    // --- Celebration effect toggle (auto-shows on the view when complete) ---
-
-    const celebrationBtn = document.getElementById("btn-celebration");
-    let celebrationOn = true;
-
-    function setCelebrationUI(on) {
-        celebrationOn = on;
-        celebrationBtn.querySelector(".lbl").textContent = `CELEBRATION: ${on ? "ON" : "OFF"}`;
-        celebrationBtn.classList.toggle("btn-accent", on);
-    }
-
-    celebrationBtn.addEventListener("click", () => {
-        setCelebrationUI(!celebrationOn);
-        post("/api/tournament/celebration", { enabled: celebrationOn });
-    });
-
-    // Reflect server-pushed celebration state (init + other admins' changes).
-    function syncCelebration(s) {
-        if (!s) return;
-        setCelebrationUI(s.enabled !== false);
-    }
-
-    // --- Single mode toggle: cycles through three control groups ---
-    // One button steps TOURNAMENT -> VIEW HIGHSCORE -> EFFEKT -> (wrap). Only the
-    // active group is shown; the label is the mode currently active.
-
-    const modeToggle = document.getElementById("mode-toggle");
-    const MODES = [
-        { group: "admin-group", label: "TOURNAMENT" },
-        { group: "view-group", label: "VIEW HIGHSCORE" },
-        { group: "effects-group", label: "EFFEKT" },
-    ];
-    let modeIndex = 0;
-
-    function applyMode() {
-        MODES.forEach((m, i) => {
-            document.getElementById(m.group).classList.toggle("hidden", i !== modeIndex);
-        });
-        modeToggle.textContent = MODES[modeIndex].label;
-    }
-    modeToggle.addEventListener("click", () => {
-        modeIndex = (modeIndex + 1) % MODES.length;
-        applyMode();
-    });
-    applyMode();
+    // The highscore display's settings (size, autoscroll, scroll, effects,
+    // banners, transparency, celebration) moved to the admin UI:
+    // Einstellungen -> Highscore-Anzeige. This console keeps the bracket.
 
     // --- WebSocket wiring -------------------------------------------------
 
@@ -343,8 +173,6 @@
         leaderboard = d.leaderboard || [];
         renderBracket(d.bracket);
         syncFromBracket(d.bracket);
-        syncViewSettings(d.view_settings);
-        syncCelebration(d.celebration);
     });
     ws.on("leaderboard_update", (lb) => {
         leaderboard = lb || [];
@@ -354,8 +182,6 @@
         renderBracket(b);
         syncFromBracket(b);
     });
-    ws.on("view_settings", syncViewSettings);
-    ws.on("celebration", syncCelebration);
     ws.onStatus(setConnStatus);
     ws.connect();
 })();

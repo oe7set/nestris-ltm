@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import PhaseBanner from "../components/PhaseBanner.svelte";
   import { api } from "../lib/api";
   import { dateTime, num } from "../lib/format";
   import { i18n, t, tDynamic } from "../lib/i18n.svelte";
@@ -68,6 +69,7 @@
 </script>
 
 <h1>{t("nav.dashboard")}</h1>
+<PhaseBanner compact />
 
 {#if event === null}
   <p class="error-box">{t("dash.no_event")} <a href="#/events">{t("nav.events")} ›</a></p>

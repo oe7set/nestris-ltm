@@ -632,6 +632,7 @@ class SceneEngine:
                             "max": info["max_lives"],
                         }
                         slots_out[slot]["match_result"] = side["result"]
+                        slots_out[slot]["player_id"] = side["player_id"]
 
         return {
             "matches": matches,

@@ -310,6 +310,20 @@ class TournamentService(Broadcaster):
         async with self.db.session() as session, session.begin():
             await app_settings.put(session, key, value)
 
+    def phase(self) -> dict[str, Any]:
+        """Qualifying or tournament, for the admin pages (Regie, Turnier, Dashboard)."""
+        st = self.state
+        eligible = [p for p in st.live_pool if p.user_id not in st.disabled]
+        return {
+            "event": self._event_name,
+            "has_event": self._event_id is not None,
+            "seeded": st.is_seeded,
+            "seeded_at": st.seeded_at,
+            "active_count": st.active_count,
+            "players": len(eligible),
+            "known": self.synced,
+        }
+
     def seeded(self) -> bool | None:
         """Tournament phase for the scenes: fixed or not; None until loaded."""
         return self.state.is_seeded if self.synced else None

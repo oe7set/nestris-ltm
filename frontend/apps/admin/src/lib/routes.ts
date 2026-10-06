@@ -19,9 +19,8 @@ export const routes: RouteDef[] = [
   { name: "game-new", pattern: "/games/new" },
   { name: "game", pattern: "/games/:id" },
   { name: "events", pattern: "/events" },
+  { name: "regie", pattern: "/regie" },
   { name: "tournament", pattern: "/tournament" },
-  { name: "matches", pattern: "/matches" },
-  { name: "scenes", pattern: "/scenes" },
   { name: "studio", pattern: "/studio" },
   { name: "studio-scene", pattern: "/studio/scene/:id" },
   { name: "studio-layout", pattern: "/studio/layout/:id" },
@@ -29,9 +28,23 @@ export const routes: RouteDef[] = [
   { name: "audit", pattern: "/audit" },
   { name: "settings", pattern: "/settings" },
   { name: "updates", pattern: "/updates" },
-  { name: "devices", pattern: "/devices" },
   { name: "pages", pattern: "/pages" },
 ];
+
+/** Old addresses (bookmarks, docs) -> where that content lives now. */
+export const redirects: Record<string, string> = {
+  "/scenes": "/regie",
+  "/matches": "/tournament?tab=matches",
+  "/devices": "/stations?tab=devices",
+};
+
+/** The new hash for an old address, or null. */
+export function redirectFor(hash: string): string | null {
+  const raw = hash.replace(/^#/, "") || "/";
+  const path = (raw.split("?", 1)[0] ?? "/").replace(/\/+$/, "") || "/";
+  const target = redirects[path];
+  return target ? `#${target}` : null;
+}
 
 export function matchPath(hash: string, defs: RouteDef[] = routes): Match {
   const raw = hash.replace(/^#/, "") || "/";

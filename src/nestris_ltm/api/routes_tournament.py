@@ -86,6 +86,12 @@ async def state(request: Request) -> dict[str, Any]:
     return await _service(request).snapshot()
 
 
+@router.get("/phase")
+async def phase(request: Request, _: AdminDep) -> dict[str, Any]:
+    """Small status for the admin pages: qualifying (not fixed) or tournament."""
+    return _service(request).phase()
+
+
 # ---------------------------------------------------------------- bracket
 
 

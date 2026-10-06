@@ -2,9 +2,12 @@
   import { copyText } from "../lib/clipboard";
   import { onMount } from "svelte";
   import Modal from "../components/Modal.svelte";
+  import DisplaySettings from "../components/settings/DisplaySettings.svelte";
+  import TournamentSettings from "../components/settings/TournamentSettings.svelte";
+  import { router } from "../lib/router.svelte";
   import { api } from "../lib/api";
   import { dateTime } from "../lib/format";
-  import { i18n, t } from "../lib/i18n.svelte";
+  import { i18n, t, tDynamic } from "../lib/i18n.svelte";
   import { toasts } from "../lib/toast.svelte";
 
   interface Admin {
@@ -20,6 +23,16 @@
     created_at: string;
     last_used_at: string | null;
     revoked_at: string | null;
+  }
+
+  // Tabs: general, tournament & scenes, highscore display, access.
+  const TABS = ["general", "tournament", "display", "access"] as const;
+  type Tab = (typeof TABS)[number];
+  const wanted = router.current.query.get("tab");
+  let tab = $state<Tab>(TABS.includes(wanted as Tab) ? (wanted as Tab) : "general");
+  function setTab(next: Tab): void {
+    tab = next;
+    router.setQuery({ tab: next === "general" ? null : next });
   }
 
   let admins = $state<Admin[]>([]);
@@ -94,6 +107,17 @@
 
 <h1>{t("settings.title")}</h1>
 
+<div class="tabs">
+  {#each TABS as name (name)}
+    <button class:on={tab === name} onclick={() => setTab(name)}>{tDynamic(`settings.tab_${name}`, name)}</button>
+  {/each}
+</div>
+
+{#if tab === "tournament"}
+  <TournamentSettings />
+{:else if tab === "display"}
+  <DisplaySettings />
+{:else if tab === "general"}
 <section class="panel block">
   <h2>{t("settings.language")}</h2>
   <div class="row">
@@ -101,6 +125,11 @@
     <button class:primary={i18n.locale === "en"} onclick={() => i18n.set("en")}>English</button>
   </div>
 </section>
+<section class="panel block">
+  <h2>{t("nav.updates")}</h2>
+  <p class="hint">{t("settings.updates_hint")} <a href="#/updates">{t("nav.updates")} →</a></p>
+</section>
+{:else}
 
 <section class="panel block">
   <h2>{t("settings.admins")}</h2>
@@ -162,6 +191,7 @@
     <button type="submit" disabled={!tokenScopes.length}>{t("settings.create_token")}</button>
   </form>
 </section>
+{/if}
 
 {#if passwordFor}
   <Modal title={t("settings.new_password", { name: passwordFor.username })} onclose={() => (passwordFor = null)}>
@@ -192,6 +222,16 @@
 {/if}
 
 <style>
+  .tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .tabs button.on {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
   .block {
     margin-bottom: 16px;
   }

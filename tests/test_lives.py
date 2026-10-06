@@ -158,6 +158,16 @@ async def test_hearts_flow(runtime: Runtime) -> None:
         assert st["matches"][0]["match_id"] == mid and st["matches"][0]["bound_by"] == "auto"
         assert st["slots"][0]["lives"] == {"current": 2, "max": 3}  # Dan, by player not order
         assert st["slots"][1]["lives"] == {"current": 3, "max": 3}
+        assert st["slots"][0]["player_id"] == ids["Dan"]  # Regie: hearts -/+ per slot
+
+        # A qualifying scene with the same stations is never bound (no hearts there).
+        r = await client.post("/api/scenes", headers=shell, json={
+            "name": "Quali", "slug": "quali", "layout": "1v1", "flow": "quali",
+            "slots": [{"slot": 0, "station_id": "st-1"}, {"slot": 1, "station_id": "st-2"}],
+        })  # fmt: skip
+        await rt.scenes.load()
+        await rt.lives.auto_bind()
+        assert rt.lives.binding(rt.scenes.scenes["quali"].id, 0) is None
 
         # Stream Deck: token scope "control", slot-based URLs.
         r = await client.post(

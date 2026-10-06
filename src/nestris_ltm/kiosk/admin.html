@@ -64,12 +64,9 @@
     <!-- ============ RIGHT: controls + bracket ============ -->
     <div class="flex-1 flex flex-col p-3 gap-3 min-w-0">
 
-        <!-- Single control bar: a mode toggle button + the active mode's controls,
-             all on ONE line. The toggle's label is the mode it switches TO. -->
+        <!-- Control bar: seeding and size. The highscore display's settings are
+             in the admin UI (Einstellungen -> Highscore-Anzeige). -->
         <header class="panel rounded-lg p-3 flex items-center gap-4 flex-wrap">
-            <!-- Mode toggle: cycles TOURNAMENT -> VIEW HIGHSCORE -> EFFEKT; the
-                 label shows the mode currently active. -->
-            <button id="mode-toggle" class="btn btn-accent flex-shrink-0">TOURNAMENT</button>
             <span id="conn-status" class="conn-dot conn-down text-xs flex-shrink-0">offline</span>
 
             <div class="h-6 w-px bg-white/10 flex-shrink-0"></div>
@@ -101,54 +98,6 @@
                         <button class="btn btn-preset" data-size="32">32</button>
                         <button class="btn btn-preset" data-size="64">64</button>
                     </span>
-                </div>
-            </div>
-
-            <!-- ===== VIEW HIGHSCORE controls group (highscore-list settings) ===== -->
-            <div id="view-group" class="flex items-center gap-4 flex-wrap hidden">
-                <!-- Font/zoom size of the public list. -->
-                <div class="text-xs text-muted flex items-center gap-2 flex-shrink-0">
-                    SIZE
-                    <button id="font-minus" class="btn btn-step" aria-label="Smaller text">−</button>
-                    <input id="font-scale" type="range" min="0.6" max="2.5" step="0.1" value="1" class="w-40">
-                    <button id="font-plus" class="btn btn-step" aria-label="Larger text">+</button>
-                    <span id="font-scale-val" class="text-accent2 w-10 text-center">1.0×</span>
-                </div>
-
-                <div class="h-6 w-px bg-white/10 flex-shrink-0"></div>
-
-                <!-- Auto-scroll toggle. -->
-                <button id="btn-autoscroll" class="btn flex-shrink-0">AUTOSCROLL: OFF</button>
-
-                <div class="h-6 w-px bg-white/10 flex-shrink-0"></div>
-
-                <!-- One-shot scroll position. -->
-                <div class="text-xs text-muted flex items-center gap-2 flex-shrink-0">
-                    SCROLL
-                    <button id="scroll-top" class="btn btn-preset">TOP</button>
-                    <input id="scroll-pos" type="range" min="0" max="100" value="0" class="w-40">
-                    <button id="scroll-bottom" class="btn btn-preset">BOTTOM</button>
-                </div>
-            </div>
-
-            <!-- ===== EFFEKT controls group (visual effects + celebration) ===== -->
-            <div id="effects-group" class="flex items-center gap-4 flex-wrap hidden">
-                <!-- Celebration effect toggle (shown on the view when complete). -->
-                <button id="btn-celebration" class="btn flex-shrink-0"><img class="tw-icon" src="/kiosk/static/icons/party.svg" alt=""> <span class="lbl">CELEBRATION: ON</span></button>
-
-                <!-- Visual effects toggle (CRT ambiente + bracket victory bursts). -->
-                <button id="btn-effects" class="btn flex-shrink-0"><img class="tw-icon" src="/kiosk/static/icons/sparkles.svg" alt=""> <span class="lbl">EFFEKTE: ON</span></button>
-
-                <!-- Live-drama banners toggle (independent of EFFEKTE). -->
-                <button id="btn-banners" class="btn flex-shrink-0"><img class="tw-icon" src="/kiosk/static/icons/speech.svg" alt=""> <span class="lbl">MELDUNGEN: ON</span></button>
-
-                <div class="h-6 w-px bg-white/10 flex-shrink-0"></div>
-
-                <!-- Box transparency (lets the background tetrominoes show through). -->
-                <div class="text-xs text-muted flex items-center gap-2 flex-shrink-0">
-                    TRANSPARENZ
-                    <input id="box-opacity" type="range" min="0" max="75" step="5" value="0" class="w-40">
-                    <span id="box-opacity-val" class="text-accent2 w-10 text-center">0%</span>
                 </div>
             </div>
 

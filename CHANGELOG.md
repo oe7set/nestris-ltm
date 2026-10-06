@@ -3,6 +3,27 @@
 The section of a version is the text of its GitHub release and what the
 built-in updater shows before installing (`.github/scripts/release_notes.py`).
 
+## Unreleased
+
+- **The scene flow follows the tournament**: before FIX every scene shows
+  the current game of each station (qualifying), FIX switches them to
+  rounds with hearts and starts round 1 fresh, UNSEED goes back. Per scene
+  it can be set to *always qualifying* or *always rounds*; whether the next
+  round starts by itself is one global switch.
+- **New page *Regie*** (control room) replaces *Szenen* and *Matches*: the
+  phase with FIX, per scene flow and mode, the live slots with hearts − / +,
+  the match per pair, next round, reset slot.
+- **Tournament phase everywhere**: a banner on *Regie*, *Turnier* and the
+  dashboard shows qualifying or fixed, with FIX / UNSEED right there.
+- ***Turnier*** has the tabs *Turnierbaum* (the console) and *Matches &
+  Herzen*.
+- ***Einstellungen*** has tabs: *Turnier & Szenen* (hearts defaults, also
+  before FIX; next round), *Highscore-Anzeige* (font size, autoscroll,
+  effects, banners, transparency, celebration, scroll, addresses; moved out
+  of the tournament console) and *Zugang* (admins, tokens).
+- ***Stationen & Geräte*** is one page with the tab *Versionen & Updates*.
+- Scene export is look-only again (no flow or mode).
+
 ## 0.2.1
 
 - **Qualifying scenes**: a scene's flow can be *Quali*: every slot always
