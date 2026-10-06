@@ -2,16 +2,20 @@
 
 Closing the window only hides it; the app keeps running in the tray. The
 embedded browser sends the runtime's shell token with every request to the
-local server, which grants an admin session without a login.
+local server, which grants an admin session without a login. Downloads (e.g.
+the scene studio export) ask where to save them; QtWebEngine drops them
+otherwise.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 
-from PySide6.QtCore import QObject, QUrl, Signal
+from PySide6.QtCore import QObject, QStandardPaths, QUrl, Signal
 from PySide6.QtGui import QCloseEvent, QDesktopServices
 from PySide6.QtWebEngineCore import (
+    QWebEngineDownloadRequest,
     QWebEnginePage,
     QWebEnginePermission,
     QWebEngineProfile,
@@ -20,7 +24,7 @@ from PySide6.QtWebEngineCore import (
     QWebEngineUrlRequestInterceptor,
 )
 from PySide6.QtWebEngineWidgets import QWebEngineView
-from PySide6.QtWidgets import QLabel, QMainWindow, QStackedWidget
+from PySide6.QtWidgets import QFileDialog, QLabel, QMainWindow, QStackedWidget
 
 from nestris_ltm.shell.icon import app_icon
 
@@ -42,6 +46,8 @@ class ShellTokenInterceptor(QWebEngineUrlRequestInterceptor):
 
 
 UrlOpener = Callable[[QUrl], object]
+# Suggested file path -> chosen path ("" = cancelled).
+SavePathAsker = Callable[[str], str]
 
 
 class _NewWindowPage(QWebEnginePage):
@@ -133,6 +139,8 @@ class MainWindow(QMainWindow):
         self._profile = QWebEngineProfile(self)
         self._interceptor = ShellTokenInterceptor(self._base, shell_token)
         self._profile.setUrlRequestInterceptor(self._interceptor)
+        self._profile.downloadRequested.connect(self._on_download)
+        self.ask_save_path: SavePathAsker = self._ask_save_path
 
         self._view = QWebEngineView(self)
         # Keep a reference: QWebEngineView.setPage() does not take ownership.
@@ -151,6 +159,35 @@ class MainWindow(QMainWindow):
         self._stack.addWidget(self._view)
         self.setCentralWidget(self._stack)
         self._loaded = False
+
+    def _ask_save_path(self, suggested: str) -> str:
+        path, _ = QFileDialog.getSaveFileName(self, "Speichern unter", suggested)
+        return path
+
+    def _on_download(self, download: QWebEngineDownloadRequest) -> None:
+        folder = (
+            QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DownloadLocation)
+            or download.downloadDirectory()
+        )
+        chosen = self.ask_save_path(str(Path(folder) / download.downloadFileName()))
+        if not chosen:
+            download.cancel()
+            return
+        target = Path(chosen)
+        download.setDownloadDirectory(str(target.parent))
+        download.setDownloadFileName(target.name)
+
+        def finished() -> None:
+            if not download.isFinished():
+                return
+            ok = download.state() == QWebEngineDownloadRequest.DownloadState.DownloadCompleted
+            self.statusBar().showMessage(
+                f"Gespeichert: {target}" if ok else f"Speichern fehlgeschlagen: {target.name}",
+                8000,
+            )
+
+        download.isFinishedChanged.connect(finished)
+        download.accept()
 
     def show_message(self, text: str) -> None:
         self._placeholder.setText(text)

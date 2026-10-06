@@ -159,6 +159,13 @@ for running them (rounds, hearts, slots).
   anlegen* / *überschreiben* / *überspringen* (layouts: *vorhandenes
   verwenden* / *ersetzen* / *als Kopie*). Everything is imported in one
   transaction (limits: 1 MB, 100 scenes, 50 layouts).
+  In the desktop app *Exportieren* asks where to save the file (default:
+  the Downloads folder).
+- **Guide lines** (*Hilfslinien* above the preview, scene editor and layout
+  builder): centre cross, thirds, safe areas (action safe 5 %, title safe
+  10 %) and own lines dragged out of the rulers at the top/left edge (drag
+  back onto the ruler or double-click to remove). They exist only in the
+  editor, never in the overlay or OBS; in the builder elements snap to them.
 - **Layout builder** (*Eigene Layouts* → *+ Neues Layout*): start blank or
   from a template (the NES camera layouts), drag elements from the palette
   (board, next piece, stats, name tag, hearts, camera, difference, diff

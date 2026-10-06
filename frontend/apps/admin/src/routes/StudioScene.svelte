@@ -2,9 +2,12 @@
   // Scene editor: everything about a scene's look and stations, with a large
   // live preview that follows every change before it is saved.
   import { onMount } from "svelte";
+  import GuideOverlay from "../components/GuideOverlay.svelte";
+  import GuideTools from "../components/GuideTools.svelte";
   import Modal from "../components/Modal.svelte";
   import Thumb from "../components/Thumb.svelte";
   import { api, ApiError } from "../lib/api";
+  import { fillHeight } from "../lib/fillHeight";
   import { i18n, t, tDynamic } from "../lib/i18n.svelte";
   import { router } from "../lib/router.svelte";
   import {
@@ -205,8 +208,8 @@
     <button class="primary" disabled={!dirty || saving || !name.trim()} onclick={save}>{t("common.save")}</button>
   </div>
 
-  <div class="editor">
-    <aside class="side">
+  <div class="editor fill-page">
+    <aside class="side" use:fillHeight>
       <section class="panel block">
         <h2>{t("studio.general")}</h2>
         <label class="field">{t("common.name")}<input bind:value={name} maxlength="128" /></label>
@@ -311,10 +314,14 @@
           <button class:on={background === "checker"} onclick={() => (background = "checker")}>{t("studio.bg_checker")}</button>
           <button class:on={background === "dark"} onclick={() => (background = "dark")}>{t("scenes.bg_dark")}</button>
         </div>
+        <GuideTools />
         <span class="spacer"></span>
         <a class="small" href="/o/{scene.slug}" target="_blank" rel="noopener">{t("studio.open_overlay")} ↗</a>
       </div>
-      <Thumb config={preview} still={false} background={background === "dark" ? "dark" : "checker"} title={name} />
+      <div class="preview">
+        <Thumb config={preview} still={false} background={background === "dark" ? "dark" : "checker"} title={name} />
+        <GuideOverlay />
+      </div>
       {#if source === "live"}<p class="muted small">{t("studio.live_hint")}</p>{/if}
     </section>
   </div>
@@ -351,7 +358,7 @@
   .side {
     display: grid;
     gap: 12px;
-    max-height: calc(100vh - 150px);
+    max-height: var(--fill-h, calc(100vh - 150px));
     overflow: auto;
     padding-right: 4px;
   }
@@ -362,6 +369,9 @@
   .block h2 {
     margin: 0;
     font-size: 15px;
+  }
+  .preview {
+    position: relative;
   }
   .stage-col {
     position: sticky;

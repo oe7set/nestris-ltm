@@ -61,3 +61,10 @@ def test_page_may_write_the_clipboard(result: dict[str, object]) -> None:
     # Without the shell's settings QtWebEngine refuses (NotAllowedError) or
     # leaves the permission request unanswered: copying silently fails (the bug).
     assert result["plain_copy_result"] != "ok"
+
+
+def test_downloads_ask_for_a_path_and_are_saved(result: dict[str, object]) -> None:
+    # The scene studio export is a blob download; without a handler
+    # QtWebEngine silently dropped it (export "did nothing" in the app).
+    assert result["download_asked"] == ["export.nltm-scenes.json"]
+    assert result["download_content"] == '{"x":1}'

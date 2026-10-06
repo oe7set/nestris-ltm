@@ -201,6 +201,10 @@
     padding: 20px 24px 40px;
     min-width: 0;
   }
+  /* Editors whose side panels run down to the window's bottom edge. */
+  main:has(:global(.fill-page)) {
+    padding-bottom: 12px;
+  }
   @media (max-width: 760px) {
     .layout {
       grid-template-columns: 1fr;

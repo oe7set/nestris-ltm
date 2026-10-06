@@ -13,7 +13,9 @@ what the app actually shows:
 - a ``target="_blank"`` link and a link to another site are handed to the
   system browser (real mouse clicks = a user gesture, as in the app);
 - ``navigator.clipboard.writeText`` succeeds; a plain QWebEnginePage (the
-  state before the fix) does not.
+  state before the fix) does not;
+- a blob download (how the admin UI exports files) asks for a path and is
+  written there (QtWebEngine drops downloads nobody accepts).
 
 Offscreen platform: the clipboard is an isolated in-process one, never the
 user's real clipboard.
@@ -24,9 +26,11 @@ from __future__ import annotations
 import gc
 import json
 import os
+import tempfile
 import threading
 from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu")
@@ -48,6 +52,9 @@ PAGE = f"""<!doctype html><html><body style="margin:0">
    style="position:absolute;left:0;top:50px;width:100px;height:40px;display:block">site</a>
 <button id="copy" onclick="navigator.clipboard.writeText('{COPIED}')
   .then(() => document.title = 'ok', e => document.title = 'err:' + e)">copy</button>
+<button id="dl" onclick="const u = window.URL.createObjectURL(new Blob([JSON.stringify({{x: 1}})], {{type: 'application/json'}}));
+  const a = document.createElement('a'); a.href = u; a.download = 'export.nltm-scenes.json';
+  document.body.append(a); a.click(); a.remove();">download</button>
 </body></html>""".encode()
 
 seen_tokens: list[str | None] = []
@@ -143,6 +150,16 @@ def main() -> None:
     click(view, 20, 70)  # plain link to another site
     wait_for(lambda: len(opened) >= 2)
     out["opened"] = list(opened)
+
+    # Download: the window asks for a path (stubbed) and writes the file.
+    target = os.path.join(tempfile.mkdtemp(), "saved.json")
+    asked: list[str] = []
+    window.ask_save_path = lambda suggested: (asked.append(suggested), target)[1]
+    view.page().runJavaScript("document.getElementById('dl').click()")
+    wait_for(lambda: os.path.exists(target) and os.path.getsize(target) > 0)
+    out["download_asked"] = [os.path.basename(a) for a in asked]
+    saved = Path(target)
+    out["download_content"] = saved.read_text(encoding="utf-8") if saved.exists() else None
 
     print("RESULT " + json.dumps(out), flush=True)
     httpd.shutdown()

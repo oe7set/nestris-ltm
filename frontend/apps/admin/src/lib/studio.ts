@@ -197,7 +197,8 @@ export async function downloadExport(query: Record<string, string>): Promise<voi
   document.body.append(a);
   a.click();
   a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  // Generous: the desktop app asks where to save before it reads the blob.
+  setTimeout(() => URL.revokeObjectURL(url), 120_000);
 }
 
 export const MAX_IMPORT_BYTES = 1024 * 1024;

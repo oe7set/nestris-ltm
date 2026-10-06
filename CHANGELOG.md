@@ -17,6 +17,10 @@ built-in updater shows before installing (`.github/scripts/release_notes.py`).
   a template or blank: snapping and guides, multi-select, align/distribute,
   layers, copy/paste, mirror a player, undo/redo, drafts kept in the browser.
   Own layouts work everywhere the built-in ones do (pairs, rounds, hearts).
+- **Guide lines** in the scene editor and layout builder (centre, thirds,
+  safe areas, own lines from the rulers); editor only, never in OBS.
+- Desktop app: downloads (scene export) ask where to save; before, the
+  embedded browser dropped them.
 
 ## 0.2.0
 

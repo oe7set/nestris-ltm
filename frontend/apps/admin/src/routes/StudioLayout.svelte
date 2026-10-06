@@ -11,6 +11,8 @@
   // document is immutable (every edit is a new definition), which keeps
   // undo/redo simple and the iframe messages plain data.
   import { onMount } from "svelte";
+  import GuideOverlay from "../components/GuideOverlay.svelte";
+  import GuideTools from "../components/GuideTools.svelte";
   import Thumb from "../components/Thumb.svelte";
   import { api, ApiError } from "../lib/api";
   import {
@@ -53,6 +55,8 @@
     type Rect,
   } from "../lib/editor/geometry";
   import { History } from "../lib/editor/history";
+  import { fillHeight } from "../lib/fillHeight";
+  import { guides as guideLines } from "../lib/guides.svelte";
   import { mirrorSlot } from "../lib/editor/mirror";
   import { i18n, t, tDynamic } from "../lib/i18n.svelte";
   import { router } from "../lib/router.svelte";
@@ -362,7 +366,12 @@
   }
 
   function others(ids: Set<string>): Rect[] {
-    return def.elements.filter((e) => !ids.has(e.id) && !e.hidden).map(rectOf);
+    const rects = def.elements.filter((e) => !ids.has(e.id) && !e.hidden).map(rectOf);
+    // Shown guide lines snap too (a line = a zero-width rectangle).
+    for (const g of guideLines.snapLines()) {
+      rects.push(g.axis === "x" ? { x: g.at, y: 0, w: 0, h: CANVAS_H } : { x: 0, y: g.at, w: CANVAS_W, h: 0 });
+    }
+    return rects;
   }
 
   function capture(event: PointerEvent): void {
@@ -755,9 +764,9 @@
     <p class="hint">{t("builder.used_by", { scenes: usedBy.join(", ") })}</p>
   {/if}
 
-  <div class="builder">
+  <div class="builder fill-page">
     <!-- left: layout + palette -->
-    <aside class="side">
+    <aside class="side" use:fillHeight>
       <section class="panel block">
         <h2>{t("builder.layout")}</h2>
         <label>{t("builder.name")}<input bind:value={name} maxlength="64" /></label>
@@ -847,6 +856,7 @@
           <button class:on={style === "nes"} onclick={() => (style = "nes")}>NES</button>
           <button class:on={style === "modern"} onclick={() => (style = "modern")}>Modern</button>
         </div>
+        <GuideTools />
         <div class="seg">
           <button class:on={background === "checker"} onclick={() => (background = "checker")}>{t("studio.bg_checker")}</button>
           <button class:on={background === "dark"} onclick={() => (background = "dark")}>{t("scenes.bg_dark")}</button>
@@ -881,7 +891,6 @@
           >
             <div class="inner" style:transform="scale({scale})" style:--s={scale}>
               {#if showGrid}<div class="grid" class:coarse={scale < 0.6}></div>{/if}
-              <div class="safe"></div>
               {#each ordered as el (el.id)}
                 {@const isSel = selected.includes(el.id)}
                 <div
@@ -914,6 +923,7 @@
               {/if}
             </div>
           </div>
+          <GuideOverlay />
         </div>
       </div>
 
@@ -938,7 +948,7 @@
     </section>
 
     <!-- right: properties + layers -->
-    <aside class="side">
+    <aside class="side" use:fillHeight>
       <section class="panel block">
         <h2>{t("builder.properties")}</h2>
         {#if one}
@@ -1109,7 +1119,7 @@
   .side {
     display: grid;
     gap: 12px;
-    max-height: calc(100vh - 140px);
+    max-height: var(--fill-h, calc(100vh - 140px));
     overflow: auto;
     padding-right: 2px;
   }
@@ -1239,15 +1249,6 @@
   }
   .grid.coarse {
     background-size: 40px 40px;
-  }
-  .safe {
-    position: absolute;
-    left: 96px;
-    top: 54px;
-    width: 1728px;
-    height: 972px;
-    border: calc(1px / var(--s)) dashed rgb(255 255 255 / 0.18);
-    pointer-events: none;
   }
   .box {
     position: absolute;
