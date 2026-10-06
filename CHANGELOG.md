@@ -3,7 +3,7 @@
 The section of a version is the text of its GitHub release and what the
 built-in updater shows before installing (`.github/scripts/release_notes.py`).
 
-## Unreleased
+## 0.2.1
 
 - **Qualifying scenes**: a scene's flow can be *Quali*: every slot always
   shows the current game of its station (board, score, stats, difference);
