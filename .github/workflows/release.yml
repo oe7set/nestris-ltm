@@ -83,7 +83,8 @@ jobs:
           body_path: dist/RELEASE_NOTES.md
           name: NestrisLTM ${{ steps.version.outputs.version }}
           prerelease: ${{ steps.version.outputs.prerelease == 'true' }}
-          generate_release_notes: true
+          # A stable version is the release the updaters and the GitHub page show.
+          make_latest: ${{ steps.version.outputs.prerelease == 'true' && 'false' || 'true' }}
           files: |
             dist/NestrisLTM-Setup-*.exe
             dist/NestrisLTM-*-portable.zip
