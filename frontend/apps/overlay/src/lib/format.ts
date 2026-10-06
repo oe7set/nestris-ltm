@@ -26,6 +26,10 @@ export function tetrises(n: number): string {
 
 const TEXT = {
   de: {
+    score: "PUNKTE",
+    start_level: "START",
+    pieces: "STEINE",
+    gap: "ABSTAND",
     lines: "LINES",
     level: "LEVEL",
     next: "NÄCHSTER",
@@ -57,6 +61,10 @@ const TEXT = {
     mode_none: "",
   },
   en: {
+    score: "SCORE",
+    start_level: "START",
+    pieces: "PIECES",
+    gap: "GAP",
     lines: "LINES",
     level: "LEVEL",
     next: "NEXT",
@@ -97,6 +105,10 @@ export function text(lang: Lang | undefined, key: TextKey): string {
 
 // The NES style uses the game's own short HUD words (as NestrisChamps does).
 const NES_HUD: Partial<Record<TextKey, string>> = {
+  score: "SCORE",
+  start_level: "START",
+  pieces: "PIECES",
+  gap: "GAP",
   lines: "LINES",
   level: "LV",
   next: "NEXT",

@@ -25,7 +25,7 @@
   });
 </script>
 
-<svg {width} {height} viewBox="0 0 {width} {height}">
+<svg class="diff-graph" {width} {height} viewBox="0 0 {width} {height}">
   <defs>
     <clipPath id="{uid}-top"><rect x="0" y="0" {width} height={height / 2} /></clipPath>
     <clipPath id="{uid}-bottom"><rect x="0" y={height / 2} {width} height={height / 2} /></clipPath>

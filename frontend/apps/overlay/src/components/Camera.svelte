@@ -8,6 +8,7 @@
 <style>
   .camera {
     flex: none;
+    box-sizing: border-box; /* the frame stays inside the given size */
   }
   .camera.framed {
     border: 3px solid var(--frame);

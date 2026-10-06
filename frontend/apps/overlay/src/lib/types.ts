@@ -55,6 +55,8 @@ export interface SceneInfo {
   auto_round: boolean;
   settings: SceneSettings;
   pairs: [number, number][];
+  // Own layouts: "<uuid>:<version>"; the definition is fetched when it changes.
+  layout_rev?: string | null;
 }
 
 export interface SceneSettings {
@@ -63,7 +65,15 @@ export interface SceneSettings {
   camera_frames?: boolean;
   title?: string;
   style?: "modern" | "nes";
+  theme?: Partial<Record<ThemeKey, string>>;
+  show?: Partial<Record<ShowKey, boolean>>;
 }
+
+// Mirrors core/scene_settings.py.
+export const THEME_KEYS = ["accent", "frame", "inner", "panel", "text", "good", "bad"] as const;
+export type ThemeKey = (typeof THEME_KEYS)[number];
+export const SHOW_KEYS = ["header", "diff_graph", "versus", "pace", "burn", "hearts", "next"] as const;
+export type ShowKey = (typeof SHOW_KEYS)[number];
 
 export interface RoundGroup {
   group: number;

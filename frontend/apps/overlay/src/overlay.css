@@ -27,3 +27,26 @@ body {
   color: var(--text);
   font-family: "Share Tech Mono", ui-monospace, monospace;
 }
+
+/* Blocks a scene switched off (settings.show, built-in layouts only). */
+.stage[data-hide~="header"] :is(header, .center .title) {
+  display: none;
+}
+.stage[data-hide~="diff_graph"] svg.diff-graph {
+  display: none;
+}
+.stage[data-hide~="versus"] .versus {
+  display: none;
+}
+.stage[data-hide~="pace"] :is(.cell.pace, .box.pace, .versus .pace) {
+  display: none;
+}
+.stage[data-hide~="burn"] :is(.cell.burn, .box.burn) {
+  display: none;
+}
+.stage[data-hide~="hearts"] .hearts {
+  display: none;
+}
+.stage[data-hide~="next"] .next {
+  display: none;
+}

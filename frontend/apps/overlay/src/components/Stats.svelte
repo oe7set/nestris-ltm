@@ -36,7 +36,7 @@
     <div class="cell"><span>{hud(lang, "level")}</span><b>{fmt(view.level)}</b></div>
     <div class="cell"><span>{hud(lang, "trt")}</span><b>{pct(view.tetris_rate)}</b></div>
     {#if !compact}
-      <div class="cell"><span>{hud(lang, "burn")}</span><b>{fmt(view.burn)}</b></div>
+      <div class="cell burn"><span>{hud(lang, "burn")}</span><b>{fmt(view.burn)}</b></div>
     {/if}
     <div class="cell" class:alarm={droughtAlarm}>
       <span>{hud(lang, "drought")}</span><b>{view.status === "playing" ? fmt(view.drought) : fmt(view.max_drought)}</b>

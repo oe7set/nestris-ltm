@@ -1,6 +1,7 @@
 // Live connection to one scene: derived state, 60 Hz frames and score history.
 
-import type { Frame, History, Message, RoundGroup, SceneState } from "./types";
+import { demoData, type DemoInput } from "./demo";
+import type { Frame, History, Message, RoundGroup, SceneInfo, SceneState } from "./types";
 
 export const HISTORY_INTERVAL_MS = 1000;
 
@@ -23,9 +24,62 @@ class SceneConnection {
   #roundStart: Record<number, number> = {};
   #rounds: Record<number, number> = {};
 
+  #stopped = false;
+
   start(slug: string): void {
+    this.stop();
+    this.#stopped = false;
     this.#slug = slug;
     this.#open();
+  }
+
+  /** End the live connection and any demo source (the editor switches between them). */
+  stop(): void {
+    this.#stopped = true;
+    clearInterval(this.#demoTimer);
+    const socket = this.#socket;
+    this.#socket = null;
+    if (socket && socket.readyState <= WebSocket.OPEN) socket.close();
+  }
+
+  #demoTimer: ReturnType<typeof setInterval> | undefined;
+
+  /**
+   * Demo data instead of a station connection (previews, layout builder).
+   * ``source`` is asked on every tick, so a changed preview config shows at once.
+   */
+  startDemo(source: () => DemoInput | null, tickMs = 100): void {
+    this.stop();
+    this.#stopped = false;
+    const started = performance.now();
+    const tick = (): void => {
+      const input = source();
+      if (!input) return;
+      const data = demoData(input, performance.now() - started);
+      this.state = data.state;
+      this.frames = data.frames;
+      this.history = data.history;
+      this.connected = true;
+      this.missing = false;
+    };
+    tick();
+    this.#demoTimer = setInterval(tick, tickMs);
+  }
+
+  /** The saved scene's settings and slots (public state endpoint), for ?demo=1. */
+  async loadInfo(slug: string): Promise<{ scene: SceneInfo; slots: number; names: (string | null)[] } | null> {
+    try {
+      const response = await fetch(`/api/scenes/${encodeURIComponent(slug)}/state`, { cache: "no-store" });
+      if (response.status === 404) {
+        this.missing = true;
+        return null;
+      }
+      if (!response.ok) return null;
+      const data = (await response.json()) as { state: SceneState };
+      return { scene: data.state.scene, slots: data.state.slots.length, names: data.state.slots.map(() => null) };
+    } catch {
+      return null;
+    }
   }
 
   #open(): void {
@@ -39,10 +93,15 @@ class SceneConnection {
       this.#retry = 1000;
       ping = setInterval(() => socket.send(JSON.stringify({ type: "ping" })), 25000);
     };
-    socket.onmessage = (e) => this.#handle(JSON.parse(e.data as string) as Message);
+    socket.onmessage = (e) => {
+      if (this.#socket !== socket) return; // a stopped/replaced connection
+      this.#handle(JSON.parse(e.data as string) as Message);
+    };
     socket.onclose = (e) => {
       clearInterval(ping);
+      if (this.#socket !== socket && this.#socket !== null) return; // replaced
       this.connected = false;
+      if (this.#stopped) return;
       if (e.code === 4404) this.missing = true;
       // Keep retrying: OBS keeps the source loaded while the host restarts.
       setTimeout(() => this.#open(), this.#retry);

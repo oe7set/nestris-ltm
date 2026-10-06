@@ -46,8 +46,8 @@
     </div>
   </div>
   {#if !compact}
-    <div class="box"><span class="label">{hud(lang, "pace")}</span><b>{fmt(view.pace)}</b></div>
-    <div class="box"><span class="label">{hud(lang, "burn")}</span><b>{fmt(view.burn)}</b></div>
+    <div class="box pace"><span class="label">{hud(lang, "pace")}</span><b>{fmt(view.pace)}</b></div>
+    <div class="box burn"><span class="label">{hud(lang, "burn")}</span><b>{fmt(view.burn)}</b></div>
   {/if}
 </div>
 
