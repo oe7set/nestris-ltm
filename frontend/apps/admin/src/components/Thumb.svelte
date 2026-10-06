@@ -12,8 +12,10 @@
     still?: boolean;
     background?: "transparent" | "dark" | "checker";
     title?: string;
+    /** Layout builder canvas (/o/_edit: hidden elements show faintly). */
+    edit?: boolean;
   }
-  let { slug = null, config = null, still = true, background = "dark", title = "" }: Props = $props();
+  let { slug = null, config = null, still = true, background = "dark", title = "", edit = false }: Props = $props();
 
   let box: HTMLDivElement;
   let frame = $state<HTMLIFrameElement | null>(null);
@@ -23,7 +25,7 @@
   const src = $derived(
     slug
       ? `/o/${encodeURIComponent(slug)}?demo=1${still ? "&still=1" : ""}${background === "dark" ? "&bg=dark" : ""}`
-      : `/o/_preview?demo=1${still ? "&still=1" : ""}${background === "dark" ? "&bg=dark" : ""}`,
+      : `/o/${edit ? "_edit" : "_preview"}?demo=1${still ? "&still=1" : ""}${background === "dark" ? "&bg=dark" : ""}`,
   );
 
   function send(): void {

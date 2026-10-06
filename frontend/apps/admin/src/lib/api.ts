@@ -6,6 +6,8 @@ export class ApiError extends Error {
     readonly detail: string,
     /** Machine-readable code of `{"detail": {"code", "message"}}` errors. */
     readonly code: string | null = null,
+    /** The parsed error body (e.g. per-element errors of an invalid layout). */
+    readonly body: unknown = null,
   ) {
     super(detail);
   }
@@ -97,6 +99,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
       response.status,
       errorDetail(body, `${response.status} ${response.statusText}`),
       errorCode(body),
+      body,
     );
   }
   return body as T;

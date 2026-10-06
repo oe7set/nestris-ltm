@@ -19,6 +19,7 @@
   import Tournament from "./routes/Tournament.svelte";
   import Devices from "./routes/Devices.svelte";
   import Studio from "./routes/Studio.svelte";
+  import StudioLayout from "./routes/StudioLayout.svelte";
   import StudioScene from "./routes/StudioScene.svelte";
   import Matches from "./routes/Matches.svelte";
   import Updates from "./routes/Updates.svelte";
@@ -108,7 +109,14 @@
         {:else if current.name === "studio"}
           <Studio />
         {:else if current.name === "studio-scene"}
-          <StudioScene id={current.params.id ?? ""} />
+          <!-- keyed: going from one scene to another (duplicate) loads it fresh -->
+          {#key current.params.id}
+            <StudioScene id={current.params.id ?? ""} />
+          {/key}
+        {:else if current.name === "studio-layout"}
+          {#key current.params.id}
+            <StudioLayout id={current.params.id ?? "new"} />
+          {/key}
         {:else if current.name === "matches"}
           <Matches />
         {:else if current.name === "pages"}

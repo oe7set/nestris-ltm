@@ -129,14 +129,47 @@ those areas (*Szenen* → *Rahmen für Kamerabereiche zeigen* draws frames aroun
 
 ### NES style
 
-*Szenen* → *Stil* → *NES (wie NestrisChamps)* (or `?style=nes` in the URL)
-gives every layout the NES look: pixel font, black boxes with the NES frame,
+NES is the standard style of every scene (*Szenen-Studio* → scene → *Aussehen*;
+`?style=nes|modern` in the URL overrides it). It gives every layout the NES look: pixel font, black boxes with the NES frame,
 numbers like `181,290`, the game's HUD words (LINES, LV, NEXT, TRT, DRT),
 green lead / red deficit. Best with `1v1_cam` and `2x1v1_cam`. The font is
 "Press Start 2P" (bundled, SIL Open Font License). If the font
 "NES Tetris" is installed on the PC that runs OBS, the overlay uses it
 instead; it is not shipped with NestrisLTM because its licence allows
 non-commercial use only.
+
+### Scene studio and layout builder
+
+*Szenen-Studio* (`/#/studio`) is where scenes are designed; *Szenen* stays
+for running them (rounds, hearts, slots).
+
+- **Gallery**: every scene and own layout with a live preview image (demo
+  data, so it is never empty). *+ Neue Szene* picks the layout from preview
+  images. New scenes use the NES style.
+- **Scene editor**: name, layout, style (NES/Modern), language, background,
+  colours (accent, frame, inner line, boxes, text, lead, behind), which
+  blocks show (title bar, difference, diff graph, pace, burn, hearts, next
+  piece) and the stations per slot. The large preview follows every change
+  before saving; *Live* shows the real data of the saved scene. Saving checks
+  that nobody else saved the scene in the meantime (else: reload).
+- **Export / import** (`*.nltm-scenes.json`, format `nestrisltm/scenes` v1)
+  carries only the look: layout, mode, style, colours, blocks and the own
+  layouts the scenes use. No stations, no player names. Import first shows
+  what is new, identical or already there; per entry choose *als Kopie
+  anlegen* / *überschreiben* / *überspringen* (layouts: *vorhandenes
+  verwenden* / *ersetzen* / *als Kopie*). Everything is imported in one
+  transaction (limits: 1 MB, 100 scenes, 50 layouts).
+- **Layout builder** (*Eigene Layouts* → *+ Neues Layout*): start blank or
+  from a template (the NES camera layouts), drag elements from the palette
+  (board, next piece, stats, name tag, hearts, camera, difference, diff
+  graph, title, round, text, frame). Elements snap to the 8 px grid, to
+  other elements and to the stage centre (Alt: free). Shift-click or drag a
+  frame to select several; align/distribute; layers with hide/lock;
+  Ctrl+C/V/D, Del, arrows (Shift = 8 px), Ctrl+Z/Y (200 steps), Ctrl+S.
+  *Slots* and *Paare* decide which slots play their rounds together (as in
+  the built-in layouts); *Spiegeln* builds the right player from the left.
+  Unsaved work is kept as a draft in the browser. A layout used by scenes
+  cannot be deleted, and saving it changes those scenes live.
 
 ## Command line (`nestris-ltm.exe` in the install folder)
 

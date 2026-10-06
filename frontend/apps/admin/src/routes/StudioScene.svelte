@@ -140,7 +140,8 @@
   }
 
   async function duplicate(): Promise<void> {
-    if (!scene || (dirty && !confirm(t("studio.unsaved_confirm")))) return;
+    // The copy is made from the saved scene; leaving asks about unsaved changes (guard).
+    if (!scene) return;
     try {
       const copy = await api<SceneRow>(`/api/scenes/${scene.id}/duplicate`, { method: "POST", body: {} });
       router.go(`/studio/scene/${copy.id}`);

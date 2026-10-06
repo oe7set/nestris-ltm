@@ -20,6 +20,7 @@ from sqlalchemy import select
 
 from nestris_ltm.api.auth import AdminDep
 from nestris_ltm.api.deps import SessionDep, get_runtime
+from nestris_ltm.core import layout_templates
 from nestris_ltm.db.models import OverlayLayout
 from nestris_ltm.services import audit, overlay_layouts, studio
 from nestris_ltm.services.overlay_layouts import (
@@ -184,6 +185,19 @@ def _ids(raw: str | None) -> list[str] | None:
     if raw is None:
         return None
     return [x for x in (part.strip() for part in raw.split(",")) if x][:500]
+
+
+@router.get("/api/studio/templates")
+async def templates(_: AdminDep) -> list[dict[str, Any]]:
+    """Starting points of the layout builder (valid definitions)."""
+    return [
+        {
+            "id": t.id, "name_de": t.name_de, "name_en": t.name_en,
+            "description_de": t.description_de, "description_en": t.description_en,
+            "definition": t.definition(),
+        }
+        for t in layout_templates.TEMPLATES
+    ]  # fmt: skip
 
 
 @router.get("/api/studio/export")
