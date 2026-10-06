@@ -3,6 +3,8 @@
 import { ApiError, buildUrl } from "./api";
 
 export type Style = "nes" | "modern";
+export type Flow = "phase" | "quali" | "rounds";
+export const FLOWS: Flow[] = ["phase", "quali", "rounds"];
 export const THEME_KEYS = ["accent", "frame", "inner", "panel", "text", "good", "bad"] as const;
 export type ThemeKey = (typeof THEME_KEYS)[number];
 export const SHOW_KEYS = ["header", "diff_graph", "versus", "pace", "burn", "hearts", "next"] as const;
@@ -44,9 +46,8 @@ export interface SceneRow {
   name: string;
   layout: string;
   mode: string;
-  auto_round: boolean;
-  /** Qualifying: always the current game of each station, no rounds. */
-  qualifying?: boolean;
+  /** phase = follows the tournament (quali before FIX, rounds after) | quali | rounds */
+  flow: Flow;
   settings: SceneSettings;
   slots: SlotRow[];
   round: number | null;
@@ -152,7 +153,7 @@ export function cleanSettings(s: SceneSettings): Omit<SceneSettings, "replay"> {
 }
 
 export function previewOf(
-  scene: { slug: string; name: string; layout: string; mode: string; auto_round: boolean; qualifying?: boolean; settings: SceneSettings },
+  scene: { slug: string; name: string; layout: string; mode?: string; qualifying?: boolean; settings: SceneSettings },
   layout: { slots: number; pairs: [number, number][] } | undefined,
   extra: Partial<PreviewConfig> = {},
 ): PreviewConfig {
@@ -161,8 +162,8 @@ export function previewOf(
       slug: scene.slug || "preview",
       name: scene.name || "Preview",
       layout: scene.layout,
-      mode: scene.mode,
-      auto_round: scene.auto_round,
+      mode: scene.mode ?? "none",
+      auto_round: false,
       qualifying: scene.qualifying ?? false,
       settings: cleanSettings(scene.settings),
       pairs: layout?.pairs ?? [],

@@ -6,8 +6,10 @@ latency) and
 
 - binds running games to slots, freezes results on game end
   (``core/rounds.py``), optionally starts the next round automatically;
-  a *qualifying* scene has no rounds: every slot always shows the current
-  game of its station (a new game replaces the finished one at once);
+  a scene's ``flow`` (``core/scene_flow.py``) follows the tournament phase:
+  *qualifying* before FIX (no rounds: every slot always shows the current
+  game of its station, a new game replaces the finished one at once), rounds
+  after FIX; ``quali`` / ``rounds`` override it per scene;
   every head-to-head pair of a layout (``Layout.pairs``, e.g. both matches
   of ``2x1v1``) plays its own rounds ("groups"), other layouts one group;
 - forwards every live frame of a slot's station to the scene's overlay
@@ -31,6 +33,7 @@ import asyncio
 import contextlib
 import time
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -39,7 +42,7 @@ import structlog
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from nestris_ltm.core import rounds, scoring
+from nestris_ltm.core import rounds, scene_flow, scoring
 from nestris_ltm.core.layouts import LAYOUTS, Layout
 from nestris_ltm.core.rounds import Entry, RoundState, Standing
 from nestris_ltm.core.scene_settings import normalize as normalize_settings
@@ -47,7 +50,7 @@ from nestris_ltm.db.manager import DatabaseManager
 from nestris_ltm.db.models import Game, Scene, SceneRound, SceneRoundEntry, SceneSlot
 from nestris_ltm.live.broadcast import Broadcaster
 from nestris_ltm.live.hub import LiveHub
-from nestris_ltm.services import overlay_layouts
+from nestris_ltm.services import app_settings, overlay_layouts
 
 if TYPE_CHECKING:
     from nestris_ltm.services.match_lives import MatchLives
@@ -75,10 +78,13 @@ class SceneRuntime:
     name: str
     layout: Layout
     mode: rounds.Mode
-    auto_round: bool
     settings: dict[str, Any]
     slots: dict[int, SlotConfig]
+    flow: str = scene_flow.DEFAULT_FLOW
+    # Derived from flow, the tournament phase and scenes.next_round
+    # (SceneEngine._apply_flow); everything below reads these two.
     qualifying: bool = False
+    auto_round: bool = False
     # Own layouts: "<uuid>:<version>"; overlays fetch the definition when it changes.
     layout_rev: str | None = None
     # Per group: the current round, its database id (None = not stored yet)
@@ -146,8 +152,50 @@ class SceneEngine:
         self._loaded = asyncio.Event()
         # Hearts of the bracket match a pair shows (set by the runtime).
         self.lives: MatchLives | None = None
+        # Tournament phase: True = bracket fixed, None = not known yet (set by
+        # the runtime; polled in run() so FIX/UNSEED/event changes switch flows).
+        self.seeded_source: Callable[[], bool | None] = lambda: False
+        self.seeded = False
+        self._phase_known = False
+        self.next_round: str = scene_flow.DEFAULT_NEXT_ROUND
         self._background: set[asyncio.Task[Any]] = set()
         hub.add_listener(self._on_hub_message)
+
+    # ------------------------------------------------------------ flow
+
+    def _apply_flow(self, runtime: SceneRuntime, *, transition: bool) -> None:
+        """Recompute the effective flow; quali -> rounds starts a fresh round."""
+        was_quali = runtime.qualifying
+        runtime.qualifying = scene_flow.effective(runtime.flow, self.seeded) == "quali"
+        runtime.auto_round = scene_flow.auto_round(runtime.flow, self.seeded, self.next_round)
+        if transition and was_quali and not runtime.qualifying:
+            # The tournament starts (FIX): qualifying results make way for round 1.
+            for group in runtime.groups():
+                self._start_new_round(runtime, group, reason="phase")
+        runtime.dirty = True
+
+    def _check_phase(self) -> None:
+        seeded = self.seeded_source()
+        if seeded is None:
+            return
+        if not self._phase_known:
+            self._phase_known = True
+            self.seeded = seeded
+            for runtime in self.scenes.values():
+                self._apply_flow(runtime, transition=False)
+            return
+        if seeded != self.seeded:
+            self.seeded = seeded
+            log.info("tournament phase changed", seeded=seeded)
+            for runtime in self.scenes.values():
+                self._apply_flow(runtime, transition=True)
+
+    async def set_next_round(self, value: str) -> None:
+        if value not in scene_flow.NEXT_ROUNDS:
+            raise ValueError(f"next round must be one of {scene_flow.NEXT_ROUNDS}")
+        self.next_round = value
+        for runtime in self.scenes.values():
+            self._apply_flow(runtime, transition=False)
 
     def mark_all_dirty(self) -> None:
         """Recompute every scene's state (e.g. hearts changed)."""
@@ -160,6 +208,9 @@ class SceneEngine:
         """(Re)load all scenes, slots and their latest round from the database."""
         async with self._lock, self.db.session() as session:
             rows = (await session.scalars(select(Scene).order_by(Scene.id))).all()
+            stored = await app_settings.get(session, app_settings.SCENES_NEXT_ROUND)
+            if stored and stored.get("next_round") in scene_flow.NEXT_ROUNDS:
+                self.next_round = stored["next_round"]
             known = await overlay_layouts.all_layouts(session)
             revs = await overlay_layouts.revisions(session)
             fresh: dict[str, SceneRuntime] = {}
@@ -187,25 +238,26 @@ class SceneEngine:
                         name=row.name,
                         layout=layout,
                         mode=row.mode,  # type: ignore[arg-type]
-                        auto_round=row.auto_round,
-                        qualifying=row.qualifying,
                         settings=settings.stored(),
                         slots=slots,
+                        flow=row.flow,
                         layout_rev=revs.get(row.layout),
                     )
                     await self._load_round(session, runtime)
+                    self._apply_flow(runtime, transition=False)
                 else:
                     relayout = runtime.layout.id != layout.id
                     runtime.name = row.name
                     runtime.layout = layout
                     runtime.mode = row.mode  # type: ignore[assignment]
-                    runtime.auto_round = row.auto_round
-                    runtime.qualifying = row.qualifying
+                    runtime.flow = row.flow
                     runtime.settings = settings.stored()
                     runtime.layout_rev = revs.get(row.layout)
                     runtime.slots = slots
                     if relayout:
                         await self._load_round(session, runtime)
+                    # An edited flow (e.g. quali -> rounds) switches like FIX does.
+                    self._apply_flow(runtime, transition=self._phase_known)
                 runtime.dirty = True
                 fresh[row.slug] = runtime
             for slug, old in self.scenes.items():
@@ -588,8 +640,10 @@ class SceneEngine:
                 "name": runtime.name,
                 "layout": layout.id,
                 "mode": runtime.mode,
+                "flow": runtime.flow,
                 "auto_round": runtime.auto_round,
                 "qualifying": runtime.qualifying,
+                "seeded": self.seeded,
                 "settings": runtime.settings,
                 "layout_rev": runtime.layout_rev,
                 "pairs": [list(p) for p in layout.pairs],
@@ -621,6 +675,7 @@ class SceneEngine:
                         log.warning("loading scenes failed", error=repr(exc))
                         await asyncio.sleep(5)
                 continue
+            self._check_phase()
             for runtime in list(self.scenes.values()):
                 if runtime.dirty:
                     runtime.dirty = False

@@ -97,6 +97,12 @@ async def test_hearts_flow(runtime: Runtime) -> None:
                               json={"player_id": ids["Dan"], "action": "lose"})  # fmt: skip
         assert r.status_code == 400
 
+        # The defaults can be set before FIX (Einstellungen): they survive it.
+        r = await client.put("/api/tournament/lives/settings", headers=shell,
+                             json={"default_lives": 2, "auto_deduct": False})  # fmt: skip
+        assert r.status_code == 200, r.text
+        assert not r.json()["seeded"] and rt.tournament.tournament_id is not None
+
         await client.post("/api/tournament/active-count", json={"count": 4}, headers=shell)
         assert (await client.post("/api/tournament/fix", headers=shell)).status_code == 200
         state = (await client.get("/api/tournament/matches", headers=shell)).json()
@@ -138,7 +144,7 @@ async def test_hearts_flow(runtime: Runtime) -> None:
 
         # A scene pair bound automatically from the cards on the stations.
         r = await client.post("/api/scenes", headers=shell, json={
-            "name": "Bühne", "slug": "buehne", "layout": "1v1",
+            "name": "Bühne", "slug": "buehne", "layout": "1v1", "flow": "rounds",
             "slots": [{"slot": 0, "station_id": "st-1"}, {"slot": 1, "station_id": "st-2"}],
         })  # fmt: skip
         assert r.status_code == 201, r.text
@@ -177,7 +183,9 @@ async def test_hearts_flow(runtime: Runtime) -> None:
         assert got["lives"] == 3 and got["winner_id"] is None
         # A slot without a bound match / an unknown scene.
         r = await client.post(
-            "/api/scenes", headers=shell, json={"name": "Leer", "slug": "leer", "layout": "1v1"}
+            "/api/scenes",
+            headers=shell,
+            json={"name": "Leer", "slug": "leer", "layout": "1v1", "flow": "rounds"},
         )
         await rt.scenes.load()
         assert (
@@ -224,11 +232,13 @@ async def test_pairs_play_their_own_rounds(runtime: Runtime) -> None:
     shell = {"X-NestrisLTM-Shell-Token": rt.shell_token}
     async with httpx.AsyncClient(transport=transport, base_url="http://t", headers=shell) as client:
         r = await client.post("/api/scenes", json={
-            "name": "Vier", "slug": "vier", "layout": "2x1v1", "auto_round": True,
+            "name": "Vier", "slug": "vier", "layout": "2x1v1", "flow": "rounds",
             "slots": [{"slot": i, "station_id": f"st-{i + 1}"} for i in range(4)],
         })  # fmt: skip
         assert r.status_code == 201, r.text
         await rt.scenes.load()
+        r = await client.put("/api/settings/scenes", json={"next_round": "auto"})
+        assert r.status_code == 200, r.text
         scene = rt.scenes.scenes["vier"]
         for st, game in (("st-1", "a1"), ("st-2", "b1"), ("st-3", "c1"), ("st-4", "d1")):
             live(rt, st, game, 1000)
@@ -266,7 +276,7 @@ async def test_automatic_deduction(runtime: Runtime) -> None:
         await client.post("/api/tournament/active-count", json={"count": 4})
         await client.post("/api/tournament/fix")
         await client.post("/api/scenes", json={
-            "name": "Bühne", "slug": "buehne", "layout": "1v1",
+            "name": "Bühne", "slug": "buehne", "layout": "1v1", "flow": "rounds",
             "slots": [{"slot": 0, "station_id": "st-1"}, {"slot": 1, "station_id": "st-2"}],
         })  # fmt: skip
         await rt.scenes.load()

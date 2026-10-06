@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from nestris_ltm.api.auth import AdminDep, Principal, require_scope
 from nestris_ltm.api.deps import SessionDep, get_runtime
+from nestris_ltm.core import scene_flow
 from nestris_ltm.core.layouts import LAYOUTS, Layout
 from nestris_ltm.core.scene_settings import from_client, normalize
 from nestris_ltm.db.models import SCENE_MODES, Game, Player, Scene, SceneSlot, Station
@@ -66,8 +67,7 @@ class SceneIn(BaseModel):
     name: str = Field(min_length=1, max_length=128)
     layout: str
     mode: str = "none"
-    auto_round: bool = False
-    qualifying: bool = False
+    flow: scene_flow.Flow = scene_flow.DEFAULT_FLOW
     settings: dict[str, Any] = Field(default_factory=dict)
     slots: list[SlotIn] = Field(default_factory=list)
 
@@ -99,8 +99,7 @@ class ScenePatch(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=128)
     layout: str | None = None
     mode: str | None = None
-    auto_round: bool | None = None
-    qualifying: bool | None = None
+    flow: scene_flow.Flow | None = None
     settings: dict[str, Any] | None = None
     slots: list[SlotIn] | None = None
     # Optimistic locking: the updated_at the editor loaded; 409 when it changed.
@@ -230,8 +229,7 @@ async def create_scene(
             name=body.name,
             layout=body.layout,
             mode=body.mode,
-            auto_round=body.auto_round,
-            qualifying=body.qualifying,
+            flow=body.flow,
             settings=body.settings,
         )
         session.add(scene)
@@ -269,7 +267,7 @@ async def update_scene(
             # The replay state belongs to the scene, not to the editor.
             replay = (scene.settings or {}).get("replay")
             changes["settings"] = from_client(body.settings, keep_replay=replay).stored()
-        for key in ("name", "layout", "mode", "auto_round", "qualifying", "settings"):
+        for key in ("name", "layout", "mode", "flow", "settings"):
             if changes.get(key) is not None:
                 setattr(scene, key, changes[key])
         if body.slots is not None:
@@ -282,6 +280,41 @@ async def update_scene(
             await audit.record(
                 session, actor=p.actor, action="update", entity="scene", entity_id=scene_id,
                 before={k: before.get(k) for k in diff}, after=diff,
+            )  # fmt: skip
+    await _engine(request).load()
+    return after
+
+
+class FlowIn(BaseModel):
+    """The run controls of the Regie page (no editor lock: they never clash)."""
+
+    flow: scene_flow.Flow | None = None
+    mode: str | None = None
+
+    @field_validator("mode")
+    @classmethod
+    def _mode(cls, value: str | None) -> str | None:
+        return None if value is None else _check_mode(value)
+
+
+@router.patch("/{scene_id}/flow")
+async def update_flow(
+    scene_id: int, body: FlowIn, request: Request, p: AdminDep, session: SessionDep
+) -> dict[str, Any]:
+    async with session.begin():
+        scene = await session.get(Scene, scene_id)
+        if scene is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "scene not found")
+        before = {"flow": scene.flow, "mode": scene.mode}
+        if body.flow is not None:
+            scene.flow = body.flow
+        if body.mode is not None:
+            scene.mode = body.mode
+        after = {"flow": scene.flow, "mode": scene.mode}
+        if after != before:
+            await audit.record(
+                session, actor=p.actor, action="update", entity="scene", entity_id=scene_id,
+                before=before, after=after,
             )  # fmt: skip
     await _engine(request).load()
     return after
@@ -321,8 +354,7 @@ async def duplicate_scene(
             name=(body.name or f"{src.name} (Kopie)")[:128],
             layout=src.layout,
             mode=src.mode,
-            auto_round=src.auto_round,
-            qualifying=src.qualifying,
+            flow=src.flow,
             settings=settings.stored(),
         )
         session.add(copy)

@@ -179,6 +179,46 @@ async def test_migration_switches_every_scene_to_nes(fresh_db_settings: Database
         await engine.dispose()
 
 
+@pytest.mark.db
+async def test_migration_0009_scene_flow(fresh_db_settings: DatabaseSettings) -> None:
+    await ensure_database(fresh_db_settings)
+    engine = create_async_engine(fresh_db_settings.url())
+    cfg = alembic_config()
+
+    def run(connection: Any, step: str, target: str) -> None:
+        cfg.attributes["connection"] = connection
+        (command.upgrade if step == "up" else command.downgrade)(cfg, target)
+
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(run, "up", "0008")
+            await conn.execute(text(
+                "INSERT INTO scenes (slug, name, layout, auto_round, qualifying) VALUES "
+                "('q', 'Q', '1v1', false, true), ('r', 'R', '1v1', true, false), "
+                "('p', 'P', '1v1', false, false)"
+            ))  # fmt: skip
+        async with engine.begin() as conn:
+            await conn.run_sync(run, "up", "0009")
+            flows = dict((await conn.execute(text("SELECT slug, flow FROM scenes"))).all())
+            setting = await conn.scalar(
+                text("SELECT value->>'next_round' FROM settings WHERE key = 'scenes.next_round'")
+            )
+        assert flows == {"q": "quali", "r": "phase", "p": "phase"}
+        assert setting == "auto"  # scene r started its rounds automatically
+        async with engine.begin() as conn:
+            await conn.run_sync(run, "down", "0008")
+            back = (await conn.execute(text(
+                "SELECT slug, qualifying, auto_round FROM scenes ORDER BY slug"
+            ))).all()  # fmt: skip
+        assert [tuple(r) for r in back] == [
+            ("p", False, True),
+            ("q", True, True),
+            ("r", False, True),
+        ]
+    finally:
+        await engine.dispose()
+
+
 # ---------------------------------------------------------------- API
 
 
@@ -341,7 +381,7 @@ async def test_export_import_round_trip(runtime: Runtime, client: httpx.AsyncCli
         await client.post("/api/overlay-layouts", json={"name": "Eigen", "definition": VALID})
     ).json()
     a = (await client.post("/api/scenes", json={
-        "slug": "buehne", "name": "Bühne", "layout": lay["key"], "qualifying": True,
+        "slug": "buehne", "name": "Bühne", "layout": lay["key"], "flow": "quali",
         "settings": {"style": "nes", "theme": {"accent": "#ff00ff"}},
         "slots": [{"slot": 0, "station_id": "st-1", "name_override": "Erv"}],
     })).json()  # fmt: skip
@@ -367,7 +407,7 @@ async def test_export_import_round_trip(runtime: Runtime, client: httpx.AsyncCli
     scene = file["scenes"][0]
     assert "replay" not in scene["settings"] and "slots" not in scene  # only the look
     assert scene["settings"]["theme"] == {"accent": "#ff00ff"}
-    assert scene["qualifying"] is True  # the flow travels along
+    assert "flow" not in scene and "mode" not in scene  # how it runs stays local
     everything = (await client.get("/api/studio/export")).json()
     assert {s["slug"] for s in everything["scenes"]} == {"buehne", "vier"}
 
@@ -385,13 +425,13 @@ async def test_export_import_round_trip(runtime: Runtime, client: httpx.AsyncCli
     scenes = (await client.get("/api/scenes")).json()
     assert [(s["slug"], s["layout"]) for s in scenes] == [("buehne", lay["key"])]
     assert scenes[0]["slots"] == [] and scenes[0]["settings"]["theme"] == {"accent": "#ff00ff"}
-    assert scenes[0]["qualifying"] is True
-    # A file of an older version (no "qualifying"): a normal round scene.
-    old = {**file, "scenes": [{k: v for k, v in file["scenes"][0].items() if k != "qualifying"}
-                              | {"slug": "alt"}]}  # fmt: skip
+    assert scenes[0]["flow"] == "phase"  # imported scenes follow the tournament phase
+    # A file of 0.2.x (mode / auto_round / qualifying): imports, those are ignored.
+    old = {**file, "scenes": [file["scenes"][0] | {"slug": "alt", "mode": "worst_out",
+                                                    "auto_round": True, "qualifying": True}]}  # fmt: skip
     assert (await _import(client, old, dry_run=False)).status_code == 200
     alt = next(s for s in (await client.get("/api/scenes")).json() if s["slug"] == "alt")
-    assert alt["qualifying"] is False
+    assert alt["flow"] == "phase" and alt["mode"] == "none"
     await client.delete(f"/api/scenes/{alt['id']}")
 
     # Again: the scene is in conflict (default: a renamed copy), the layout identical.

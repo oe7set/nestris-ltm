@@ -46,6 +46,7 @@ GAME_STATUSES = ("live", "finished", "abandoned")
 GAME_SOURCES = ("station", "manual", "ngf_import", "self_reported")
 END_REASONS = ("game_over", "reset", "signal_lost", "shutdown")
 SCENE_MODES = ("none", "top2_advance", "worst_out", "winner_only")
+SCENE_FLOWS = ("phase", "quali", "rounds")  # core/scene_flow.py
 ROUND_OUTCOMES = ("advanced", "eliminated", "winner")
 LIFE_KINDS = ("lose", "gain", "set")
 LIFE_SOURCES = ("admin", "api", "auto")
@@ -396,7 +397,10 @@ class MatchLifeEvent(Base):
 
 class Scene(TimestampMixin, Base):
     __tablename__ = "scenes"
-    __table_args__ = (CheckConstraint(_in("mode", SCENE_MODES), name="mode"),)
+    __table_args__ = (
+        CheckConstraint(_in("mode", SCENE_MODES), name="mode"),
+        CheckConstraint(_in("flow", SCENE_FLOWS), name="flow"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
     slug: Mapped[str] = mapped_column(String(64), unique=True)
@@ -404,9 +408,8 @@ class Scene(TimestampMixin, Base):
     # A built-in layout id or "custom:<uuid>" (overlay_layouts).
     layout: Mapped[str] = mapped_column(String(64))
     mode: Mapped[str] = mapped_column(String(16), server_default=text("'none'"))
-    auto_round: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
-    # Qualifying: every slot always shows the current game of its station (no rounds).
-    qualifying: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    # phase (follows the tournament: quali before FIX, rounds after) | quali | rounds
+    flow: Mapped[str] = mapped_column(String(8), server_default=text("'phase'"))
     settings: Mapped[dict[str, Any]] = mapped_column(server_default=text("'{}'::jsonb"))
 
 

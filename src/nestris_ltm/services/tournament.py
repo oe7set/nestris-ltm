@@ -37,12 +37,11 @@ from nestris_ltm.db.models import (
     MatchLifeEvent,
     MatchSeries,
     ScenePairMatch,
-    Setting,
     Tournament,
 )
 from nestris_ltm.live.broadcast import Broadcaster
 from nestris_ltm.live.hub import LiveHub
-from nestris_ltm.services import audit, events, highscore
+from nestris_ltm.services import app_settings, audit, events, highscore
 
 log = structlog.get_logger(__name__)
 
@@ -83,6 +82,8 @@ class TournamentService(Broadcaster):
         self._loaded = False
         # Called after the hearts were wiped (services/match_lives.py).
         self.on_reset: list[Callable[[], None]] = []
+        # The active event's bracket was loaded at least once (phase is known).
+        self.synced = False
 
     @property
     def tournament_id(self) -> int | None:
@@ -91,12 +92,12 @@ class TournamentService(Broadcaster):
     # ------------------------------------------------------------ loading
 
     async def _load_settings(self, session: AsyncSession) -> None:
-        view = await session.get(Setting, VIEW_SETTINGS_KEY)
+        view = await app_settings.get(session, VIEW_SETTINGS_KEY)
         if view is not None:
-            self.view_settings = ViewSettings.model_validate(view.value)
-        celebration = await session.get(Setting, CELEBRATION_KEY)
+            self.view_settings = ViewSettings.model_validate(view)
+        celebration = await app_settings.get(session, CELEBRATION_KEY)
         if celebration is not None:
-            self.celebration_enabled = bool(celebration.value.get("enabled", True))
+            self.celebration_enabled = bool(celebration.get("enabled", True))
         self._loaded = True
 
     async def _sync_event(self, session: AsyncSession) -> Event | None:
@@ -125,6 +126,7 @@ class TournamentService(Broadcaster):
                         manual_winners={str(k): int(v) for k, v in row.winners.items()},
                     )
             log.info("tournament scope changed", event_name=self._event_name)
+        self.synced = True
         return event
 
     async def _refresh(self, session: AsyncSession) -> dict[str, Any]:
@@ -306,11 +308,23 @@ class TournamentService(Broadcaster):
 
     async def _store_setting(self, key: str, value: dict[str, Any]) -> None:
         async with self.db.session() as session, session.begin():
-            await session.execute(
-                insert(Setting)
-                .values(key=key, value=value)
-                .on_conflict_do_update(index_elements=[Setting.key], set_={"value": value})
-            )
+            await app_settings.put(session, key, value)
+
+    def seeded(self) -> bool | None:
+        """Tournament phase for the scenes: fixed or not; None until loaded."""
+        return self.state.is_seeded if self.synced else None
+
+    async def ensure_tournament(self) -> int:
+        """The active event's tournament row (created unfixed if missing)."""
+        async with self._lock:
+            async with self.db.session() as session, session.begin():
+                await self._refresh(session)
+                if self._event_id is None:
+                    raise NoActiveEventError("create and activate an event first")
+                if self._tournament_id is None:
+                    await self._persist(session)
+            assert self._tournament_id is not None
+            return self._tournament_id
 
     def invalidate(self) -> None:
         """Force a full reload and re-broadcast on the next refresh."""

@@ -4,7 +4,7 @@ File format (``*.nltm-scenes.json``)::
 
     {"format": "nestrisltm/scenes", "version": 1, "app_version": "0.2.0",
      "exported_at": "...",
-     "scenes":  [{"slug", "name", "layout", "mode", "auto_round", "qualifying", "settings"}],
+     "scenes":  [{"slug", "name", "layout", "settings"}],
      "layouts": [{"id", "name", "description", "definition"}]}
 
 Only the look travels: no stations, no player names, no replay state. A
@@ -29,7 +29,7 @@ from nestris_ltm import __version__
 from nestris_ltm.core import overlay_layout as defs
 from nestris_ltm.core.layouts import LAYOUTS
 from nestris_ltm.core.scene_settings import from_client, normalize
-from nestris_ltm.db.models import SCENE_MODES, OverlayLayout, Scene
+from nestris_ltm.db.models import OverlayLayout, Scene
 from nestris_ltm.services import audit, overlay_layouts
 
 FORMAT = "nestrisltm/scenes"
@@ -66,9 +66,7 @@ class SceneEntry(_Loose):
     slug: str = Field(min_length=1, max_length=64)
     name: str = Field(min_length=1, max_length=128)
     layout: str = Field(min_length=1, max_length=64)
-    mode: str = "none"
-    auto_round: bool = False
-    qualifying: bool = False  # missing in files of older versions
+    # Files of 0.2.x also carry mode/auto_round/qualifying: ignored (look only).
     settings: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -97,9 +95,6 @@ def _scene_look(scene: Scene) -> dict[str, Any]:
         "slug": scene.slug,
         "name": scene.name,
         "layout": scene.layout,
-        "mode": scene.mode,
-        "auto_round": scene.auto_round,
-        "qualifying": scene.qualifying,
         "settings": settings.appearance(),
     }
 
@@ -155,8 +150,6 @@ def _scene_errors(entry: SceneEntry, layout_ok: bool) -> list[str]:
     errors = []
     if not entry.slug.replace("-", "").isalnum() or entry.slug != entry.slug.lower():
         errors.append("invalid URL name (lowercase letters, digits, dashes)")
-    if entry.mode not in SCENE_MODES:
-        errors.append(f"unknown mode {entry.mode!r}")
     if not layout_ok:
         errors.append(f"layout {entry.layout!r} is neither built in nor part of the file")
     try:
@@ -300,9 +293,6 @@ async def apply(
             keep_replay = (existing.settings or {}).get("replay")
             existing.name = item.name
             existing.layout = layout
-            existing.mode = item.mode
-            existing.auto_round = item.auto_round
-            existing.qualifying = item.qualifying
             existing.settings = from_client(item.settings, keep_replay=keep_replay).stored()
             await session.flush()
             target_id, slug = existing.id, existing.slug
@@ -310,8 +300,7 @@ async def apply(
             slug = item.slug
             if existing is not None or slug in taken:
                 slug = await _free_slug(session, item.slug, taken)
-            scene = Scene(slug=slug, name=item.name, layout=layout, mode=item.mode,
-                          auto_round=item.auto_round, qualifying=item.qualifying,
+            scene = Scene(slug=slug, name=item.name, layout=layout,
                           settings=settings.stored())  # fmt: skip
             session.add(scene)
             await session.flush()

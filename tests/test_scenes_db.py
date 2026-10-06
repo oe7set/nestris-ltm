@@ -12,7 +12,7 @@ from sqlalchemy import select
 
 from nestris_ltm.api.app import create_app
 from nestris_ltm.config import DatabaseSettings, load_settings
-from nestris_ltm.db.models import SceneRound, SceneRoundEntry, Station
+from nestris_ltm.db.models import AuditLog, SceneRound, SceneRoundEntry, Station
 from nestris_ltm.ingest.payloads import LivePayload
 from nestris_ltm.runtime import Runtime
 from tests.payload_samples import LIVE, dumps
@@ -63,6 +63,7 @@ def end(rt: Runtime, station: str, game: str, score: int, level: int = 19) -> No
 
 
 async def make_scene(client: httpx.AsyncClient, **body: Any) -> dict[str, Any]:
+    body.setdefault("flow", "rounds")  # the default "phase" is qualifying until FIX
     r = await client.post("/api/scenes", json=body)
     assert r.status_code == 201, r.text
     return r.json()
@@ -145,9 +146,13 @@ async def test_4p_top2_mode_and_rounds(runtime: Runtime, client: httpx.AsyncClie
 
 async def test_auto_round_and_reset_slot(runtime: Runtime, client: httpx.AsyncClient) -> None:
     await make_scene(
-        client, slug="auto", name="Auto", layout="1v1", auto_round=True,
+        client, slug="auto", name="Auto", layout="1v1",
         slots=[{"slot": 0, "station_id": "st-1"}, {"slot": 1, "station_id": "st-2"}],
     )  # fmt: skip
+    # One global switch for all scenes in rounds.
+    r = await client.put("/api/settings/scenes", json={"next_round": "auto"})
+    assert r.json()["next_round"] == "auto"
+    assert (await client.put("/api/settings/scenes", json={"next_round": "x"})).status_code == 422
     scene = runtime.scenes.scenes["auto"]
     live(runtime, "st-1", "a1", 10)
     live(runtime, "st-2", "b1", 10)
@@ -166,10 +171,10 @@ async def test_qualifying_always_shows_the_current_game(
     runtime: Runtime, client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     scene_out = await make_scene(
-        client, slug="quali", name="Quali", layout="1v1", qualifying=True, mode="top2_advance",
+        client, slug="quali", name="Quali", layout="1v1", flow="quali", mode="top2_advance",
         slots=[{"slot": 0, "station_id": "st-1"}, {"slot": 1, "station_id": "st-2"}],
     )  # fmt: skip
-    assert scene_out["qualifying"] is True
+    assert scene_out["flow"] == "quali"
     scene = runtime.scenes.scenes["quali"]
     completed: list[int] = []
     monkeypatch.setattr(runtime.scenes, "_round_complete", lambda rt, g: completed.append(g))
@@ -200,10 +205,59 @@ async def test_qualifying_always_shows_the_current_game(
     restored = runtime.scenes.scenes["quali"]
     assert restored.qualifying and restored.round.entry(0).game_id == "a2"
 
-    # Switching back to rounds via the API.
-    r = await client.patch(f"/api/scenes/{scene_out['id']}", json={"qualifying": False})
-    assert r.status_code == 200 and r.json()["qualifying"] is False
-    assert runtime.scenes.scenes["quali"].qualifying is False
+    # Switching to rounds from the Regie page: a fresh round starts.
+    runtime.scenes._phase_known = True
+    r = await client.patch(f"/api/scenes/{scene_out['id']}/flow", json={"flow": "rounds"})
+    assert r.status_code == 200 and r.json()["flow"] == "rounds"
+    switched = runtime.scenes.scenes["quali"]
+    assert switched.qualifying is False and switched.round.number == 2
+
+
+async def test_flow_follows_the_tournament_phase(
+    runtime: Runtime, client: httpx.AsyncClient
+) -> None:
+    await make_scene(
+        client, slug="phase", name="Phase", layout="1v1", flow="phase",
+        slots=[{"slot": 0, "station_id": "st-1"}, {"slot": 1, "station_id": "st-2"}],
+    )  # fmt: skip
+    engine = runtime.scenes
+    seeded: list[bool | None] = [None]
+    engine.seeded_source = lambda: seeded[0]
+    scene = engine.scenes["phase"]
+
+    engine._check_phase()  # phase not known yet: nothing changes
+    assert scene.qualifying and not engine._phase_known
+    seeded[0] = False
+    engine._check_phase()
+    live(runtime, "st-1", "a1", 70_000)
+    end(runtime, "st-1", "a1", 70_000)
+    live(runtime, "st-1", "a2", 100)  # qualifying: replaces the result
+    assert scene.round.entry(0).game_id == "a2" and scene.round.number == 1
+
+    seeded[0] = True  # FIX: rounds, starting with a fresh round
+    engine._check_phase()
+    st = state_of(runtime, "phase")
+    assert scene.qualifying is False and scene.round.number == 2
+    assert st["scene"]["qualifying"] is False and st["scene"]["flow"] == "phase"
+    assert all(s["status"] == "waiting" for s in st["slots"])
+    live(runtime, "st-1", "a3", 100)
+    end(runtime, "st-1", "a3", 5_000)
+    live(runtime, "st-1", "a4", 100)  # rounds: one game per slot and round
+    assert scene.round.entry(0).game_id == "a3"
+
+    seeded[0] = False  # UNSEED: qualifying again, the round stays
+    engine._check_phase()
+    assert scene.qualifying and scene.round.number == 2
+
+    # A scene set to "rounds" ignores the phase.
+    r = await client.patch(f"/api/scenes/{scene.id}/flow", json={"flow": "rounds"})
+    assert r.status_code == 200
+    assert engine.scenes["phase"].qualifying is False
+    async with runtime.db.session() as s:
+        entry = await s.scalar(
+            select(AuditLog).where(AuditLog.entity == "scene").order_by(AuditLog.id.desc())
+        )
+        assert entry is not None and entry.after == {"flow": "rounds", "mode": "none"}
 
 
 async def test_scene_api_validation_and_state(runtime: Runtime, client: httpx.AsyncClient) -> None:

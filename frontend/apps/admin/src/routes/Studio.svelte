@@ -256,7 +256,7 @@
             <div class="muted small">/o/{s.slug} · {layoutTitle(s.layout)}</div>
           </div>
           <span class="badge {s.settings.style === 'nes' ? 'accent' : ''}">{s.settings.style === "nes" ? "NES" : "Modern"}</span>
-          {#if s.qualifying}<span class="badge ok">{t("studio.quali_badge")}</span>{/if}
+          {#if s.flow === "quali"}<span class="badge ok">{t("studio.quali_badge")}</span>{/if}
         </div>
         <div class="row actions">
           <a class="button primary" href="#/studio/scene/{s.id}">{t("common.edit")}</a>
@@ -278,7 +278,7 @@
         <a class="thumb-link" href="#/studio/layout/{l.id}" aria-label={l.name}>
           <Thumb
             config={previewOf(
-              { slug: "preview", name: l.name, layout: l.key, mode: "none", auto_round: false, settings: defaultSettings() },
+              { slug: "preview", name: l.name, layout: l.key, mode: "none", settings: defaultSettings() },
               { slots: l.slots ?? 1, pairs: l.pairs },
             )}
             title={l.name}
@@ -311,7 +311,7 @@
     <div class="gallery small-cards">
       {#each builtins as l (l.id)}
         <article class="card panel">
-          <Thumb config={previewOf({ slug: "preview", name: l.title_de, layout: l.id, mode: "none", auto_round: false, settings: defaultSettings() }, l)} />
+          <Thumb config={previewOf({ slug: "preview", name: l.title_de, layout: l.id, mode: "none", settings: defaultSettings() }, l)} />
           <div class="meta"><strong>{i18n.locale === "en" ? l.title_en : l.title_de}</strong></div>
           <button onclick={() => openCreate(l.id)}>{t("studio.use_layout")}</button>
         </article>
@@ -336,7 +336,7 @@
     <div class="layout-pick">
       {#each creatable as l (l.id)}
         <button class="pick" class:on={newLayout === l.id} onclick={() => (newLayout = l.id)}>
-          <Thumb config={previewOf({ slug: "preview", name: newName || l.title_de, layout: l.id, mode: "none", auto_round: false, settings: defaultSettings() }, l)} />
+          <Thumb config={previewOf({ slug: "preview", name: newName || l.title_de, layout: l.id, mode: "none", settings: defaultSettings() }, l)} />
           <span>{i18n.locale === "en" ? l.title_en : l.title_de}{l.custom ? " ★" : ""}</span>
         </button>
       {/each}

@@ -61,6 +61,8 @@ class Runtime:
         self.lives = MatchLives(self.db, self.tournament, self.hub)
         self.lives.scenes = self.scenes
         self.scenes.lives = self.lives
+        # Scenes follow the tournament phase (quali before FIX, rounds after).
+        self.scenes.seeded_source = self.tournament.seeded
         self.lives.add_listener(self.scenes.mark_all_dirty)
         self.updates = UpdateService(
             settings,

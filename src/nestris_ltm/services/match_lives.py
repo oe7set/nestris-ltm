@@ -387,10 +387,12 @@ class MatchLives:
         return self.match_view(match_id) or {}
 
     async def update_settings(self, changes: dict[str, Any], actor: str) -> dict[str, Any]:
+        # Defaults may be set before FIX: the tournament row is created unfixed.
+        await self.tournament.ensure_tournament()
         async with self._lock:
             await self._ensure_loaded()
-            if self._tournament_id is None:
-                raise ValueError("fix the bracket first (the tournament is created then)")
+            if self._tournament_id is None:  # pragma: no cover - just created
+                raise ValueError("no tournament for the active event")
             values = {k: v for k, v in changes.items() if v is not None}
             if "default_lives" in values and not 1 <= values["default_lives"] <= core.MAX_LIVES:
                 raise ValueError(f"hearts must be 1..{core.MAX_LIVES}")

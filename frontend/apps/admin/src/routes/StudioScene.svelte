@@ -14,7 +14,6 @@
     cleanSettings,
     defaultSettings,
     downloadExport,
-    MODES,
     previewOf,
     SHOW_KEYS,
     THEME_DEFAULTS,
@@ -44,21 +43,12 @@
   let name = $state("");
   let layout = $state("1v1");
   let mode = $state("none");
-  let autoRound = $state(false);
-  let qualifying = $state(false);
-  // One choice in the editor for both flags.
-  type Flow = "manual" | "auto" | "quali";
-  const flow = $derived<Flow>(qualifying ? "quali" : autoRound ? "auto" : "manual");
-  function setFlow(next: Flow): void {
-    qualifying = next === "quali";
-    autoRound = next === "auto";
-  }
   let settings = $state<SceneSettings>(defaultSettings());
   let slots = $state<SlotRow[]>([]);
   let saved = $state("");
 
   function snapshot(): string {
-    return JSON.stringify({ name, layout, mode, autoRound, qualifying, settings: cleanSettings(settings), slots });
+    return JSON.stringify({ name, layout, mode, settings: cleanSettings(settings), slots });
   }
   const dirty = $derived(scene !== null && snapshot() !== saved);
 
@@ -67,8 +57,6 @@
     name = s.name;
     layout = s.layout;
     mode = s.mode;
-    autoRound = s.auto_round;
-    qualifying = s.qualifying ?? false;
     settings = { ...defaultSettings(), ...s.settings, theme: { ...s.settings.theme }, show: { ...defaultSettings().show, ...s.settings.show } };
     slots = slotsFor(info?.slots ?? s.slots.length, s.slots);
     saved = snapshot();
@@ -126,8 +114,6 @@
           name: name.trim(),
           layout,
           mode,
-          auto_round: autoRound,
-          qualifying,
           settings: cleanSettings(settings),
           slots: slots.map((s) => ({
             slot: s.slot,
@@ -177,7 +163,7 @@
   const preview = $derived(
     scene
       ? previewOf(
-          { slug: scene.slug, name, layout, mode, auto_round: autoRound, qualifying, settings },
+          { slug: scene.slug, name, layout, mode, settings },
           info,
           {
             names: slots.map((s) => s.name_override?.trim() || null),
@@ -233,23 +219,8 @@
             {info ? (i18n.locale === "en" ? info.title_en : info.title_de) : layout} — {t("studio.change")}
           </button>
         </div>
-        <label class="field">
-          {t("studio.flow")}
-          <select value={flow} onchange={(e) => setFlow(e.currentTarget.value as Flow)}>
-            <option value="manual">{t("studio.flow_manual")}</option>
-            <option value="auto">{t("studio.flow_auto")}</option>
-            <option value="quali">{t("studio.flow_quali")}</option>
-          </select>
-        </label>
-        <p class="muted small">{t(flow === "quali" ? "studio.flow_quali_hint" : "studio.flow_rounds_hint")}</p>
-        {#if info?.supports_modes && !qualifying}
-          <label class="field">
-            {t("scenes.mode")}
-            <select bind:value={mode}>
-              {#each MODES as m (m)}<option value={m}>{tDynamic(`scenes.mode.${m}`, m)}</option>{/each}
-            </select>
-          </label>
-        {/if}
+        <!-- How the scene runs (qualifying / rounds, mode) is set on the Regie page. -->
+        <p class="muted small">{t("studio.flow_in_regie")} <a href="#/regie">{t("nav.regie")} →</a></p>
       </section>
 
       <section class="panel block">
@@ -350,7 +321,7 @@
     <div class="layout-pick">
       {#each layouts.filter((l) => l.id !== "replay" || layout === "replay") as l (l.id)}
         <button class="pick" class:on={layout === l.id} onclick={() => chooseLayout(l.id)}>
-          <Thumb config={previewOf({ slug: "preview", name, layout: l.id, mode: "none", auto_round: false, settings }, l, { definition: customs.find((c) => c.key === l.id)?.definition ?? null })} />
+          <Thumb config={previewOf({ slug: "preview", name, layout: l.id, mode: "none", settings }, l, { definition: customs.find((c) => c.key === l.id)?.definition ?? null })} />
           <span>{i18n.locale === "en" ? l.title_en : l.title_de}{l.custom ? " ★" : ""}</span>
         </button>
       {/each}
