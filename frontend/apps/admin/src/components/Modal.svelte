@@ -7,8 +7,10 @@
     onclose: () => void;
     children: Snippet;
     footer?: Snippet;
+    /** Wider dialog (tables, previews). */
+    wide?: boolean;
   }
-  let { title, onclose, children, footer }: Props = $props();
+  let { title, onclose, children, footer, wide = false }: Props = $props();
 
   let dialog: HTMLDialogElement;
 
@@ -18,7 +20,7 @@
   });
 </script>
 
-<dialog bind:this={dialog} oncancel={(e) => { e.preventDefault(); onclose(); }}>
+<dialog bind:this={dialog} class:wide oncancel={(e) => { e.preventDefault(); onclose(); }}>
   <header>
     <strong>{title}</strong>
     <button class="link" onclick={onclose} aria-label={t("common.close")}>✕</button>
@@ -37,6 +39,9 @@
     border-radius: var(--radius);
     padding: 0;
     width: min(560px, calc(100vw - 32px));
+  }
+  dialog.wide {
+    width: min(1100px, calc(100vw - 32px));
   }
   dialog::backdrop {
     background: rgba(3, 6, 15, 0.7);

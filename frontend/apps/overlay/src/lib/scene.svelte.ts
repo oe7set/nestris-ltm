@@ -47,11 +47,12 @@ class SceneConnection {
   /**
    * Demo data instead of a station connection (previews, layout builder).
    * ``source`` is asked on every tick, so a changed preview config shows at once.
+   * ``tickMs`` 0 draws a single frame (thumbnails: no animation, no CPU load).
    */
-  startDemo(source: () => DemoInput | null, tickMs = 100): void {
+  startDemo(source: () => DemoInput | null, tickMs = 100, atMs = 45_000): void {
     this.stop();
     this.#stopped = false;
-    const started = performance.now();
+    const started = performance.now() - (tickMs > 0 ? 0 : atMs);
     const tick = (): void => {
       const input = source();
       if (!input) return;
@@ -63,7 +64,7 @@ class SceneConnection {
       this.missing = false;
     };
     tick();
-    this.#demoTimer = setInterval(tick, tickMs);
+    if (tickMs > 0) this.#demoTimer = setInterval(tick, tickMs);
   }
 
   /** The saved scene's settings and slots (public state endpoint), for ?demo=1. */

@@ -18,6 +18,8 @@
   import Stations from "./routes/Stations.svelte";
   import Tournament from "./routes/Tournament.svelte";
   import Devices from "./routes/Devices.svelte";
+  import Studio from "./routes/Studio.svelte";
+  import StudioScene from "./routes/StudioScene.svelte";
   import Matches from "./routes/Matches.svelte";
   import Updates from "./routes/Updates.svelte";
 
@@ -29,6 +31,7 @@
     { route: "tournament", href: "/tournament", label: "nav.tournament" },
     { route: "matches", href: "/matches", label: "nav.matches" },
     { route: "scenes", href: "/scenes", label: "nav.scenes" },
+    { route: "studio", href: "/studio", label: "nav.studio", also: ["studio-scene", "studio-layout"] },
     { route: "stations", href: "/stations", label: "nav.stations" },
     { route: "devices", href: "/devices", label: "nav.devices" },
     { route: "audit", href: "/audit", label: "nav.audit" },
@@ -102,6 +105,10 @@
           <Updates />
         {:else if current.name === "devices"}
           <Devices />
+        {:else if current.name === "studio"}
+          <Studio />
+        {:else if current.name === "studio-scene"}
+          <StudioScene id={current.params.id ?? ""} />
         {:else if current.name === "matches"}
           <Matches />
         {:else if current.name === "pages"}

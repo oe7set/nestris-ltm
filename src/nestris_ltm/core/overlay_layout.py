@@ -207,7 +207,8 @@ class LayoutDefinition(_Strict):
         return self
 
     def dump(self) -> dict[str, Any]:
-        return self.model_dump(by_alias=True)
+        """JSON-shaped (pairs as lists), exactly what the database stores."""
+        return self.model_dump(by_alias=True, mode="json")
 
 
 def migrate(raw: Any) -> dict[str, Any]:

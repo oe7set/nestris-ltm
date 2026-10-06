@@ -1,4 +1,4 @@
-"""Scene studio: own overlay layouts (layout builder).
+"""Scene studio: own overlay layouts (layout builder), export and import.
 
 - ``GET /api/overlay-layouts/{id}`` is public: the overlay page loads the
   definition of the layout its scene uses (no secrets in a layout).
@@ -9,16 +9,19 @@
 
 from __future__ import annotations
 
+import json
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, status
-from pydantic import BaseModel, Field
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import select
 
 from nestris_ltm.api.auth import AdminDep
 from nestris_ltm.api.deps import SessionDep, get_runtime
 from nestris_ltm.db.models import OverlayLayout
-from nestris_ltm.services import audit, overlay_layouts
+from nestris_ltm.services import audit, overlay_layouts, studio
 from nestris_ltm.services.overlay_layouts import (
     InvalidLayoutError,
     LayoutInUseError,
@@ -172,3 +175,75 @@ async def delete_layout(
         )  # fmt: skip
     await _reload(request)
     return {"ok": True}
+
+
+# ---------------------------------------------------------------- export / import
+
+
+def _ids(raw: str | None) -> list[str] | None:
+    if raw is None:
+        return None
+    return [x for x in (part.strip() for part in raw.split(",")) if x][:500]
+
+
+@router.get("/api/studio/export")
+async def export(
+    _: AdminDep, session: SessionDep, scenes: str | None = None, layouts: str | None = None
+) -> JSONResponse:
+    """Download the look of scenes (``scenes=1,2``; none = all) and layouts."""
+    scene_ids = _ids(scenes)
+    try:
+        ids = [int(x) for x in scene_ids] if scene_ids is not None else None
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "scene ids are numbers") from exc
+    if ids is None and layouts is not None:
+        ids = []  # only layouts were asked for
+    data = await studio.export(session, ids, _ids(layouts))
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M")
+    return JSONResponse(
+        data,
+        headers={
+            "Content-Disposition": f'attachment; filename="nestrisltm-{stamp}.nltm-scenes.json"'
+        },
+    )
+
+
+class ImportIn(BaseModel):
+    file: dict[str, Any]
+    dry_run: bool = True
+    scenes: dict[str, studio.SceneDecision] = Field(default_factory=dict)
+    layouts: dict[str, studio.LayoutDecision] = Field(default_factory=dict)
+
+
+@router.post("/api/studio/import")
+async def import_(request: Request, p: AdminDep, session: SessionDep) -> dict[str, Any]:
+    """Dry run (default) reports per entry; ``dry_run: false`` imports, all or nothing."""
+    declared = request.headers.get("content-length")
+    if declared and int(declared) > studio.MAX_BYTES + 64 * 1024:
+        raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, "file larger than 1 MB")
+    raw = await request.body()
+    if len(raw) > studio.MAX_BYTES + 64 * 1024:
+        raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, "file larger than 1 MB")
+    try:
+        body = ImportIn.model_validate(json.loads(raw))
+        file = studio.parse_file(body.file)
+    except (json.JSONDecodeError, ValidationError, studio.ImportError_) as exc:
+        message = str(exc) if isinstance(exc, studio.ImportError_) else "not a valid import request"
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT, {"code": "invalid_file", "message": message}
+        ) from exc
+    if body.dry_run:
+        return await studio.analyze(session, file)
+    try:
+        async with session.begin():
+            result = await studio.apply(session, file, body.scenes, body.layouts, p.actor)
+    except studio.ImportError_ as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, {"code": "import_failed", "message": str(exc)}
+        ) from exc
+    except (ValueError, StaleVersionError) as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, {"code": "import_failed", "message": str(exc)}
+        ) from exc
+    await _reload(request)
+    return result

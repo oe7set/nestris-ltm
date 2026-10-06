@@ -302,3 +302,112 @@ async def test_layout_api(runtime: Runtime, client: httpx.AsyncClient) -> None:
     assert (await client.delete(f"/api/overlay-layouts/{dup.json()['id']}")).status_code == 200
     listing = (await client.get("/api/overlay-layouts")).json()
     assert [x["used_by"] for x in listing] == [["eigen"]]
+
+
+# ---------------------------------------------------------------- export / import
+
+
+async def _import(client: httpx.AsyncClient, file: dict[str, Any], **kw: Any) -> httpx.Response:
+    return await client.post("/api/studio/import", json={"file": file, **kw})
+
+
+@pytest.mark.db
+async def test_export_import_round_trip(runtime: Runtime, client: httpx.AsyncClient) -> None:
+    lay = (await client.post("/api/overlay-layouts", json={"name": "Eigen", "definition": VALID})).json()
+    a = (await client.post("/api/scenes", json={
+        "slug": "buehne", "name": "Bühne", "layout": lay["key"],
+        "settings": {"style": "nes", "theme": {"accent": "#ff00ff"}},
+        "slots": [{"slot": 0, "station_id": "st-1", "name_override": "Erv"}],
+    })).json()  # fmt: skip
+    b = (await client.post("/api/scenes", json={"slug": "vier", "name": "Vier", "layout": "2x1v1_cam"})).json()
+    async with runtime.db.session() as s, s.begin():
+        await s.execute(text("UPDATE scenes SET settings = settings || '{\"replay\": {\"game_id\": 1}}' WHERE slug = 'buehne'"))
+
+    r = await client.get(f"/api/studio/export?scenes={a['id']}")
+    assert r.status_code == 200 and "attachment" in r.headers["content-disposition"]
+    file = r.json()
+    assert file["format"] == "nestrisltm/scenes" and [s["slug"] for s in file["scenes"]] == ["buehne"]
+    assert [x["id"] for x in file["layouts"]] == [lay["id"]]  # its own layout travels along
+    scene = file["scenes"][0]
+    assert "replay" not in scene["settings"] and "slots" not in scene  # only the look
+    assert scene["settings"]["theme"] == {"accent": "#ff00ff"}
+    everything = (await client.get("/api/studio/export")).json()
+    assert {s["slug"] for s in everything["scenes"]} == {"buehne", "vier"}
+
+    # Into an empty installation: everything new, the layout keeps its id.
+    await client.delete(f"/api/scenes/{a['id']}")
+    await client.delete(f"/api/scenes/{b['id']}")
+    await client.delete(f"/api/overlay-layouts/{lay['id']}")
+    dry = (await _import(client, file)).json()
+    assert dry["ok"] and dry["scenes"][0]["status"] == "new" and dry["layouts"][0]["status"] == "new"
+    assert (await client.get("/api/scenes")).json() == []  # a dry run changes nothing
+    done = await _import(client, file, dry_run=False)
+    assert done.status_code == 200, done.text
+    scenes = (await client.get("/api/scenes")).json()
+    assert [(s["slug"], s["layout"]) for s in scenes] == [("buehne", lay["key"])]
+    assert scenes[0]["slots"] == [] and scenes[0]["settings"]["theme"] == {"accent": "#ff00ff"}
+
+    # Again: the scene is in conflict (default: a renamed copy), the layout identical.
+    dry = (await _import(client, file)).json()
+    assert dry["scenes"][0]["status"] == "conflict" and dry["scenes"][0]["suggested_slug"] == "buehne-2"
+    assert dry["layouts"][0]["status"] == "same"
+    await _import(client, file, dry_run=False)
+    assert sorted(s["slug"] for s in (await client.get("/api/scenes")).json()) == ["buehne", "buehne-2"]
+    assert len((await client.get("/api/overlay-layouts")).json()) == 1
+
+    # Overwrite keeps the stations of the existing scene.
+    target = next(s for s in (await client.get("/api/scenes")).json() if s["slug"] == "buehne")
+    await client.patch(f"/api/scenes/{target['id']}", json={"settings": {"style": "modern"},
+                                                            "slots": [{"slot": 0, "station_id": "st-2"}]})  # fmt: skip
+    await _import(client, file, dry_run=False, scenes={"buehne": "overwrite"}, layouts={lay["id"]: "keep"})
+    target = next(s for s in (await client.get("/api/scenes")).json() if s["slug"] == "buehne")
+    assert target["settings"]["style"] == "nes" and target["slots"][0]["station_id"] == "st-2"
+
+
+@pytest.mark.db
+async def test_import_conflicts_and_errors(runtime: Runtime, client: httpx.AsyncClient) -> None:
+    lay = (await client.post("/api/overlay-layouts", json={"name": "Eigen", "definition": VALID})).json()
+    await client.post("/api/scenes", json={"slug": "eigen", "name": "Eigen", "layout": lay["key"]})
+    file = (await client.get("/api/studio/export")).json()
+
+    # The local layout changed meanwhile: conflict. "copy" adds a new layout and
+    # the imported scene uses the copy.
+    changed = copy.deepcopy(VALID)
+    changed["elements"][1]["x"] = 700
+    await client.put(f"/api/overlay-layouts/{lay['id']}", json={"expected_version": 1, "definition": changed})
+    dry = (await _import(client, file)).json()
+    assert dry["layouts"][0]["status"] == "conflict"
+    r = await _import(client, file, dry_run=False, layouts={lay["id"]: "copy"})
+    assert r.status_code == 200, r.text
+    layouts = {x["name"]: x for x in (await client.get("/api/overlay-layouts")).json()}
+    assert set(layouts) == {"Eigen", "Eigen (Import)"}
+    copy_key = layouts["Eigen (Import)"]["key"]
+    assert {s["slug"]: s["layout"] for s in (await client.get("/api/scenes")).json()}["eigen-2"] == copy_key
+    # "replace" overwrites the local layout instead.
+    r = await _import(client, file, dry_run=False, scenes={"eigen": "skip"}, layouts={lay["id"]: "replace"})
+    assert r.status_code == 200
+    replaced = (await client.get(f"/api/overlay-layouts/{lay['id']}")).json()
+    assert replaced["definition"]["elements"][1]["x"] == VALID["elements"][1]["x"] and replaced["version"] == 3
+
+    # Not allowed for the status: refused, nothing changes.
+    before = len((await client.get("/api/scenes")).json())
+    r = await _import(client, file, dry_run=False, scenes={"eigen": "create"})
+    assert r.status_code == 409
+    assert len((await client.get("/api/scenes")).json()) == before
+
+    # Broken files.
+    assert (await _import(client, {"format": "other"})).status_code == 422
+    assert (await _import(client, {**file, "version": 9})).status_code == 422
+    bad = copy.deepcopy(file)
+    bad["scenes"][0]["settings"] = {"style": "neon"}
+    bad["layouts"][0]["definition"]["elements"][0]["slot"] = 7
+    dry = (await _import(client, bad)).json()
+    assert not dry["ok"] and dry["scenes"][0]["errors"] and dry["layouts"][0]["errors"]
+    r = await _import(client, bad, dry_run=False)
+    assert r.status_code == 409 and len((await client.get("/api/scenes")).json()) == before
+    huge = {**file, "layouts": [], "scenes": [{**file["scenes"][0], "name": "x" * 100}] * 20000}
+    assert (await _import(client, huge)).status_code in (413, 422)
+    missing = copy.deepcopy(file)
+    missing["layouts"] = []
+    missing["scenes"][0]["layout"] = "custom:00000000-0000-4000-8000-000000000000"
+    assert "neither built in" in (await _import(client, missing)).json()["scenes"][0]["errors"][0]

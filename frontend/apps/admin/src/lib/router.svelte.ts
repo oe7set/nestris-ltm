@@ -7,11 +7,27 @@ export type { Match } from "./routes";
 
 class Router {
   current = $state<Match>(matchPath(location.hash));
+  // A page with unsaved changes may veto leaving it (e.g. the scene editor).
+  #guard: ((to: Match) => boolean) | null = null;
 
   constructor() {
-    window.addEventListener("hashchange", () => {
-      this.current = matchPath(location.hash);
+    window.addEventListener("hashchange", (event) => {
+      const next = matchPath(location.hash);
+      if (this.#guard && !this.#guard(next)) {
+        // Stay: restore the old address without a new hashchange event.
+        history.replaceState(null, "", new URL(event.oldURL).hash || "#/");
+        return;
+      }
+      this.current = next;
     });
+  }
+
+  /** Ask before leaving the current page; returns the function that removes the guard. */
+  setGuard(guard: (to: Match) => boolean): () => void {
+    this.#guard = guard;
+    return () => {
+      if (this.#guard === guard) this.#guard = null;
+    };
   }
 
   go(path: string): void {

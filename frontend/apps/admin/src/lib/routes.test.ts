@@ -27,3 +27,13 @@ describe("matchPath", () => {
     expect(matchPath("#/nope/1/2").name).toBe("not-found");
   });
 });
+
+describe("studio routes", () => {
+  it("resolves the studio pages", () => {
+    expect(matchPath("#/studio").name).toBe("studio");
+    expect(matchPath("#/studio?tab=layouts").query.get("tab")).toBe("layouts");
+    const scene = matchPath("#/studio/scene/12");
+    expect([scene.name, scene.params.id]).toEqual(["studio-scene", "12"]);
+    expect(matchPath("#/studio/layout/new").name).toBe("studio-layout");
+  });
+});

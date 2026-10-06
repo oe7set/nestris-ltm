@@ -41,6 +41,9 @@
   const params = new URLSearchParams(location.search);
   const mode = overlayMode(slug, params);
   const studio = mode === "preview" || mode === "edit";
+  // Thumbnails: one demo frame instead of an animation.
+  const still = params.get("still") === "1";
+  const tickMs = still ? 0 : 100;
 
   // In the studio the edited (unsaved) scene replaces the stored one; the data
   // underneath is demo data or, on request, the live data of the saved scene.
@@ -83,10 +86,16 @@
     const config = host.config;
     if (!config) return;
     const wanted = config.liveSlug ? `live:${config.liveSlug}` : "demo";
-    if (wanted === source) return;
+    // A still picture is redrawn on every config change; an animation keeps
+    // running and picks the new config up on its next tick.
+    if (wanted === source && !still) return;
     source = wanted;
     if (config.liveSlug) scene.start(config.liveSlug);
-    else scene.startDemo(() => (host.config ? { scene: host.config.scene, slots: host.config.slots, names: host.config.names } : null));
+    else
+      scene.startDemo(
+        () => (host.config ? { scene: host.config.scene, slots: host.config.slots, names: host.config.names } : null),
+        tickMs,
+      );
   });
 
   function fit(): void {
@@ -105,8 +114,8 @@
       const load = async (): Promise<void> => {
         info = (await scene.loadInfo(slug)) ?? info;
       };
-      void load().then(() => scene.startDemo(() => info));
-      refresh = setInterval(() => void load(), 5000);
+      void load().then(() => scene.startDemo(() => info, tickMs));
+      refresh = setInterval(() => void load().then(() => still && scene.startDemo(() => info, 0)), 5000);
     } else if (studio) {
       host.listen(mode);
     }
