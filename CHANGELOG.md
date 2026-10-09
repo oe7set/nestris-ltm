@@ -3,7 +3,7 @@
 The section of a version is the text of its GitHub release and what the
 built-in updater shows before installing (`.github/scripts/release_notes.py`).
 
-## 0.3.0
+## 0.3.1
 
 - **Station configuration from here** (*Stationen & Geräte* →
   *Konfiguration*, stations 0.3.0+): a template for all stations plus
