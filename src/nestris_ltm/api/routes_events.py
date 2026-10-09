@@ -238,6 +238,13 @@ async def list_stations(request: Request, _: AdminDep, session: SessionDep) -> l
     return out
 
 
+@router.get("/stations/{station_id}/metrics")
+async def station_metrics(station_id: str, request: Request, _: AdminDep) -> dict[str, Any]:
+    """Recent performance of one station (in memory, since the app started)."""
+    hub = get_runtime(request).hub
+    return {"station": station_id, "points": hub.history(station_id)}
+
+
 @router.patch("/stations/{station_id}")
 async def update_station(
     station_id: str, body: StationPatch, principal: AdminDep, session: SessionDep

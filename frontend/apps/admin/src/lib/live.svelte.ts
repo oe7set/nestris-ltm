@@ -21,6 +21,8 @@ export interface StationSnapshot {
   card_present: boolean;
   player_nickname: string | null;
   live: LiveFrame | null;
+  /** How `live` reaches this host (see lib/perf.ts). */
+  link?: import("./perf").LinkStats;
   messages: number;
   last_message_at: string | null;
 }

@@ -5,8 +5,10 @@ For development and rehearsals without capture hardware:
     nestris-ltm simulate game.ngf --station station-1 --name Erv --uid A1B2C3D4
 
 It publishes the same topics and payload shapes as the real station
-(``status``, ``player``, ``live``, ``event/game_start``, ``event/game_end``),
-paced by the recorded timestamps divided by ``speed``.
+(``status`` with ``perf``, ``player``, ``live``, ``event/game_start``,
+``event/game_end``, ``config``), paced by the recorded timestamps divided by
+``speed``. It answers ``station_config`` commands like a station 0.3.0
+(without restarting: a set applies at once, or after the running game).
 """
 
 from __future__ import annotations
@@ -27,6 +29,7 @@ import structlog
 from nestris_ltm import __version__
 from nestris_ltm.config import MqttSettings
 from nestris_ltm.core import playfield
+from nestris_ltm.core import station_config as sc
 from nestris_ltm.core.ngf import NgfFrame, iter_frames, split_games
 from nestris_ltm.core.ngf_stats import GameTracker
 
@@ -62,6 +65,12 @@ class StationSimulator:
         self._started = time.monotonic()
         self._game_state = "title"
         self._game_id: str | None = None
+        self._live_seq = 0
+        # Remote config (station_config): what is in effect, and a set that
+        # waits for the running game to end.
+        self._config: dict[str, Any] = {"rev": None, "state": "none", "error": None, "values": {}}
+        self._pending: dict[str, Any] | None = None
+        self._devices: dict[str, Any] | None = None
 
     def _player(self) -> dict[str, Any] | None:
         if self.card_uid is None:
@@ -82,9 +91,83 @@ class StationSimulator:
             "game_id": self._game_id,
             "fps": 60.0,
             "dropped_frames": 0,
+            "perf": {
+                "capture_fps": 60.0,
+                "fps": 60.0,
+                "target_fps": 60.0,
+                "drop_rate": 0.0,
+                "missing": 0,
+                "dropped_total": 0,
+                "missing_total": 0,
+                "engine_ms_p50": 2.0,
+                "engine_ms_p95": 3.5,
+                "frame_age_ms_p95": 4.0,
+                "live_hz": DEFAULT_LIVE_HZ if self._game_state == "in_game" else 0.0,
+                "size": "720x576",
+                "cpu_pct": None,
+                "load1": None,
+            },
             "uptime_s": int(time.monotonic() - self._started),
             "ts": _stamp(datetime.now(UTC)),
         }
+
+    def _config_report(self) -> dict[str, Any]:
+        return {
+            "station": self.station,
+            "version": f"sim-{__version__}",
+            **self._config,
+            "effective": sc.merge({"station": {"id": self.station}}, self._config["values"]),
+            "locked": ["station.id"],
+            "allowed": list(sc.ALLOWED),
+            "devices": self._devices,
+            "ts": _stamp(datetime.now(UTC)),
+        }
+
+    async def _publish_config(self, client: aiomqtt.Client) -> None:
+        await self._pub(client, "config", self._config_report(), qos=1, retain=True)
+
+    async def _commands(self, client: aiomqtt.Client) -> None:
+        """Answer ``station_config`` on ``<base>/cmd`` (others are ignored)."""
+        async for message in client.messages:
+            if not isinstance(message.payload, bytes | str):
+                continue
+            try:
+                cmd = json.loads(message.payload)
+            except ValueError:
+                continue
+            if not isinstance(cmd, dict) or cmd.get("type") != "station_config":
+                continue
+            op = cmd.get("op", "get")
+            if op == "list_devices":
+                self._devices = {
+                    "capture": [
+                        {
+                            "path": "/dev/v4l/by-id/usb-SIMULATED-video-index0",
+                            "formats": [{"format": "mjpeg", "sizes": ["720x576", "640x480"]}],
+                        }
+                    ],
+                    "serial": ["/dev/serial/by-id/usb-SIMULATED-if00-port0"],
+                }
+            elif op == "set":
+                values = cmd.get("values") or {}
+                try:
+                    sc.check(values)
+                except sc.ConfigError as exc:
+                    self._config.update(rev=cmd.get("rev"), state="rejected", error=str(exc))
+                else:
+                    new = {"rev": cmd.get("rev"), "error": None, "values": values}
+                    if self._game_id is not None:
+                        self._pending = new
+                        self._config.update(rev=new["rev"], state="pending", error=None)
+                    else:
+                        self._config = {**new, "state": "applied"}
+            await self._publish_config(client)
+
+    async def _apply_pending(self, client: aiomqtt.Client) -> None:
+        if self._pending is not None:
+            self._config = {**self._pending, "state": "applied"}
+            self._pending = None
+            await self._publish_config(client)
 
     async def _pub(
         self,
@@ -133,6 +216,9 @@ class StationSimulator:
                 qos=1,
                 retain=True,
             )
+            await client.subscribe(f"{self.base}/cmd", qos=1)
+            await self._publish_config(client)
+            commands = asyncio.create_task(self._commands(client))
             heartbeat = asyncio.create_task(self._heartbeat(client))
             try:
                 while True:
@@ -143,9 +229,10 @@ class StationSimulator:
                     if not loop:
                         break
             finally:
-                heartbeat.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await heartbeat
+                for task in (heartbeat, commands):
+                    task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await task
                 offline = {
                     "state": "offline",
                     "station": self.station,
@@ -230,10 +317,12 @@ class StationSimulator:
         self._game_state = "game_over"
         self._game_id = None
         await self._pub(client, "status", self._status(), qos=1, retain=True)
+        await self._apply_pending(client)
 
     def _live(
         self, frame: NgfFrame, tracker: GameTracker, started_at: datetime, rel_ms: int
     ) -> dict[str, Any]:
+        self._live_seq += 1
         return {
             "game_id": self._game_id,
             "player": self._player(),
@@ -251,6 +340,8 @@ class StationSimulator:
             "cheated": 0,
             "confidence": 1.0,
             "playfield": playfield.rows_from_cells(frame.field),
+            "seq": self._live_seq,
+            "frame_age_ms": 4.0,
             "ts": _stamp(started_at + timedelta(milliseconds=rel_ms)),
         }
 

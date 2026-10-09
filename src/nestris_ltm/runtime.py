@@ -27,6 +27,7 @@ from nestris_ltm.live.hub import LiveHub
 from nestris_ltm.services.devices import DeviceUpdates
 from nestris_ltm.services.match_lives import MatchLives
 from nestris_ltm.services.scenes import SceneEngine
+from nestris_ltm.services.station_config import StationConfigService
 from nestris_ltm.services.tournament import TournamentService
 from nestris_ltm.services.updates import UpdateService, running_live_games
 
@@ -71,6 +72,9 @@ class Runtime:
         )
         # Stations, terminals and readers, and the station updates (U4).
         self.devices = DeviceUpdates(settings, self.hub, self.mqtt.publish_command)
+        # Remote configuration of the stations.
+        self.station_config = StationConfigService(self.db, self.hub, self.mqtt.publish_command)
+        self.ingest.config_listener = self.station_config.on_report
         # Set when the app should end (e.g. the updater handed over to the
         # installer); the shell then quits instead of reporting a dead core.
         self.quit_requested = False

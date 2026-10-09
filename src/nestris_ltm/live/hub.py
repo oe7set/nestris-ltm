@@ -9,14 +9,21 @@ messages rather than slowing down the ingest.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
 
-from nestris_ltm.ingest.payloads import LivePayload, PlayerPayload, StatusPayload, UpdatePayload
+from nestris_ltm.ingest.payloads import (
+    ConfigReportPayload,
+    LivePayload,
+    PlayerPayload,
+    StatusPayload,
+    UpdatePayload,
+)
 from nestris_ltm.live.broadcast import Broadcaster
+from nestris_ltm.live.linkstats import LinkStats, PerfHistory
 
 log = structlog.get_logger(__name__)
 
@@ -47,8 +54,13 @@ class StationState:
     player_id: int | None = None
     # Last update progress the station reported (``<base>/update``).
     update: UpdatePayload | None = None
+    # Remote configuration state (``<base>/config``, station 0.3.0+).
+    config: ConfigReportPayload | None = None
     messages: int = 0
     last_message_at: datetime | None = None
+    # Reception of ``live`` here, and the performance history.
+    link: LinkStats = field(default_factory=LinkStats)
+    history: PerfHistory = field(default_factory=PerfHistory)
 
     def online(self, now: datetime) -> bool:
         if self.live_at is not None and now - self.live_at <= LIVE_PROVES_ONLINE:
@@ -77,8 +89,15 @@ class StationState:
             "player_nickname": self.player_nickname,
             "player_id": self.player_id,
             "update": self.update.model_dump(mode="json") if self.update else None,
+            # Summary only; the full report (effective config) is in the API.
+            "config": (
+                {"rev": self.config.rev, "state": self.config.state, "error": self.config.error}
+                if self.config
+                else None
+            ),
             "live": self.live.model_dump(mode="json") if self.live else None,
             "live_at": _iso(self.live_at),
+            "link": self.link.snapshot(now),
             "messages": self.messages,
             "last_message_at": _iso(self.last_message_at),
         }
@@ -132,6 +151,7 @@ class LiveHub(Broadcaster):
         state = self.station(station_id)
         state.status = payload
         state.status_at = self._touch(state)
+        state.history.add(payload, state.link, state.status_at)
         self._publish_station(state)
 
     def update_player(self, station_id: str, payload: PlayerPayload) -> None:
@@ -149,6 +169,12 @@ class LiveHub(Broadcaster):
         self._touch(state)
         self._publish_station(state)
 
+    def update_config(self, station_id: str, payload: ConfigReportPayload) -> None:
+        state = self.station(station_id)
+        state.config = payload
+        self._touch(state)
+        self._publish_station(state)
+
     def set_player_nickname(
         self, station_id: str, nickname: str | None, player_id: int | None = None
     ) -> None:
@@ -162,6 +188,7 @@ class LiveHub(Broadcaster):
         state = self.station(station_id)
         state.live = payload
         state.live_at = self._touch(state)
+        state.link.record(payload, state.live_at)
         self.publish(
             {
                 "type": "live",
@@ -173,6 +200,11 @@ class LiveHub(Broadcaster):
     def game_event(self, station_id: str, kind: str, data: dict[str, Any]) -> None:
         """Announce a stored game event (start/cheat/end) to subscribers."""
         self.publish({"type": "game_event", "station": station_id, "kind": kind, "data": data})
+
+    def history(self, station_id: str) -> list[dict[str, Any]]:
+        """Performance points of one station, oldest first (empty if unknown)."""
+        state = self._stations.get(station_id)
+        return list(state.history.points) if state else []
 
     def snapshot(self) -> list[dict[str, Any]]:
         now = _now()

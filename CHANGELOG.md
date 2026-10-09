@@ -3,8 +3,20 @@
 The section of a version is the text of its GitHub release and what the
 built-in updater shows before installing (`.github/scripts/release_notes.py`).
 
-## Unreleased
+## 0.3.0
 
+- **Station configuration from here** (*Stationen & Geräte* →
+  *Konfiguration*, stations 0.3.0+): a template for all stations plus
+  per-station values (capture size and rate, recognition size, region,
+  game-detection thresholds, live rate, recordings, reader). Saving sends
+  them; the station applies them after the running game and reports
+  *übernommen*, *wartet auf Spielende* or *abgelehnt* with the reason.
+  Device suggestions via *Geräte suchen*; values pinned on the station are
+  shown as locked.
+- **Station performance** (*Stationen & Geräte* → *Leistung*): camera and
+  recognition FPS, dropped and missing frames, engine time, CPU, and how
+  many live messages arrive here (losses, latency), with a 15-minute history.
+  The dashboard's FPS column shows a traffic light.
 - **The scene flow follows the tournament**: before FIX every scene shows
   the current game of each station (qualifying), FIX switches them to
   rounds with hearts and starts round 1 fresh, UNSEED goes back. Per scene

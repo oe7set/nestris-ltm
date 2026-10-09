@@ -162,6 +162,22 @@ class Station(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
+class StationConfig(Base):
+    """Remote config overrides of one station (over the template in
+    ``settings`` key ``stations.config_template``; services/station_config.py).
+    A row means NestrisLTM manages this station's remote config."""
+
+    __tablename__ = "station_configs"
+
+    station_id: Mapped[str] = mapped_column(
+        ForeignKey("stations.id", ondelete="CASCADE"), primary_key=True
+    )
+    # Nested like the station config file: {"capture": {"scale_width": 480}}.
+    overrides: Mapped[dict[str, Any]]
+    updated_by: Mapped[str | None] = mapped_column(String(64))
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+
+
 # ---------------------------------------------------------------- games
 
 

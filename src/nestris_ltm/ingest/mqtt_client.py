@@ -42,6 +42,7 @@ class MqttIngest:
             (f"{p}/+/live", 0),
             (f"{p}/+/event/#", 1),
             (f"{p}/+/update", 1),
+            (f"{p}/+/config", 1),
         ]
 
     def _new_client(self) -> aiomqtt.Client:
@@ -103,7 +104,7 @@ class MqttIngest:
             delay = min(delay * 2, self.settings.reconnect_max_s)
 
     async def publish_command(self, station: str, command: dict[str, Any]) -> bool:
-        """Send a command to a station's RFID reader (``<prefix>/<station>/cmd``)."""
+        """Send a command to a station (``<prefix>/<station>/cmd``)."""
         client = self._client
         if client is None:
             return False

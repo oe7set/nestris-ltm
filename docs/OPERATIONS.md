@@ -277,6 +277,34 @@ newest releases of `nestris-core`, `nestris-rfid-reader` and
 - Downloaded releases stay in `%APPDATA%\NestrisLTM\release-cache\`
   (delete the folder to free space).
 
+### Station configuration (*Stationen & Geräte* → *Konfiguration*)
+
+Stations from version 0.3.0 take their settings from here (no SSH needed):
+
+- *Vorlage (alle Stationen)*: values for every station, e.g. capture size,
+  frame rate, region, game-detection thresholds.
+- Per station: own values over the template (↺ resets one). *Eigene Werte
+  übertragen auf* copies a station's values to others.
+- Saving sends the merged set; the station stores it and restarts its
+  recognition after the running game (state *wartet auf Spielende* →
+  *startet neu* → *übernommen*). A station that is offline gets it when it
+  reconnects. A set the station rejects (bad value) shows *abgelehnt* with
+  the reason; the station keeps running on its previous config.
+- *Geräte suchen* fills the device and serial port suggestions.
+- Values set in the station's env file or with `--set` win and are shown as
+  *gesperrt*. The station id, broker, host URL/token and paths are never
+  set from here. Contract: `nestris-core/docs/STATION.md`.
+
+### Station performance (*Stationen & Geräte* → *Leistung*)
+
+Per station (0.3.0+): camera and recognition frames per second against the
+target, dropped and missing frames, engine time per frame, frame age, CPU,
+and how many `live` messages reach this PC (lost ones are counted through
+their sequence numbers). The dot is green when everything is within its
+limits; the dashboard's FPS column links here. History: the last 15 minutes
+since NestrisLTM started. A latency shown with a clock warning means the
+station's and this PC's clocks differ (set up NTP).
+
 ## Backup and restore
 
 All tournament data is in the PostgreSQL database. Back it up before and

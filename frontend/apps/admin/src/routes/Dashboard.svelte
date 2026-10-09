@@ -5,6 +5,7 @@
   import { dateTime, num } from "../lib/format";
   import { i18n, t, tDynamic } from "../lib/i18n.svelte";
   import { live } from "../lib/live.svelte";
+  import { fmt, overallLevel, pct, type StationPerf } from "../lib/perf";
   import type { Diagnostics, LogEntry } from "../lib/types";
 
   interface ActiveEvent {
@@ -143,6 +144,7 @@
     <tbody>
       {#each stations as s (s.id)}
         {@const st = s.status ?? {}}
+        {@const perf = (st.perf as StationPerf | undefined) ?? null}
         <tr>
           <td>{s.name ?? s.id} {#if s.name}<span class="muted small">{s.id}</span>{/if}</td>
           <td>
@@ -161,7 +163,15 @@
           <td class="num">{num(s.live?.score, i18n.locale)}</td>
           <td class="num">{num(s.live?.lines, i18n.locale)}</td>
           <td class="num">{num(s.live?.level, i18n.locale)}</td>
-          <td class="num">{typeof st.fps === "number" ? st.fps.toFixed(1) : "–"}</td>
+          <td class="num">
+            {#if perf}
+              <a href="#/stations?tab=perf" title={`${t("perf.dropped")} ${pct(perf.drop_rate)}`}>
+                <span class="dot {overallLevel(perf, s.link)}"></span>{fmt(perf.fps)}
+              </a>
+            {:else}
+              {typeof st.fps === "number" ? st.fps.toFixed(1) : "–"}
+            {/if}
+          </td>
         </tr>
       {:else}
         <tr><td colspan="10" class="empty">{t("dash.no_stations")}</td></tr>

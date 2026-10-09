@@ -32,6 +32,25 @@ class CardPlayer(_Payload):
         return value or None
 
 
+class StationPerf(_Payload):
+    """``perf`` in the status (station 0.3.0+): the last 2-second window."""
+
+    capture_fps: float | None = None
+    fps: float | None = None
+    target_fps: float | None = None
+    drop_rate: float | None = None
+    missing: int | None = None
+    dropped_total: int | None = None
+    missing_total: int | None = None
+    engine_ms_p50: float | None = None
+    engine_ms_p95: float | None = None
+    frame_age_ms_p95: float | None = None
+    live_hz: float | None = None
+    size: str | None = None
+    cpu_pct: float | None = None
+    load1: float | None = None
+
+
 class StatusPayload(_Payload):
     state: Literal["online", "offline"]
     station: str
@@ -48,6 +67,7 @@ class StatusPayload(_Payload):
     game_id: str | None = None
     fps: float | None = None
     dropped_frames: int | None = None
+    perf: StationPerf | None = None
     uptime_s: int | None = None
     ts: AwareDatetime | None = None
 
@@ -62,6 +82,23 @@ class UpdatePayload(_Payload):
     state: str = Field(max_length=32)
     detail: str | None = Field(default=None, max_length=500)
     progress: float | None = None
+    ts: AwareDatetime | None = None
+
+
+class ConfigReportPayload(_Payload):
+    """``<base>/config`` (retained, station 0.3.0+): the remote configuration."""
+
+    station: str | None = None
+    version: str | None = None
+    rev: int | None = None
+    # none, applied, pending (after the running game), restarting, rejected
+    state: str = Field(max_length=16)
+    error: str | None = Field(default=None, max_length=2000)
+    values: dict[str, Any] = Field(default_factory=dict)
+    effective: dict[str, Any] = Field(default_factory=dict)
+    locked: list[str] = Field(default_factory=list)
+    allowed: list[str] = Field(default_factory=list)
+    devices: dict[str, Any] | None = None
     ts: AwareDatetime | None = None
 
 
@@ -89,6 +126,10 @@ class LivePayload(_Payload):
     cheated: int = 0
     confidence: float = 0.0
     playfield: list[str] | None = None
+    # Running message number (station 0.3.0+): gaps = lost messages.
+    seq: int | None = None
+    # Capture read -> publish on the station, ms.
+    frame_age_ms: float | None = None
     ts: AwareDatetime
 
     @field_validator("playfield")

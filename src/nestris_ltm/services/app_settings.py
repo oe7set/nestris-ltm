@@ -5,6 +5,7 @@ Each key holds a small JSON object. Keys in use:
 - ``kiosk.view``, ``kiosk.celebration`` (services/tournament.py)
 - ``scenes.next_round`` (``{"next_round": "manual" | "auto"}``, services/scenes.py)
 - ``session_secret`` (services/auth.py)
+- ``stations.config_template`` (``{"values": {...}}``, services/station_config.py)
 """
 
 from __future__ import annotations

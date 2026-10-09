@@ -303,3 +303,77 @@ async def test_stations_listing_and_delete(runtime: Runtime, admin: httpx.AsyncC
     assert (await admin.get("/api/stations")).json() == []
     games = (await admin.get("/api/games", params={"all_time": True})).json()
     assert games["total"] == 1 and games["items"][0]["station_id"] is None
+
+
+async def test_station_metrics(runtime: Runtime, admin: httpx.AsyncClient) -> None:
+    from tests.payload_samples import STATUS
+
+    perf = {"capture_fps": 50.0, "fps": 49.8, "target_fps": 50.0, "drop_rate": 0.0}
+    await runtime.ingest.handle_message(
+        f"{PREFIX}/station-1/status", dumps({**STATUS, "perf": perf}).encode(), PREFIX
+    )
+    r = await admin.get("/api/stations/station-1/metrics")
+    assert r.status_code == 200
+    points = r.json()["points"]
+    assert len(points) == 1 and points[0]["fps"] == 49.8
+    assert (await admin.get("/api/stations/nope/metrics")).json()["points"] == []
+
+
+async def test_station_config_template_overrides_and_push(
+    runtime: Runtime, admin: httpx.AsyncClient
+) -> None:
+    from nestris_ltm.core import station_config as sc
+    from tests.payload_samples import STATUS
+
+    sent: list[tuple[str, dict[str, object]]] = []
+
+    async def sink(station: str, command: dict[str, object]) -> bool:
+        sent.append((station, command))
+        return True
+
+    runtime.station_config.command_sink = sink
+    await _ingest_game(runtime)  # creates the station row
+    await runtime.ingest.handle_message(
+        f"{PREFIX}/station-1/status", dumps(STATUS).encode(), PREFIX
+    )
+    report = {"station": "station-1", "rev": None, "state": "none", "values": {}}
+    await runtime.ingest.handle_message(
+        f"{PREFIX}/station-1/config", dumps(report).encode(), PREFIX
+    )
+
+    # Unmanaged: nothing is sent.
+    overview = (await admin.get("/api/station-config")).json()
+    assert overview["template"] is None
+    assert overview["stations"][0]["managed"] is False and sent == []
+
+    bad = await admin.put("/api/station-config/template", json={"values": {"mqtt": {"host": "x"}}})
+    assert bad.status_code == 422 and "mqtt.host" in bad.text
+
+    r = await admin.put(
+        "/api/station-config/template", json={"values": {"capture": {"fps": 50, "lowres": 0}}}
+    )
+    assert r.status_code == 200 and r.json()["sent"] == ["station-1"]
+    r = await admin.put(
+        "/api/stations/station-1/config",
+        json={"values": {"capture": {"lowres": 1, "fps": None}}},
+    )
+    assert r.status_code == 200
+    desired = {"capture": {"fps": 50, "lowres": 1}}
+    assert sent[-1][1] == {
+        "type": "station_config", "op": "set", "rev": sc.revision(desired), "values": desired,
+    }  # fmt: skip
+
+    row = (await admin.get("/api/station-config")).json()["stations"][0]
+    assert row["overrides"] == {"capture": {"lowres": 1}}
+    assert row["desired"] == desired and row["in_sync"] is False
+
+    applied = {**report, "rev": sc.revision(desired), "state": "applied", "values": desired}
+    await runtime.ingest.handle_message(
+        f"{PREFIX}/station-1/config", dumps(applied).encode(), PREFIX
+    )
+    assert (await admin.get("/api/station-config")).json()["stations"][0]["in_sync"] is True
+
+    assert (await admin.delete("/api/stations/station-1/config")).status_code == 200
+    assert (await admin.put("/api/stations/nope/config", json={"values": {}})).status_code == 404
+    audit = (await admin.get("/api/audit", params={"entity": "station_config"})).json()
+    assert len(audit["items"]) == 3

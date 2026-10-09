@@ -6,6 +6,8 @@ Message routing (topics below ``<prefix>/<station>/``):
   in the background.
 - ``live``                -> LiveHub + FrameBuffer (batched DB writes).
 - ``update``              -> LiveHub (progress of a station/reader update).
+- ``config``              -> LiveHub + ``config_listener`` (remote config,
+  services/station_config.py).
 - ``event/*``             -> durable spool -> worker -> database. The worker
   is the only writer of game rows, so events are applied strictly in order.
 """
@@ -30,6 +32,7 @@ from nestris_ltm.db.models import Station
 from nestris_ltm.ingest.frame_buffer import FrameBuffer
 from nestris_ltm.ingest.payloads import (
     CheatPayload,
+    ConfigReportPayload,
     GameEndPayload,
     GameStartPayload,
     LivePayload,
@@ -96,6 +99,8 @@ class IngestService:
         self._background: set[asyncio.Task[Any]] = set()
         # Sends a command to a station (<prefix>/<station>/cmd); set by the runtime.
         self.command_sink: Callable[[str, dict[str, Any]], Awaitable[bool]] | None = None
+        # Called with the station id after a config report; set by the runtime.
+        self.config_listener: Callable[[str], Awaitable[None]] | None = None
 
     # ------------------------------------------------------------ MQTT side
 
@@ -122,6 +127,10 @@ class IngestService:
                 self.frames.add(live)
             elif kind == "update":
                 self.hub.update_update(station, UpdatePayload.model_validate_json(text))
+            elif kind == "config":
+                self.hub.update_config(station, ConfigReportPayload.model_validate_json(text))
+                if self.config_listener is not None:
+                    self._spawn(self.config_listener(station))
             elif kind in EVENT_KINDS:
                 await asyncio.to_thread(self.spool.append, station, kind, text)
                 self._wake.set()

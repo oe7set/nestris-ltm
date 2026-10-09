@@ -55,7 +55,7 @@ Qt shell: tray icon, window = QWebEngineView(admin), autostart, single instance
 
 ## Schema overview
 
-`events`, `players` (+ `player_cards`), `stations`, `games` (+ `game_frames`, `game_recordings`,
+`events`, `players` (+ `player_cards`), `stations` (+ `station_configs`), `games` (+ `game_frames`, `game_recordings`,
 `game_cheats`), `event_player_flags`, `event_hidden_stations`,
 `event_hidden_games`, `tournaments` (+ `match_series`, `match_life_events`),
 `scenes` (+ `scene_slots`, `scene_rounds` per group, `scene_round_entries`, `scene_pair_matches`), `admin_users`, `api_tokens`,
