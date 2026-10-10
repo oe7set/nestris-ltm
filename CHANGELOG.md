@@ -3,6 +3,43 @@
 The section of a version is the text of its GitHub release and what the
 built-in updater shows before installing (`.github/scripts/release_notes.py`).
 
+## 0.4.0
+
+- **Database problems explained**: instead of a raw error the app shows
+  what is wrong (PostgreSQL not reachable, wrong password, login rejected,
+  no right to create the database, database newer than this app, failed
+  update) with solution steps. On the host the connection can be tested and
+  changed without a restart. A database left by a newer version blocks
+  writing and offers its backups (with the schema each contains) for a
+  restore; the current database is renamed, never deleted. Tray tooltip,
+  status page and `nestris-ltm check` say the same.
+- **Needs attention**: a bell in the menu and a dashboard card list what
+  needs a look (broker down, stations gone, failed results, games without
+  a player, suspected cheats, no event, new players, update), each a link
+  to the fix; optional sound. New page *Fehlgeschlagene Ergebnisse* (retry
+  or discard). FIX lists what is still open.
+- **Games and players**: multi-select with bulk actions (delete, hide/show,
+  assign, unassign; delete/restore players), undo in the message for
+  reversible actions, CSV export with the current filters.
+- **Phone layout**: menu button, lists as cards, foldable filters.
+- **Tournament bracket**: help folded away, *Fokus* and *Vollbild*, the
+  console's player list can be hidden, zoom and *FIT* for the whole tree.
+- **Regie**: station state per slot, open the slot's game or assign its
+  player, keys 1–9 / N / ?, hearts with undo.
+- **Results** page (podium, highscore, print), CSV exports, *Event
+  abschließen* (backup, exports, end, next event), automatic backups
+  (optionally copied to a second folder).
+- **Helper role** for the event-day crew (Regie, hearts, looking up,
+  assigning); admins keep deleting and configuring. *Überall abmelden*; a
+  deleted admin or an old password no longer keeps a session.
+- **Audit log** filters (object, action, person, time, text) and CSV.
+- Quick search (Ctrl+K), previous/next game, in-app confirmations instead
+  of browser dialogs, warnings before losing unsaved edits, accessibility
+  fixes.
+- The database is migrated on the first start (two new revisions). Going
+  back to 0.3.x afterwards shows "Datenbank ist neuer als diese App" with
+  the backup from before the update to restore.
+
 ## 0.3.1
 
 - **Station configuration from here** (*Stationen & Geräte* →
