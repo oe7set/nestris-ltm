@@ -13,7 +13,9 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Coroutine
 from pathlib import Path
+from typing import Any
 
 import structlog
 
@@ -62,7 +64,7 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-async def _migrate(settings: Settings) -> None:
+async def _migrate(settings: Settings) -> bool:
     from nestris_ltm.db.bootstrap import bootstrap
     from nestris_ltm.db.session import create_engine
 
@@ -71,6 +73,23 @@ async def _migrate(settings: Settings) -> None:
         await bootstrap(settings.database, engine)
     finally:
         await engine.dispose()
+    return True
+
+
+def _run_db_command[T](settings: Settings, coro: Coroutine[Any, Any, T]) -> T | None:
+    """Run a command that needs the database; explain failures instead of a traceback."""
+    from nestris_ltm.db import diagnosis
+
+    try:
+        return run_async(coro)
+    except Exception as exc:
+        problem = run_async(diagnosis.diagnose(exc, settings.database))
+        log.error("database command failed", state=problem.state, error=problem.detail)
+        print(f"Datenbank: {diagnosis.title(problem.state)}", file=sys.stderr)
+        print(f"  {problem.detail}", file=sys.stderr)
+        for step in diagnosis.steps(problem.state):
+            print(f"  - {step}", file=sys.stderr)
+        return None
 
 
 def _run_headless(settings: Settings) -> None:
@@ -167,7 +186,9 @@ def main(argv: list[str] | None = None) -> int:
         if getpass.getpass("Repeat: ") != password:
             print("The passwords do not match.", file=sys.stderr)
             return 2
-        created = run_async(_set_admin_password(settings, args.username, password))
+        created = _run_db_command(settings, _set_admin_password(settings, args.username, password))
+        if created is None:
+            return 2
         print("Admin account created." if created else "Password changed.")
         return 0
 
@@ -176,7 +197,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "migrate":
-        run_async(_migrate(settings))
+        if _run_db_command(settings, _migrate(settings)) is None:
+            return 2
+        print("Database is up to date.")
         return 0
 
     if args.headless:

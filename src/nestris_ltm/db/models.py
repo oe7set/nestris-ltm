@@ -566,3 +566,18 @@ class AuditLog(Base):
     entity_id: Mapped[str] = mapped_column(String(64))
     before: Mapped[dict[str, Any] | None]
     after: Mapped[dict[str, Any] | None]
+
+
+class SchemaHistory(Base):
+    """One row per schema upgrade: which app version migrated to which revision.
+
+    Read with plain SQL by older app versions (see ``db/bootstrap.py``), so
+    keep the table and column names stable.
+    """
+
+    __tablename__ = "schema_history"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    revision: Mapped[str | None] = mapped_column(String(32))
+    app_version: Mapped[str] = mapped_column(String(32))
+    migrated_at: Mapped[datetime] = mapped_column(server_default=func.now())

@@ -162,7 +162,15 @@ export interface PageInfo {
 export interface Diagnostics {
   version: string;
   uptime_s: number;
-  database: { ready: boolean; host: string; name: string; error: string | null };
+  database: {
+    ready: boolean;
+    state: string;
+    host: string;
+    name: string;
+    error: string | null;
+    attempts: number;
+    next_retry_at: string | null;
+  };
   mqtt: {
     enabled: boolean;
     broker: string;
@@ -191,4 +199,38 @@ export interface LogEntry {
   level: string;
   logger: string;
   message: string;
+}
+
+export interface DbStatus {
+  ready: boolean;
+  state: string;
+  detail: string | null;
+  extra: { db_revision?: string | null; app_head?: string | null; migrated_by?: string | null };
+  attempts: number;
+  next_retry_at: string | null;
+  ready_since: string | null;
+  connection: { host: string; port: number; user: string; name: string; has_password: boolean };
+  app_head: string | null;
+  config_file: string;
+  env_overrides: string[];
+  aside_databases: string[];
+  can_reconfigure: boolean;
+  can_restore: boolean;
+}
+
+export interface DbTestResult {
+  ok: boolean;
+  state: string;
+  detail: string;
+  database_exists?: boolean;
+}
+
+export interface DbBackup {
+  file: string;
+  size: number;
+  created_at: string;
+  kind: "update" | "manual" | "other";
+  before_version: string | null;
+  revision: string | null;
+  compatible: boolean | null;
 }

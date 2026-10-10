@@ -22,6 +22,7 @@ from PySide6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
 
 from nestris_ltm import __version__
 from nestris_ltm.config import Settings
+from nestris_ltm.db import diagnosis
 from nestris_ltm.runtime import Runtime
 from nestris_ltm.shell import autostart
 from nestris_ltm.shell.core_thread import CoreThread
@@ -68,6 +69,7 @@ class ShellApp:
         self._quitting = False
         self._start_minimized = minimized
         self._notified_update: str | None = None
+        self._notified_db_state: str | None = None
 
         self._build_tray()
         self.window.hidden_to_tray.connect(self._on_hidden_to_tray)
@@ -121,6 +123,12 @@ class ShellApp:
         self._open_action = QAction("Öffnen", menu)
         self._open_action.triggered.connect(self.show_window)
         menu.addAction(self._open_action)
+
+        # Only shown while the database has a problem.
+        self._db_action = QAction("Datenbankproblem anzeigen …", menu)
+        self._db_action.triggered.connect(self.show_window)
+        self._db_action.setVisible(False)
+        menu.addAction(self._db_action)
 
         browser = QAction("Im Browser öffnen", menu)
         browser.triggered.connect(lambda: QDesktopServices.openUrl(QUrl(self.runtime.local_url)))
@@ -244,6 +252,22 @@ class ShellApp:
             )
         )
         self._notify_update()
+
+    def _notify_db_problem(self, state: str) -> None:
+        """One balloon per problem that needs the operator (wrong password, ...)."""
+        if state not in diagnosis.PERMANENT_STATES:
+            if state == diagnosis.READY:
+                self._notified_db_state = None
+            return
+        if state == self._notified_db_state or not self.tray.supportsMessages():
+            return
+        self._notified_db_state = state
+        self.tray.showMessage(
+            f"Datenbank: {diagnosis.title(state)}",
+            "Details und Lösungsvorschläge im NestrisLTM-Fenster.",
+            app_icon(),
+            8000,
+        )
 
     def _update_lines(self) -> list[str]:
         upd = self.runtime.updates

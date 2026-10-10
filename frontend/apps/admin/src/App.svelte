@@ -1,6 +1,9 @@
 <script lang="ts">
+  import { onMount } from "svelte";
+  import DatabaseProblem from "./components/DatabaseProblem.svelte";
   import Toasts from "./components/Toasts.svelte";
-  import { i18n, t, type MessageKey } from "./lib/i18n.svelte";
+  import { api } from "./lib/api";
+  import { i18n, t, tDynamic, type MessageKey } from "./lib/i18n.svelte";
   import { router } from "./lib/router.svelte";
   import { session } from "./lib/session.svelte";
   import Audit from "./routes/Audit.svelte";
@@ -51,6 +54,7 @@
         { route: "stations", href: "/stations", label: "nav.stations_devices" },
         { route: "audit", href: "/audit", label: "nav.audit" },
         { route: "updates", href: "/updates", label: "nav.updates" },
+        { route: "database", href: "/database", label: "nav.database" },
         { route: "settings", href: "/settings", label: "nav.settings" },
         { route: "pages", href: "/pages", label: "nav.pages" },
       ],
@@ -63,12 +67,32 @@
     void session.refresh();
   });
 
+  onMount(() => {
+    // While the server is unreachable (no answer at all), keep asking; and
+    // while the database is down under a running app, watch for its return.
+    const timer = setInterval(async () => {
+      if (session.me === null && !session.dbState) {
+        await session.refresh();
+      } else if (session.me !== null && session.dbState) {
+        try {
+          const health = await api<{ database: { ready: boolean } }>("/api/health");
+          if (health.database.ready) session.dbRecovered();
+        } catch {
+          // still down
+        }
+      }
+    }, 3000);
+    return () => clearInterval(timer);
+  });
+
   function isActive(item: NavItem): boolean {
     return current.name === item.route || (item.also ?? []).includes(current.name);
   }
 </script>
 
-{#if session.me === null}
+{#if session.me === null && session.dbState}
+  <div class="gate"><DatabaseProblem onready={() => session.refresh()} /></div>
+{:else if session.me === null}
   <div class="center muted">{session.error ?? t("common.loading")}</div>
 {:else if !session.me.authenticated}
   <Login />
@@ -96,6 +120,13 @@
       </div>
     </aside>
     <main>
+      {#if session.dbState && current.name !== "database"}
+        <div class="db-banner" role="alert">
+          <span class="dot bad"></span>
+          <span>{t("db.banner", { title: tDynamic(`db.state.${session.dbState}.title`, session.dbState) })}</span>
+          <a href="#/database">{t("db.banner_link")}</a>
+        </div>
+      {/if}
       {#key current.name + JSON.stringify(current.params)}
         {#if current.name === "dashboard"}
           <Dashboard />
@@ -136,6 +167,8 @@
           {/key}
         {:else if current.name === "pages"}
           <Pages />
+        {:else if current.name === "database"}
+          <DatabaseProblem />
         {:else}
           <p class="muted">{t("common.not_found")}</p>
         {/if}
@@ -146,6 +179,23 @@
 <Toasts />
 
 <style>
+  .gate {
+    padding: 24px 16px;
+    display: grid;
+    justify-items: center;
+  }
+  .db-banner {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    border: 1px solid #7f1d1d;
+    background: #2a1215;
+    color: #fecaca;
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin-bottom: 14px;
+  }
   .center {
     display: grid;
     place-items: center;

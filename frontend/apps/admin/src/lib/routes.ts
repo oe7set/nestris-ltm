@@ -28,6 +28,7 @@ export const routes: RouteDef[] = [
   { name: "audit", pattern: "/audit" },
   { name: "settings", pattern: "/settings" },
   { name: "updates", pattern: "/updates" },
+  { name: "database", pattern: "/database" },
   { name: "pages", pattern: "/pages" },
 ];
 

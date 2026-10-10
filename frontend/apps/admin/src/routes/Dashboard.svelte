@@ -86,9 +86,14 @@
     <h2>{t("dash.database")}</h2>
     <div class="big">
       <span class="dot {diag?.database.ready ? 'ok' : 'bad'}"></span>
-      {diag?.database.ready ? t("dash.connected") : t("dash.disconnected")}
+      {!diag ? "–" : diag.database.ready ? t("dash.connected") : tDynamic(`db.state.${diag.database.state}.title`, t("dash.disconnected"))}
     </div>
-    <div class="muted small">{diag?.database.error ?? (diag ? `${diag.database.name} @ ${diag.database.host}` : "")}</div>
+    {#if diag && !diag.database.ready}
+      <div class="muted small">{diag.database.error ?? ""}</div>
+      <a class="small" href="#/database">{t("dash.db_problem")}</a>
+    {:else}
+      <div class="muted small">{diag ? `${diag.database.name} @ ${diag.database.host}` : ""}</div>
+    {/if}
   </div>
   <div class="panel">
     <h2>{t("dash.broker")}</h2>

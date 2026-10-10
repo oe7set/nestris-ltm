@@ -100,8 +100,12 @@ Common steps, done by a small shared module in each app
 - Then run `NestrisLTM-Setup-<v>.exe /SILENT /SUPPRESSMSGBOXES /NORESTART
   /update=1` (Windows asks for admin rights once) and quit; the installer
   restarts NestrisLTM when `/update=1` is given.
-- Downgrades across a database migration are refused unless the backup
-  from before that update is restored (the admin page explains this).
+- After a downgrade across a database migration, the older version finds a
+  schema revision it does not know and starts blocked ("Datenbank ist neuer
+  als diese App"); it writes nothing. Its problem screen lists the backups
+  (with the schema each contains) and restores one after renaming the current
+  database. Every upgrade is logged in the `schema_history` table, so the
+  screen can name the version that migrated the database.
 
 ### Player terminal
 

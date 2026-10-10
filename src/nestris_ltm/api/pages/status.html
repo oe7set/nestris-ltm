@@ -105,6 +105,20 @@ function renderStations(stations) {
   }
 }
 
+// Same wording as the tray (db/diagnosis.py); the admin UI explains the fix.
+const DB_STATES = {
+  ready: "verbunden",
+  connecting: "verbinde …",
+  unreachable: "PostgreSQL nicht erreichbar",
+  auth_failed: "Passwort falsch",
+  auth_rejected: "Anmeldung abgelehnt",
+  no_create_permission: "keine Rechte, die Datenbank anzulegen",
+  schema_too_new: "Datenbank ist neuer als diese App",
+  migration_failed: "Datenbank-Update fehlgeschlagen",
+  restoring: "Backup wird wiederhergestellt …",
+  unknown: "unbekannter Datenbankfehler",
+};
+
 async function refresh() {
   try {
     const r = await fetch("/api/diagnostics", { cache: "no-store" });
@@ -118,8 +132,10 @@ async function refresh() {
     $("version").textContent = "v" + d.version;
     $("uptime").textContent = "läuft seit " + Math.floor(d.uptime_s / 60) + " min";
     dot($("db-dot"), d.database.ready ? "ok" : "bad");
-    $("db").textContent = d.database.ready ? "verbunden" : "nicht verbunden";
-    $("db-sub").textContent = d.database.error || `${d.database.name} @ ${d.database.host}`;
+    $("db").textContent = DB_STATES[d.database.state] || (d.database.ready ? "verbunden" : "nicht verbunden");
+    $("db-sub").textContent = d.database.ready
+      ? `${d.database.name} @ ${d.database.host}`
+      : `${d.database.error || ""} · Lösung: Verwaltung (/) öffnen`;
     const m = d.mqtt;
     dot($("mq-dot"), !m.enabled ? "" : m.connected ? "ok" : "bad");
     $("mq").textContent = !m.enabled ? "deaktiviert" : m.connected ? "verbunden" : "nicht verbunden";

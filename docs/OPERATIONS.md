@@ -253,9 +253,11 @@ A new version shows up as a tray balloon and on the admin page *Updates*:
 
 If games are running, the page asks first; results sent meanwhile are
 queued by Mosquitto and the stations. *Andere Version …* installs an older
-release (rollback); if the newer version changed the database, restore its
-backup (below) after going back. Installing only works in the installed app,
-not when started from source.
+release (rollback); if the newer version changed the database, the older
+version starts blocked ("Datenbank ist neuer als diese App", see
+[Database problems](#database-problems)) and offers to restore the backup
+from before the update. Installing only works in the installed app, not when
+started from source.
 
 ### Stations, readers and terminals (*Stationen & Geräte* → *Versionen & Updates*)
 
@@ -305,10 +307,67 @@ limits; the dashboard's FPS column links here. History: the last 15 minutes
 since NestrisLTM started. A latency shown with a clock warning means the
 station's and this PC's clocks differ (set up NTP).
 
+## Database problems
+
+NestrisLTM starts even when the database is not usable. The admin UI then
+shows a problem screen instead of the app (also under *System → Datenbank*,
+`#/database`), the tray tooltip names the problem, and `nestris-ltm.exe
+check` prints the same diagnosis with solution steps. Station results wait
+in the event spool and are stored once the database is back.
+
+| Shown as | Meaning | What to do |
+|---|---|---|
+| *PostgreSQL nicht erreichbar* | No server answers at host:port. Retried every 1–30 s. | Start the service *postgresql-x64-18* (`services.msc`, startup type *Automatic*); check host/port; another program on 5432 (Docker, a second PostgreSQL)? |
+| *Passwort falsch* | The server rejects the password. Retried only every 60 s. | Enter the password on the problem screen (*Verbindung testen*, *Speichern und verbinden*; no restart needed) or `configure --db-password`. Forgotten: see below. |
+| *Anmeldung abgelehnt* | User unknown, or `pg_hba.conf` does not allow this address. | Check the user name and `pg_hba.conf`. |
+| *Keine Rechte, die Datenbank anzulegen* | The database does not exist and the user may not `CREATE DATABASE`. | Use a superuser (e.g. `postgres`) or create the database once by hand. |
+| *Datenbank ist neuer als diese App* (tray red) | A newer NestrisLTM migrated the database. This version writes nothing. | Install the newer version again, or restore a backup from before the update (below). |
+| *Datenbank-Update fehlgeschlagen* (tray red) | A migration failed; it was rolled back, the data is unchanged. | Read the error (*Technische Details*, log); install the previous version or restore a backup. |
+
+The connection form and the restore only work on the host itself (the
+NestrisLTM window or `http://localhost:7990`) or for a signed-in admin; other
+devices only see the explanation. Environment variables
+`NESTRIS_LTM__DATABASE__*` override the config file; the screen warns about
+them.
+
+A German PostgreSQL install sends its login errors in the Windows code page,
+which the database driver cannot read (it reports a dropped connection).
+NestrisLTM then asks the server once more with its own minimal login probe,
+so a wrong password still shows as *Passwort falsch* and not as *nicht
+erreichbar*.
+
+**Restoring a backup from the problem screen.** The list shows every dump in
+`%APPDATA%\NestrisLTM\backups\` (the updater's `…-before-<version>.dump` and
+*Backup jetzt erstellen*) with the schema version it contains; *passt* means
+this app can use it. *Wiederherstellen* asks for the database name, then
+renames the current database to `nestrisltm_pre_restore_<timestamp>`
+(nothing is deleted), restores the dump into a new `nestrisltm` and brings it
+up to the app's schema. If `pg_restore` fails, the previous database is put
+back. Old `_pre_restore_` databases stay until you drop them (pgAdmin, or
+`DROP DATABASE "nestrisltm_pre_restore_…";` in psql). While the database is
+connected, restoring from the UI is disabled; use the manual procedure below.
+
+### Forgotten PostgreSQL password
+
+Only on the host, as Windows administrator. This briefly allows logins
+without a password from this PC, so do it quickly and undo it:
+
+1. Stop NestrisLTM. Copy `C:\Program Files\PostgreSQL\18\data\pg_hba.conf`,
+   then open it in an editor started as administrator.
+2. In the lines for `127.0.0.1/32` and `::1/128`, change the method
+   (`scram-sha-256`) to `trust`. Save.
+3. Restart the service *postgresql-x64-18*.
+4. `& "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U postgres -h 127.0.0.1 -c "ALTER USER postgres PASSWORD 'new-password';"`
+5. Put the copy of `pg_hba.conf` back and restart the service again.
+6. `nestris-ltm.exe configure --db-password new-password`, then start
+   NestrisLTM (or enter the password on the problem screen).
+
 ## Backup and restore
 
-All tournament data is in the PostgreSQL database. Back it up before and
-after every event day:
+All tournament data is in the PostgreSQL database. *System → Datenbank →
+Backup jetzt erstellen* writes a dump to `%APPDATA%\NestrisLTM\backups\`
+(the last 10 dumps are kept). For a copy on another drive, back it up before
+and after every event day:
 
 ```powershell
 & "C:\Program Files\PostgreSQL\18\bin\pg_dump.exe" -U postgres -Fc -f "D:\Backup\nestrisltm-$(Get-Date -f yyyyMMdd-HHmm).dump" nestrisltm
@@ -338,7 +397,7 @@ what the views show.
 
 | Symptom | Check |
 |---|---|
-| Tray icon orange, *Datenbank* red | `nestris-ltm.exe check`. Service *postgresql-x64-18* running (`services.msc`)? Password in the config right (`configure --db-password`)? |
+| Tray icon orange or red, *Datenbank: …* | The tooltip and the problem screen name the cause, see [Database problems](#database-problems); `nestris-ltm.exe check` prints the same. |
 | Tray icon orange, *MQTT* red | Service *Mosquitto Broker* running? `C:\ProgramData\mosquitto\mosquitto.log`. A config error stops the service: compare with `packaging\mosquitto\mosquitto.conf`. |
 | Tray icon red / window says port in use | Another program (or a second NestrisLTM under another user) uses 7990: `check` names it; change `--http-port`. |
 | Stations do not appear | Station `[mqtt] host` = host IP, same `topic_prefix`, firewall rule for 1883, both PCs in the same subnet. |

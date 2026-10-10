@@ -30,10 +30,13 @@ async def diagnostics(request: Request) -> dict[str, Any]:
         "uptime_s": int((now - rt.started_at).total_seconds()),
         "database": {
             "ready": db_ok,
-            "host": f"{rt.settings.database.host}:{rt.settings.database.port}",
-            "name": rt.settings.database.name,
+            "state": rt.db.state,
+            "host": f"{rt.db.settings.host}:{rt.db.settings.port}",
+            "name": rt.db.settings.name,
             "ready_since": rt.db.ready_since.isoformat() if rt.db.ready_since else None,
             "error": None if db_ok else rt.db.last_error,
+            "attempts": rt.db.attempts,
+            "next_retry_at": rt.db.next_retry_at.isoformat() if rt.db.next_retry_at else None,
         },
         "mqtt": rt.mqtt.snapshot(),
         "ingest": {

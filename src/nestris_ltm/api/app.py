@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from nestris_ltm import __version__
 from nestris_ltm.api import (
     routes_auth,
+    routes_dbadmin,
     routes_devices,
     routes_diagnostics,
     routes_events,
@@ -52,7 +53,16 @@ def create_app(runtime: Runtime) -> FastAPI:
 
     @app.exception_handler(DatabaseUnavailableError)
     async def _db_unavailable(_: Request, exc: DatabaseUnavailableError) -> JSONResponse:
-        return JSONResponse({"detail": f"database unavailable: {exc}"}, status_code=503)
+        # "detail" stays a plain string (clients such as nestris-terminal show
+        # it); "code"/"state" let the admin UI switch to its problem screen.
+        return JSONResponse(
+            {
+                "detail": f"database unavailable ({exc.state})",
+                "code": "db_unavailable",
+                "state": exc.state,
+            },
+            status_code=503,
+        )
 
     @app.exception_handler(IntegrityError)
     async def _integrity(_: Request, exc: IntegrityError) -> JSONResponse:
@@ -78,6 +88,7 @@ def create_app(runtime: Runtime) -> FastAPI:
         routes_devices,
         routes_station_config,
         routes_diagnostics,
+        routes_dbadmin,
         routes_ws,
         routes_pages,
     ):

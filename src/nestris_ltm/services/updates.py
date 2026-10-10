@@ -210,10 +210,15 @@ class GitHubReleases:
 # ---------------------------------------------------------------- database backup
 
 
-def find_pg_dump(configured: str = "") -> str | None:
-    """pg_dump of the configured path, the local PostgreSQL install or PATH."""
-    if configured:
-        return configured if Path(configured).is_file() else None
+def find_pg_tool(name: str, configured_pg_dump: str = "") -> str | None:
+    """A PostgreSQL client tool (``pg_dump``, ``pg_restore``): next to the
+    configured pg_dump, from the newest local PostgreSQL install, or on PATH."""
+    exe_name = f"{name}.exe" if sys.platform == "win32" else name
+    if configured_pg_dump:
+        candidate = Path(configured_pg_dump)
+        if name != "pg_dump":
+            candidate = candidate.with_name(exe_name)
+        return str(candidate) if candidate.is_file() else None
     if sys.platform == "win32":
         import winreg
 
@@ -229,7 +234,7 @@ def find_pg_dump(configured: str = "") -> str | None:
                             ver_text, _ = winreg.QueryValueEx(inst, "Version")
                         except OSError:
                             ver_text = "0.0"
-                        exe = Path(base) / "bin" / "pg_dump.exe"
+                        exe = Path(base) / "bin" / exe_name
                         parts = [*str(ver_text).split("."), "0", "0"][:3]
                         ver = Version.parse(".".join(p if p.isdigit() else "0" for p in parts))
                         if exe.is_file() and ver and (best is None or ver > best[0]):
@@ -238,7 +243,12 @@ def find_pg_dump(configured: str = "") -> str | None:
             pass
         if best:
             return best[1]
-    return shutil.which("pg_dump")
+    return shutil.which(name)
+
+
+def find_pg_dump(configured: str = "") -> str | None:
+    """pg_dump of the configured path, the local PostgreSQL install or PATH."""
+    return find_pg_tool("pg_dump", configured)
 
 
 async def run_pg_dump(settings: Settings, target: Path) -> Path:

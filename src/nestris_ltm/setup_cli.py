@@ -18,7 +18,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-from nestris_ltm.config import Settings, load_settings, update_config_file
+from nestris_ltm.config import DatabaseSettings, Settings, load_settings, update_config_file
 
 
 def add_parsers(sub: Any) -> None:
@@ -72,30 +72,76 @@ def configure(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------- check
 
 
-async def _check_db(settings: Settings) -> dict[str, Any]:
+async def _schema_revision(db: DatabaseSettings) -> str | None:
     import asyncpg
 
-    db = settings.database
+    conn = await asyncpg.connect(
+        host=db.host,
+        port=db.port,
+        user=db.user,
+        password=db.password.get_secret_value() or None,
+        database=db.name,
+        timeout=db.connect_timeout_s,
+    )
     try:
-        conn = await asyncpg.connect(
-            host=db.host,
-            port=db.port,
-            user=db.user,
-            password=db.password.get_secret_value() or None,
-            database="postgres",
-            timeout=db.connect_timeout_s,
-        )
+        if await conn.fetchval("SELECT to_regclass('alembic_version')") is None:
+            return None
+        value = await conn.fetchval("SELECT version_num FROM alembic_version LIMIT 1")
+        return str(value) if value is not None else None
+    finally:
+        await conn.close()
+
+
+async def _problem(where: str, exc: BaseException, db: DatabaseSettings) -> dict[str, Any]:
+    from nestris_ltm.db import diagnosis
+
+    problem = await diagnosis.diagnose(exc, db)
+    return {
+        "ok": False,
+        "state": problem.state,
+        "detail": f"{where}: {diagnosis.title(problem.state)} ({problem.detail})",
+        "steps": diagnosis.steps(problem.state),
+    }
+
+
+async def _check_db(settings: Settings) -> dict[str, Any]:
+    from nestris_ltm.db import diagnosis
+    from nestris_ltm.db.bootstrap import app_head, connect_maintenance, known_revisions
+
+    db = settings.database
+    where = f"{db.user}@{db.host}:{db.port}"
+    try:
+        conn = await connect_maintenance(db)
     except Exception as exc:
-        where = f"{db.user}@{db.host}:{db.port}"
-        return {"ok": False, "detail": f"{where}: {type(exc).__name__}: {exc}"}
+        return await _problem(where, exc, db)
     try:
         version = await conn.fetchval("SHOW server_version")
         exists = await conn.fetchval("SELECT 1 FROM pg_database WHERE datname = $1", db.name)
     finally:
         await conn.close()
-    note = "exists" if exists else "will be created on first start"
-    detail = f"PostgreSQL {version} at {db.host}:{db.port}; '{db.name}' {note}"
-    return {"ok": True, "detail": detail}
+    server = f"PostgreSQL {version} at {db.host}:{db.port}"
+    if not exists:
+        note = "will be created on first start"
+        return {"ok": True, "state": diagnosis.READY, "detail": f"{server}; '{db.name}' {note}"}
+    try:
+        revision = await _schema_revision(db)
+    except Exception as exc:
+        return await _problem(f"{where}/{db.name}", exc, db)
+    head = app_head()
+    if revision is not None and revision not in known_revisions():
+        state = diagnosis.SCHEMA_TOO_NEW
+        return {
+            "ok": False,
+            "state": state,
+            "detail": f"{server}; '{db.name}': {diagnosis.title(state)}"
+            f" (schema {revision}, this app knows up to {head})",
+            "steps": diagnosis.steps(state),
+        }
+    if revision == head:
+        schema = f"schema {revision} is current"
+    else:
+        schema = f"schema {revision or 'empty'} -> {head} is migrated on the next start"
+    return {"ok": True, "state": diagnosis.READY, "detail": f"{server}; '{db.name}' {schema}"}
 
 
 async def _check_mqtt(settings: Settings) -> dict[str, Any]:
@@ -156,6 +202,8 @@ def check(args: argparse.Namespace) -> int:
         print(f"Config: {args.config}{'' if args.config.is_file() else ' (not found, defaults)'}")
         for name, r in results.items():
             print(f"[{'OK' if r['ok'] else 'FAIL'}] {name}: {r['detail']}")
+            for step in r.get("steps", []):
+                print(f"       - {step}")
     return 0 if ok else 1
 
 

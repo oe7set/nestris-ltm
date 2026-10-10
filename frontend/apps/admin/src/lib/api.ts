@@ -14,6 +14,10 @@ export class ApiError extends Error {
 }
 
 function errorCode(body: unknown): string | null {
+  // Top-level code: the 503 "database unavailable" answer keeps "detail" a string.
+  if (body && typeof body === "object" && "code" in body) {
+    return String((body as { code: unknown }).code);
+  }
   if (body && typeof body === "object" && "detail" in body) {
     const detail = (body as { detail: unknown }).detail;
     if (detail && typeof detail === "object" && "code" in detail) {
@@ -32,10 +36,23 @@ interface RequestOptions {
 }
 
 let onUnauthorized: () => void = () => {};
+let onDbUnavailable: (state: string) => void = () => {};
 
 /** Called whenever the server answers 401 (session expired, logged out). */
 export function setUnauthorizedHandler(handler: () => void): void {
   onUnauthorized = handler;
+}
+
+/** Called whenever the server answers 503 because the database is not ready. */
+export function setDbUnavailableHandler(handler: (state: string) => void): void {
+  onDbUnavailable = handler;
+}
+
+/** The database state of a 503 "database unavailable" error, else null. */
+export function dbUnavailableState(error: unknown): string | null {
+  if (!(error instanceof ApiError) || error.code !== "db_unavailable") return null;
+  const body = error.body as { state?: unknown } | null;
+  return typeof body?.state === "string" ? body.state : "unknown";
 }
 
 export function buildUrl(path: string, query?: Query): string {
@@ -95,12 +112,15 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
   }
   if (!response.ok) {
     if (response.status === 401) onUnauthorized();
-    throw new ApiError(
+    const error = new ApiError(
       response.status,
       errorDetail(body, `${response.status} ${response.statusText}`),
       errorCode(body),
       body,
     );
+    const dbState = dbUnavailableState(error);
+    if (dbState) onDbUnavailable(dbState);
+    throw error;
   }
   return body as T;
 }

@@ -3,6 +3,12 @@
 1. Create the database itself if it does not exist yet.
 2. Run all pending Alembic migrations, serialized by an advisory lock so
    two processes starting at once cannot migrate concurrently.
+
+A schema revision this app does not know means a newer NestrisLTM migrated
+the database: that raises ``SchemaTooNewError`` and leaves the database
+untouched (an older app cannot downgrade, it lacks the newer migrations).
+Every upgrade is logged in ``schema_history`` with the app version, so an
+older app can tell which version the schema came from.
 """
 
 from __future__ import annotations
@@ -19,7 +25,9 @@ from alembic.script import ScriptDirectory
 from sqlalchemy import Connection, text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from nestris_ltm import __version__
 from nestris_ltm.config import DatabaseSettings
+from nestris_ltm.db.diagnosis import MigrationFailedError, SchemaTooNewError
 
 log = structlog.get_logger(__name__)
 
@@ -37,9 +45,9 @@ def alembic_config() -> Config:
     return cfg
 
 
-async def ensure_database(settings: DatabaseSettings) -> bool:
-    """Create the configured database if missing. Returns True if created."""
-    conn = await asyncpg.connect(
+async def connect_maintenance(settings: DatabaseSettings) -> asyncpg.Connection:
+    """A plain connection to the server's ``postgres`` maintenance database."""
+    return await asyncpg.connect(
         host=settings.host,
         port=settings.port,
         user=settings.user,
@@ -47,6 +55,16 @@ async def ensure_database(settings: DatabaseSettings) -> bool:
         database="postgres",
         timeout=settings.connect_timeout_s,
     )
+
+
+async def ensure_database(settings: DatabaseSettings) -> bool:
+    """Create the configured database if missing. Returns True if created."""
+    try:
+        conn = await connect_maintenance(settings)
+    except asyncpg.InvalidCatalogNameError:
+        # No "postgres" database (or no access to it): the app's own database
+        # may still exist; the engine's connect then tells the real story.
+        return False
     try:
         exists = await conn.fetchval("SELECT 1 FROM pg_database WHERE datname = $1", settings.name)
         if exists:
@@ -69,15 +87,57 @@ def _current_revision(connection: Connection) -> str | None:
     return MigrationContext.configure(connection).get_current_revision()
 
 
+def _migrated_by(connection: Connection, revision: str) -> str | None:
+    """App version that migrated to ``revision`` (``schema_history``, if present)."""
+    if connection.execute(text("SELECT to_regclass('schema_history')")).scalar() is None:
+        return None
+    value = connection.execute(
+        text(
+            "SELECT app_version FROM schema_history WHERE revision = :rev"
+            " ORDER BY migrated_at DESC LIMIT 1"
+        ),
+        {"rev": revision},
+    ).scalar()
+    return str(value) if value is not None else None
+
+
+def _record_history(connection: Connection, revision: str | None) -> None:
+    connection.execute(
+        text("INSERT INTO schema_history (revision, app_version) VALUES (:rev, :ver)"),
+        {"rev": revision, "ver": __version__},
+    )
+
+
+def known_revisions() -> set[str]:
+    return {s.revision for s in ScriptDirectory.from_config(alembic_config()).walk_revisions()}
+
+
+def app_head() -> str | None:
+    return ScriptDirectory.from_config(alembic_config()).get_current_head()
+
+
 async def migrate(engine: AsyncEngine) -> str | None:
-    """Upgrade the schema to head. Returns the resulting revision."""
+    """Upgrade the schema to head. Returns the resulting revision.
+
+    Raises ``SchemaTooNewError`` for a revision this app does not know and
+    ``MigrationFailedError`` when an upgrade fails (rolled back).
+    """
     cfg = alembic_config()
-    head = ScriptDirectory.from_config(cfg).get_current_head()
+    script = ScriptDirectory.from_config(cfg)
+    head = script.get_current_head()
+    known = {s.revision for s in script.walk_revisions()}
     async with engine.begin() as conn:
         before = await conn.run_sync(_current_revision)
+        if before is not None and before not in known:
+            by = await conn.run_sync(_migrated_by, before)
+            raise SchemaTooNewError(before, head, by)
         if before != head:
             log.info("migrating database schema", current=before, target=head)
-            await conn.run_sync(_upgrade, cfg)
+            try:
+                await conn.run_sync(_upgrade, cfg)
+            except Exception as exc:
+                raise MigrationFailedError(before, head, exc) from exc
+            await conn.run_sync(_record_history, head)
     return head
 
 
