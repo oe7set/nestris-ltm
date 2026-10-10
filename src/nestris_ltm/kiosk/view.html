@@ -44,9 +44,12 @@
     <link rel="stylesheet" href="/kiosk/static/css/fonts.css">
     <link rel="stylesheet" href="/kiosk/static/css/app.css">
     <link rel="stylesheet" href="/kiosk/static/css/effects.css">
+    <link rel="stylesheet" href="/kiosk/static/css/view-portrait.css">
     <style>
         /* URL options for OBS / extra screens:
            ?only=highscore | ?only=bracket   show a single column, full width
+           ?layout=portrait                   portrait screen (9:16): highscore on
+                                              top, bracket below (view-portrait.*)
            ?transparent=1                     transparent page background */
         body.only-highscore main { display: none; }
         body.only-highscore aside { grid-column: span 3 / span 3; }
@@ -62,6 +65,7 @@
         const only = q.get("only");
         if (only === "highscore" || only === "bracket") document.body.classList.add("only-" + only);
         if (q.get("transparent") === "1") document.body.classList.add("transparent");
+        if (q.get("layout") === "portrait") document.body.classList.add("portrait");
     })();
 </script>
 
@@ -132,6 +136,7 @@
 <script src="/kiosk/static/js/ambiente.js"></script>
 <script src="/kiosk/static/js/drama.js"></script>
 <script src="/kiosk/static/js/bracket-juice.js"></script>
+<script src="/kiosk/static/js/view-portrait.js"></script>
 <script>
     // Highscore list animates its row reorder in place.
     function renderLeaderboardAnimated(entries) {

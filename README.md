@@ -123,7 +123,8 @@ reader state (`outdated` = old reader firmware) and firmware version.
   and bracket, score-train count-up, live banners (new record, lead change,
   milestone), CRT/tetromino ambiente, victory bursts and the champion
   celebration (podium, confetti, rockets). Options: `?only=highscore`,
-  `?only=bracket`, `?transparent=1` (OBS).
+  `?only=bracket`, `?transparent=1` (OBS), `?layout=portrait` (screen turned
+  upright, 9:16: highscore on top, the bracket below zoomed to fit).
 - It shows the **active event**: the best game per player inside the event
   window, running games live (green dot), without hidden players, stations
   and games.

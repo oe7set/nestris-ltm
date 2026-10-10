@@ -1,0 +1,44 @@
+/* NestrisLTM addition to the ported highscore view (view.html): portrait
+   screens (9:16, e.g. 1080x1920), /view/highscore?layout=portrait. The
+   highscore is on top (2/5), the bracket below (3/5); js/view-portrait.js
+   zooms the bracket so the whole tree fits. Kept apart from app.css so the
+   ported styles stay as they were. */
+
+body.portrait > .grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 2fr) minmax(0, 3fr);
+}
+body.portrait > .grid > aside,
+body.portrait > .grid > main {
+    grid-column: 1 / -1;
+}
+
+/* Top: title row, then stats and score train side by side, then the list. */
+body.portrait > .grid > aside {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
+    align-items: stretch;
+}
+body.portrait > .grid > aside > :first-child,
+body.portrait > .grid > aside > :last-child {
+    grid-column: 1 / -1;
+}
+body.portrait #stats-grid {
+    align-content: center;
+}
+
+/* Bottom: the bracket, zoomed to fit (rounds and podium, not the scroll
+   container itself, like the console). */
+body.portrait #bracket {
+    overflow: hidden;
+}
+body.portrait #bracket > * {
+    zoom: var(--bracket-zoom, 1);
+}
+
+/* The single-column variants keep their full height on a portrait screen. */
+body.portrait.only-highscore > .grid,
+body.portrait.only-bracket > .grid {
+    grid-template-rows: minmax(0, 1fr);
+}

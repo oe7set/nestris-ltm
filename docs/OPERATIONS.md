@@ -61,6 +61,11 @@ stay.
   stations, MQTT rate, errors and the live log.
 - The admin UI and all displays are at `http://<host-ip>:7990/` (overview of
   all pages: `/#/pages`). OBS browser sources use `/o/<scene>`.
+- **Portrait screen** (a TV turned upright, 9:16): turn it in Windows
+  (*Einstellungen → System → Bildschirm → Bildschirmausrichtung: Hochformat*)
+  and open `http://<host-ip>:7990/view/highscore?layout=portrait` full screen,
+  e.g. `chrome --kiosk --app=<url>`. Highscore on top, the bracket below; the
+  bracket zooms itself so the whole tree is always visible.
 - Station results are written to a durable spool first. If the database is
   down, nothing is lost: results are stored when it is back. Results sent
   while NestrisLTM itself is down are queued by Mosquitto (persistent session).

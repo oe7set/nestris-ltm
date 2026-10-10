@@ -62,6 +62,7 @@
       { label: t("display.link_all"), url: `${origin}/view/highscore` },
       { label: t("display.link_highscore"), url: `${origin}/view/highscore?only=highscore` },
       { label: t("display.link_bracket"), url: `${origin}/view/highscore?only=bracket` },
+      { label: t("display.link_portrait"), url: `${origin}/view/highscore?layout=portrait` },
       { label: t("display.link_transparent"), url: `${origin}/view/highscore?transparent=1` },
     ];
   }
