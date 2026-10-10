@@ -71,6 +71,16 @@
 
   const current = $derived(router.current);
 
+  // A helper login: Regie, Turnier (hearts), players, games, results.
+  const HELPER_ROUTES = new Set(["dashboard", "regie", "tournament", "players", "games", "results"]);
+  const visibleGroups = $derived(
+    session.isAdmin
+      ? navGroups
+      : navGroups
+          .map((g) => ({ ...g, items: g.items.filter((i) => HELPER_ROUTES.has(i.route)) }))
+          .filter((g) => g.items.length),
+  );
+
   $effect(() => {
     void session.refresh();
   });
@@ -142,7 +152,7 @@
         </button>
       </div>
       <nav id="main-nav">
-        {#each navGroups as group (group.label)}
+        {#each visibleGroups as group (group.label)}
           <span class="group">{t(group.label)}</span>
           {#each group.items as item (item.route)}
             <a href={`#${item.href}`} class:active={isActive(item)} onclick={() => (menuOpen = false)}>{t(item.label)}</a>
@@ -154,7 +164,10 @@
           <button aria-pressed={i18n.locale === "de"} class:on={i18n.locale === "de"} onclick={() => i18n.set("de")}>DE</button>
           <button aria-pressed={i18n.locale === "en"} class:on={i18n.locale === "en"} onclick={() => i18n.set("en")}>EN</button>
         </div>
-        <div class="muted small">{t("nav.signed_in", { name: session.me.name ?? "" })}</div>
+        <div class="muted small">
+          {t("nav.signed_in", { name: session.me.name ?? "" })}
+          {#if !session.isAdmin}<span class="badge">{t("roles.helper")}</span>{/if}
+        </div>
         {#if session.me.kind === "session"}
           <button class="link small" onclick={() => session.logout()}>{t("nav.logout")}</button>
         {/if}

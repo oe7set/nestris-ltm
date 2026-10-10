@@ -15,7 +15,7 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
-from nestris_ltm.api.auth import AdminDep, Principal, require_scope
+from nestris_ltm.api.auth import AdminDep, CrewDep, Principal, require_scope
 from nestris_ltm.api.deps import get_runtime
 from nestris_ltm.core import lives as core
 from nestris_ltm.services.match_lives import MatchLives
@@ -61,12 +61,12 @@ async def _run(coro: Any) -> Any:
 
 
 @router.get("/api/tournament/matches")
-async def matches(request: Request, _: AdminDep) -> dict[str, Any]:
+async def matches(request: Request, _: CrewDep) -> dict[str, Any]:
     return await _lives(request).snapshot()
 
 
 @router.post("/api/tournament/matches/{match_id}/lives")
-async def change(match_id: str, body: LivesIn, request: Request, p: AdminDep) -> dict[str, Any]:
+async def change(match_id: str, body: LivesIn, request: Request, p: CrewDep) -> dict[str, Any]:
     result: dict[str, Any] = await _run(
         _lives(request).apply(match_id, body.player_id, body.action, body.value, actor=p.actor)
     )
@@ -82,7 +82,7 @@ async def max_lives(
 
 
 @router.post("/api/tournament/lives/undo/{event_id}")
-async def undo(event_id: int, request: Request, p: AdminDep) -> dict[str, Any]:
+async def undo(event_id: int, request: Request, p: CrewDep) -> dict[str, Any]:
     result: dict[str, Any] = await _run(_lives(request).undo(event_id, p.actor))
     return result
 
@@ -97,7 +97,7 @@ async def settings(body: LivesSettingsIn, request: Request, p: AdminDep) -> dict
 
 @router.put("/api/scenes/{scene_id}/pairs/{pair}/match")
 async def bind(
-    scene_id: int, pair: int, body: BindIn, request: Request, p: AdminDep
+    scene_id: int, pair: int, body: BindIn, request: Request, p: CrewDep
 ) -> dict[str, Any]:
     runtime = get_runtime(request)
     scene = next((s for s in runtime.scenes.scenes.values() if s.id == scene_id), None)

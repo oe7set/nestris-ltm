@@ -29,6 +29,11 @@ class Session {
     }
   }
 
+  /** Full admin (not a helper login). */
+  get isAdmin(): boolean {
+    return this.me?.role !== "helper";
+  }
+
   /** The database is back (seen by the problem screen): clear the banner. */
   dbRecovered(): void {
     this.dbState = null;

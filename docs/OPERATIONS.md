@@ -447,6 +447,17 @@ what the views show.
 
 ## Security
 
+**Roles.** *Einstellungen → Zugang*: each account is *Admin* or *Helfer*.
+Helpers see Dashboard, Regie, Turnier (*Matches & Herzen*), Spieler, Spiele
+and Ergebnisse; they can take/give hearts, start rounds, look players and
+games up and assign games to players. Deleting, hiding, FIX/UNSEED, events,
+settings, accounts, updates and the database stay with admins. A role change
+applies at the account's next request; the last admin cannot be demoted.
+*Überall abmelden* ends all other sessions of one's account; a new password
+does that too. *Protokoll* filters by object, action, person, time and free
+text and exports CSV.
+
+
 - The admin UI needs a login; write APIs need tokens; overlays and displays
   are read-only and open on the LAN.
 - The firewall rules allow ports 7990 and 1883 from the **local subnet**

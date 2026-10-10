@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { session } from "../lib/session.svelte";
   import ErrorBox from "../components/ErrorBox.svelte";
   import { onMount } from "svelte";
   import BulkBar from "../components/BulkBar.svelte";
@@ -128,7 +129,9 @@
 <div class="row head">
   <h1>{t("players.title")}</h1>
   <span class="spacer"></span>
-  <button class="primary" onclick={() => (creating = true)}>+ {t("players.new")}</button>
+  {#if session.isAdmin}
+    <button class="primary" onclick={() => (creating = true)}>+ {t("players.new")}</button>
+  {/if}
 </div>
 
 <div class="row filters">
@@ -194,7 +197,7 @@
   <Pager total={page.total} limit={LIMIT} {offset} onchange={(o) => { offset = o; void load(); }} />
 {/if}
 
-<BulkBar count={selection.size} onclear={() => selection.clear()}>
+<BulkBar count={session.isAdmin ? selection.size : 0} onclear={() => selection.clear()}>
   {#if anyDeleted}
     <button disabled={bulkBusy} onclick={() => bulk("restore")}>{t("bulk.restore")}</button>
   {/if}

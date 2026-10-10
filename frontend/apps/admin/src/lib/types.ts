@@ -142,6 +142,8 @@ export interface Me {
   authenticated: boolean;
   kind: string | null;
   name: string | null;
+  /** "admin" | "helper" (helpers see the event-day pages only). */
+  role: string | null;
   needs_setup: boolean;
   can_setup: boolean;
 }

@@ -12,7 +12,7 @@ from typing import Any
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
-from nestris_ltm.api.auth import AdminDep
+from nestris_ltm.api.auth import CrewDep
 from nestris_ltm.api.deps import SessionDep, get_runtime
 from nestris_ltm.core import scene_flow
 from nestris_ltm.services import app_settings, audit
@@ -25,14 +25,14 @@ class ScenesSettingsIn(BaseModel):
 
 
 @router.get("/scenes")
-async def scenes_settings(_: AdminDep, request: Request) -> dict[str, Any]:
+async def scenes_settings(_: CrewDep, request: Request) -> dict[str, Any]:
     engine = get_runtime(request).scenes
     return {"next_round": engine.next_round, "seeded": engine.seeded}
 
 
 @router.put("/scenes")
 async def update_scenes_settings(
-    body: ScenesSettingsIn, request: Request, p: AdminDep, session: SessionDep
+    body: ScenesSettingsIn, request: Request, p: CrewDep, session: SessionDep
 ) -> dict[str, Any]:
     engine = get_runtime(request).scenes
     before = engine.next_round

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
@@ -38,6 +38,11 @@ class Credentials(BaseModel):
 class NewAdmin(BaseModel):
     username: str = Field(min_length=2, max_length=64, pattern=r"^[A-Za-z0-9._-]+$")
     password: str = Field(min_length=8, max_length=256)
+    role: Literal["admin", "helper"] = "admin"
+
+
+class RoleChange(BaseModel):
+    role: Literal["admin", "helper"]
 
 
 class PasswordChange(BaseModel):
@@ -47,6 +52,7 @@ class PasswordChange(BaseModel):
 class AdminOut(BaseModel):
     id: int
     username: str
+    role: str
     created_at: datetime
     last_login_at: datetime | None
 
@@ -85,9 +91,11 @@ async def me(request: Request, response: Response, session: SessionDep) -> dict[
     if principal is not None and principal.kind == "session":
         await _renew(request, response, session)
     return {
-        "authenticated": principal is not None and principal.allows("admin"),
+        # Helpers are signed in too; the UI shows them the event-day pages.
+        "authenticated": principal is not None and principal.allows("crew"),
         "kind": principal.kind if principal else None,
         "name": principal.name if principal else None,
+        "role": (principal.role if principal.kind == "session" else "admin") if principal else None,
         "needs_setup": needs_setup,
         # Setup is only offered on the host itself.
         "can_setup": needs_setup and (is_loopback(request) or (principal is not None)),
@@ -213,13 +221,15 @@ async def create_admin(body: NewAdmin, principal: AdminDep, session: SessionDep)
         if exists is not None:
             raise HTTPException(status.HTTP_409_CONFLICT, "username already taken")
         user = AdminUser(
-            username=body.username, password_hash=auth_service.hash_password(body.password)
+            username=body.username,
+            password_hash=auth_service.hash_password(body.password),
+            role=body.role,
         )
         session.add(user)
         await session.flush()
         await audit.record(
             session, actor=principal.actor, action="create", entity="admin", entity_id=user.id,
-            after={"username": user.username},
+            after={"username": user.username, "role": user.role},
         )  # fmt: skip
         await session.refresh(user)
     return AdminOut.model_validate(user, from_attributes=True)
@@ -256,14 +266,41 @@ async def set_admin_password(
     return {"ok": True}
 
 
-@router.delete("/admins/{admin_id}")
-async def delete_admin(admin_id: int, principal: AdminDep, session: SessionDep) -> dict[str, bool]:
+async def _full_admins(session: AsyncSession) -> int:
+    return int(
+        await session.scalar(select(func.count(AdminUser.id)).where(AdminUser.role == "admin")) or 0
+    )
+
+
+@router.put("/admins/{admin_id}/role")
+async def set_admin_role(
+    admin_id: int, body: RoleChange, principal: AdminDep, session: SessionDep
+) -> AdminOut:
+    """Admin or helper; the role takes effect at the account's next request."""
     async with session.begin():
-        if await auth_service.admin_count(session) <= 1:
-            raise HTTPException(status.HTTP_409_CONFLICT, "the last admin cannot be deleted")
         user = await session.get(AdminUser, admin_id)
         if user is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "admin not found")
+        before = user.role
+        if before == "admin" and body.role != "admin" and await _full_admins(session) <= 1:
+            raise HTTPException(status.HTTP_409_CONFLICT, "the last admin must stay an admin")
+        user.role = body.role
+        if before != body.role:
+            await audit.record(
+                session, actor=principal.actor, action="role", entity="admin", entity_id=admin_id,
+                before={"role": before}, after={"role": body.role},
+            )  # fmt: skip
+    return AdminOut.model_validate(user, from_attributes=True)
+
+
+@router.delete("/admins/{admin_id}")
+async def delete_admin(admin_id: int, principal: AdminDep, session: SessionDep) -> dict[str, bool]:
+    async with session.begin():
+        user = await session.get(AdminUser, admin_id)
+        if user is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "admin not found")
+        if user.role == "admin" and await _full_admins(session) <= 1:
+            raise HTTPException(status.HTTP_409_CONFLICT, "the last admin cannot be deleted")
         await session.delete(user)
         await audit.record(
             session, actor=principal.actor, action="delete", entity="admin", entity_id=admin_id,

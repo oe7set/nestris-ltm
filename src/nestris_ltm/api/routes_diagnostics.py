@@ -9,12 +9,12 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query, Request
 
 from nestris_ltm import __version__
-from nestris_ltm.api.auth import require_admin_or_local
+from nestris_ltm.api.auth import require_crew_or_local
 from nestris_ltm.api.deps import get_runtime
 from nestris_ltm.logging_setup import ring_buffer
 
 router = APIRouter(
-    prefix="/api/diagnostics", tags=["diagnostics"], dependencies=[Depends(require_admin_or_local)]
+    prefix="/api/diagnostics", tags=["diagnostics"], dependencies=[Depends(require_crew_or_local)]
 )
 
 

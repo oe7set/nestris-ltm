@@ -7,7 +7,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from fastapi.responses import Response
 
-from nestris_ltm.api.auth import AdminDep
+from nestris_ltm.api.auth import AdminDep, CrewDep
 from nestris_ltm.api.deps import SessionDep, get_runtime
 from nestris_ltm.api.routes_games import games_query
 from nestris_ltm.db.models import Game
@@ -28,7 +28,7 @@ def _csv(data: bytes, name: str) -> Response:
 
 
 @router.get("/results")
-async def results(request: Request, _: AdminDep, session: SessionDep) -> dict[str, Any]:
+async def results(request: Request, _: CrewDep, session: SessionDep) -> dict[str, Any]:
     return await export.results(get_runtime(request), session)
 
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { session } from "../lib/session.svelte";
   import ErrorBox from "../components/ErrorBox.svelte";
   import { onMount } from "svelte";
   import BulkBar from "../components/BulkBar.svelte";
@@ -223,9 +224,11 @@
 <div class="row head">
   <h1>{t("games.title")}</h1>
   <span class="spacer"></span>
-  <a class="button" href={csvUrl} download>CSV</a>
-  <button onclick={() => (importing = true)}>{t("games.import")}</button>
-  <a class="button primary" href="#/games/new">+ {t("games.new")}</a>
+  {#if session.isAdmin}
+    <a class="button" href={csvUrl} download>CSV</a>
+    <button onclick={() => (importing = true)}>{t("games.import")}</button>
+    <a class="button primary" href="#/games/new">+ {t("games.new")}</a>
+  {/if}
 </div>
 
 {#if importing}
@@ -360,13 +363,15 @@
 {/if}
 
 <BulkBar count={selection.size} onclear={() => selection.clear()}>
-  {#if page?.event}
+  {#if page?.event && session.isAdmin}
     <button disabled={bulkBusy} onclick={() => bulk("hide")} title={t("bulk.hide_hint", { event: page.event.name })}>{t("bulk.hide")}</button>
     <button disabled={bulkBusy} onclick={() => bulk("unhide")} title={t("bulk.hide_hint", { event: page.event.name })}>{t("bulk.unhide")}</button>
   {/if}
   <button disabled={bulkBusy} onclick={() => (assigning = true)}>{t("bulk.assign")}</button>
   <button disabled={bulkBusy} onclick={() => bulk("unassign")}>{t("bulk.unassign")}</button>
-  <button class="danger" disabled={bulkBusy} onclick={() => (confirmDelete = true)}>{t("bulk.delete")}</button>
+  {#if session.isAdmin}
+    <button class="danger" disabled={bulkBusy} onclick={() => (confirmDelete = true)}>{t("bulk.delete")}</button>
+  {/if}
 </BulkBar>
 
 {#if confirmDelete}

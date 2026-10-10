@@ -12,7 +12,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from nestris_ltm.api.auth import AdminDep
+from nestris_ltm.api.auth import AdminDep, CrewDep
 from nestris_ltm.api.deps import SessionDep
 from nestris_ltm.db.models import EventPlayerFlags, Game, Player, PlayerCard
 from nestris_ltm.services import audit, events
@@ -104,7 +104,7 @@ async def _ensure_unique(session: AsyncSession, nickname: str, own_id: int | Non
 
 @router.get("")
 async def list_players(
-    _: AdminDep,
+    _: CrewDep,
     session: SessionDep,
     q: str = Query("", max_length=64),
     include_deleted: bool = False,
@@ -196,7 +196,7 @@ async def create_player(body: PlayerIn, principal: AdminDep, session: SessionDep
 
 
 @router.get("/{player_id}")
-async def get_player(player_id: int, _: AdminDep, session: SessionDep) -> dict[str, Any]:
+async def get_player(player_id: int, _: CrewDep, session: SessionDep) -> dict[str, Any]:
     player = await _get(session, player_id)
     cards = (
         await session.scalars(

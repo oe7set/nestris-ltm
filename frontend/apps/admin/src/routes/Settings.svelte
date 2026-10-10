@@ -16,6 +16,7 @@
   interface Admin {
     id: number;
     username: string;
+    role: "admin" | "helper";
     created_at: string;
     last_login_at: string | null;
   }
@@ -40,7 +41,11 @@
   let admins = $state<Admin[]>([]);
   let tokens = $state<Token[]>([]);
   let scopes = $state<string[]>([]);
-  let newAdmin = $state({ username: "", password: "" });
+  let newAdmin = $state<{ username: string; password: string; role: "admin" | "helper" }>({
+    username: "",
+    password: "",
+    role: "admin",
+  });
   let passwordFor = $state<Admin | null>(null);
   let newPassword = $state("");
   let tokenName = $state("");
@@ -74,7 +79,7 @@
   async function addAdmin(event: SubmitEvent): Promise<void> {
     event.preventDefault();
     if (await run(() => api("/api/admins", { method: "POST", body: newAdmin }), t("common.saved"))) {
-      newAdmin = { username: "", password: "" };
+      newAdmin = { username: "", password: "", role: "admin" };
     }
   }
 
@@ -131,11 +136,22 @@
 
 <section class="panel block">
   <h2>{t("settings.admins")}</h2>
+  <p class="hint">{t("roles.hint")}</p>
   <table>
     <tbody>
       {#each admins as a (a.id)}
         <tr>
           <td><strong>{a.username}</strong></td>
+          <td>
+            <select
+              value={a.role}
+              aria-label={t("roles.label")}
+              onchange={(e) => run(() => api(`/api/admins/${a.id}/role`, { method: "PUT", body: { role: e.currentTarget.value } }), t("common.saved"))}
+            >
+              <option value="admin">{t("roles.admin")}</option>
+              <option value="helper">{t("roles.helper")}</option>
+            </select>
+          </td>
           <td class="muted small">{t("settings.last_login")}: {dateTime(a.last_login_at, i18n.locale)}</td>
           <td class="actions"><div class="row">
             <button onclick={() => { passwordFor = a; newPassword = ""; }}>{t("settings.change_password")}</button>
@@ -154,6 +170,10 @@
   <form class="row add" onsubmit={addAdmin}>
     <input placeholder={t("settings.username")} aria-label={t("settings.username")} bind:value={newAdmin.username} required minlength="2" pattern="[A-Za-z0-9._\-]+" autocomplete="off" />
     <input type="password" placeholder={t("settings.password")} aria-label={t("settings.password")} bind:value={newAdmin.password} required minlength="8" autocomplete="new-password" />
+    <select bind:value={newAdmin.role} aria-label={t("roles.label")}>
+      <option value="admin">{t("roles.admin")}</option>
+      <option value="helper">{t("roles.helper")}</option>
+    </select>
     <button type="submit">{t("settings.add_admin")}</button>
   </form>
   {#if session.me?.kind === "session"}

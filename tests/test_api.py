@@ -650,3 +650,69 @@ async def test_backup_schedule_settings(runtime: Runtime, admin: httpx.AsyncClie
     assert await runtime.backups._due() is False
     bad = await admin.put("/api/db/schedule", json={"interval_min": -5})
     assert bad.status_code == 422
+
+
+# ---------------------------------------------------------------- roles + audit filters
+
+
+async def test_helper_role(runtime: Runtime, admin: httpx.AsyncClient) -> None:
+    r = await admin.post(
+        "/api/admins", json={"username": "helfer", "password": "helfer-pw-1", "role": "helper"}
+    )
+    assert r.status_code == 201 and r.json()["role"] == "helper"
+    helper_id = r.json()["id"]
+    p = (await admin.post("/api/players", json={"nickname": "Hel"})).json()["id"]
+    g = (await admin.post("/api/games", json={"player_id": p, "score": 5})).json()["id"]
+
+    transport = httpx.ASGITransport(app=create_app(runtime), client=("192.168.1.78", 5000))
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as helper:
+        r = await helper.post(
+            "/api/auth/login", json={"username": "helfer", "password": "helfer-pw-1"}
+        )
+        assert r.status_code == 200
+        me = (await helper.get("/api/auth/me")).json()
+        assert me["authenticated"] is True and me["role"] == "helper"
+        # Event-day work is allowed ...
+        assert (await helper.get("/api/games")).status_code == 200
+        assert (await helper.get("/api/players")).status_code == 200
+        assert (await helper.get("/api/attention")).status_code == 200
+        assert (await helper.get("/api/diagnostics")).status_code == 200
+        r = await helper.post("/api/games/bulk", json={"ids": [g], "action": "unassign"})
+        assert r.status_code == 200
+        # ... deleting and configuring is not.
+        assert (
+            await helper.post("/api/games/bulk", json={"ids": [g], "action": "delete"})
+        ).status_code == 403
+        assert (await helper.delete(f"/api/players/{p}")).status_code == 403
+        assert (await helper.get("/api/admins")).status_code == 403
+        assert (await helper.post("/api/tournament/fix")).status_code == 403
+        assert (await helper.get("/api/db/backups")).status_code == 403
+
+        # Promoted: admin rights at the next request.
+        assert (
+            await admin.put(f"/api/admins/{helper_id}/role", json={"role": "admin"})
+        ).status_code == 200
+        assert (await helper.get("/api/admins")).status_code == 200
+
+    # The last full admin cannot be demoted or deleted.
+    await admin.put(f"/api/admins/{helper_id}/role", json={"role": "helper"})
+    crew = next(a for a in (await admin.get("/api/admins")).json() if a["username"] == "crew")
+    r = await admin.put(f"/api/admins/{crew['id']}/role", json={"role": "helper"})
+    assert r.status_code == 409
+
+
+async def test_audit_filters(runtime: Runtime, admin: httpx.AsyncClient) -> None:
+    await admin.post("/api/players", json={"nickname": "Findme"})
+    await admin.post("/api/players", json={"nickname": "Other"})
+    facets = (await admin.get("/api/audit/facets")).json()
+    assert "player" in facets["entities"] and "crew" in facets["actors"]
+    found = (await admin.get("/api/audit", params={"q": "Findme"})).json()
+    assert found["total"] == 1
+    by_action = (
+        await admin.get("/api/audit", params={"entity": "player", "action": "create"})
+    ).json()
+    assert by_action["total"] == 2
+    future = (await admin.get("/api/audit", params={"since": "2999-01-01T00:00:00Z"})).json()
+    assert future["total"] == 0
+    csv = (await admin.get("/api/audit.csv", params={"q": "Findme"})).content.decode("utf-8")
+    assert csv.count("\r\n") == 2 and "Findme" in csv

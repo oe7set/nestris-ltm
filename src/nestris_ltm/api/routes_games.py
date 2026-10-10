@@ -10,7 +10,7 @@ from pydantic import AwareDatetime, BaseModel, Field, model_validator
 from sqlalchemy import Select, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from nestris_ltm.api.auth import AdminDep
+from nestris_ltm.api.auth import AdminDep, CrewDep
 from nestris_ltm.api.deps import SessionDep, get_runtime
 from nestris_ltm.db.models import (
     Event,
@@ -156,7 +156,7 @@ async def games_query(
 @router.get("")
 async def list_games(
     request: Request,
-    _: AdminDep,
+    _: CrewDep,
     session: SessionDep,
     event_id: int | None = Query(None, description="default: the active event"),
     all_time: bool = Query(False, description="ignore the event window"),
@@ -221,7 +221,7 @@ async def list_games(
 
 
 @router.get("/external/{external_id}")
-async def game_by_external_id(external_id: str, _: AdminDep, session: SessionDep) -> dict[str, Any]:
+async def game_by_external_id(external_id: str, _: CrewDep, session: SessionDep) -> dict[str, Any]:
     """The game a station reported under its own id (scenes know only that)."""
     row = (
         await session.execute(
@@ -236,7 +236,7 @@ async def game_by_external_id(external_id: str, _: AdminDep, session: SessionDep
 
 
 @router.get("/{game_id}")
-async def get_game(game_id: int, _: AdminDep, session: SessionDep) -> dict[str, Any]:
+async def get_game(game_id: int, _: CrewDep, session: SessionDep) -> dict[str, Any]:
     game = await _game(session, game_id)
     nickname = (
         await session.scalar(select(Player.nickname).where(Player.id == game.player_id))
@@ -407,9 +407,11 @@ class BulkIn(BaseModel):
 
 @router.post("/bulk")
 async def bulk_games(
-    body: BulkIn, request: Request, principal: AdminDep, session: SessionDep
+    body: BulkIn, request: Request, principal: CrewDep, session: SessionDep
 ) -> dict[str, Any]:
     """One action on many games, all or nothing (one audit entry per game)."""
+    if body.action not in ("assign", "unassign") and not principal.allows("admin"):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "admin scope required")
     scenes_changed = False
     async with session.begin():
         games = list((await session.scalars(select(Game).where(Game.id.in_(body.ids)))).all())

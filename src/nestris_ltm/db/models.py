@@ -516,8 +516,12 @@ class SceneRoundEntry(Base):
 # ---------------------------------------------------------------- auth, settings, audit
 
 
+ADMIN_ROLES = ("admin", "helper")
+
+
 class AdminUser(Base):
     __tablename__ = "admin_users"
+    __table_args__ = (CheckConstraint(_in("role", ADMIN_ROLES), name="role"),)
 
     id: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
     username: Mapped[str] = mapped_column(String(64), unique=True)
@@ -527,6 +531,9 @@ class AdminUser(Base):
     # Part of every session cookie; raising it ends all of this admin's
     # sessions (password change, "sign out everywhere").
     session_version: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    # admin: everything; helper: the event-day work (Regie, hearts, assigning
+    # games, looking things up), nothing that deletes or configures.
+    role: Mapped[str] = mapped_column(String(16), server_default=text("'admin'"))
 
 
 class ApiToken(Base):

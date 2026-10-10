@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from nestris_ltm.api.auth import AdminDep, Principal, require_scope
+from nestris_ltm.api.auth import AdminDep, CrewDep, Principal, require_scope
 from nestris_ltm.api.deps import SessionDep, get_runtime
 from nestris_ltm.core import scene_flow
 from nestris_ltm.core.layouts import LAYOUTS, Layout
@@ -200,7 +200,7 @@ async def layouts(session: SessionDep) -> list[dict[str, Any]]:
 
 
 @router.get("")
-async def list_scenes(request: Request, _: AdminDep, session: SessionDep) -> list[dict[str, Any]]:
+async def list_scenes(request: Request, _: CrewDep, session: SessionDep) -> list[dict[str, Any]]:
     rows = (await session.scalars(select(Scene).order_by(Scene.name))).all()
     engine = _engine(request)
     out = []
@@ -486,7 +486,7 @@ async def stop_replay(
 
 
 @router.get("/states")
-async def scene_states(request: Request, _: AdminDep) -> dict[str, Any]:
+async def scene_states(request: Request, _: CrewDep) -> dict[str, Any]:
     """All scenes' current state at once (the control room polls this)."""
     engine = _engine(request)
     out: dict[str, Any] = {}

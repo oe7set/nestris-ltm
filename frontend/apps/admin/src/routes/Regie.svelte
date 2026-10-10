@@ -3,6 +3,7 @@
   // tournament phase (qualifying / fixed, FIX), the global run switches, and
   // per scene: how it runs, the live slots with hearts -/+, the match each
   // pair shows, new round, reset slot. Designing scenes is the studio's job.
+  import { session } from "../lib/session.svelte";
   import Modal from "../components/Modal.svelte";
   import PlayerPicker from "../components/PlayerPicker.svelte";
   import { confirmAsync } from "../lib/confirm.svelte";
@@ -140,7 +141,7 @@
     if (!target || assignTo === null) return;
     assigning = null;
     void run(
-      () => api(`/api/games/${target.game.id}`, { method: "PATCH", body: { player_id: assignTo } }),
+      () => api("/api/games/bulk", { method: "POST", body: { ids: [target.game.id], action: "assign", player_id: assignTo } }),
       t("regie.assigned"),
     );
   }
@@ -299,7 +300,7 @@
     value={nextRound}
     onchange={setNextRound}
   />
-  {#if lives}
+  {#if lives && session.isAdmin}
     <label class="check" title={t("regie.auto_bind_hint")}>
       <input type="checkbox" checked={lives.auto_bind} onchange={(e) => setLives({ auto_bind: e.currentTarget.checked })} />
       {t("matches.auto_bind")}

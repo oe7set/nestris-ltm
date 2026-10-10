@@ -7,7 +7,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, status
 
-from nestris_ltm.api.auth import AdminDep
+from nestris_ltm.api.auth import AdminDep, CrewDep
 from nestris_ltm.api.deps import SessionDep, get_runtime
 from nestris_ltm.ingest.spool import EventSpool
 from nestris_ltm.services import attention, audit
@@ -18,7 +18,7 @@ PAYLOAD_PREVIEW = 4000
 
 
 @router.get("/attention")
-async def get_attention(request: Request, _: AdminDep, session: SessionDep) -> dict[str, Any]:
+async def get_attention(request: Request, _: CrewDep, session: SessionDep) -> dict[str, Any]:
     items = await attention.collect(get_runtime(request), session)
     return {"items": [i.to_dict() for i in items]}
 

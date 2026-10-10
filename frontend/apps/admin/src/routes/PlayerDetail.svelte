@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { session } from "../lib/session.svelte";
   import { onMount } from "svelte";
   import Modal from "../components/Modal.svelte";
   import PlayerPicker from "../components/PlayerPicker.svelte";
@@ -148,8 +149,12 @@
         ✓ {t("player.mark_checked")}
       </button>
     {/if}
+    {#if session.isAdmin}
     <button onclick={() => { merging = true; mergeTarget = null; }}>{t("player.merge")}</button>
-    {#if player.deleted_at}
+    {/if}
+    {#if !session.isAdmin}
+      <!-- helpers look players up; changing them is an admin's job -->
+    {:else if player.deleted_at}
       <button onclick={() => action(() => api(`/api/players/${id}/restore`, { method: "POST" }))}>{t("player.restore")}</button>
     {:else}
       <button class="danger" onclick={remove}>{t("common.delete")}</button>

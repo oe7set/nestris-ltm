@@ -12,7 +12,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, HTMLResponse
 
 from nestris_ltm import __version__
-from nestris_ltm.api.auth import AdminDep
+from nestris_ltm.api.auth import CrewDep
 from nestris_ltm.api.deps import get_runtime
 from nestris_ltm.pages import PAGES
 
@@ -83,7 +83,7 @@ def lan_addresses() -> list[str]:
 
 
 @router.get("/api/meta/pages", tags=["meta"])
-async def page_registry(request: Request, _: AdminDep) -> dict[str, Any]:
+async def page_registry(request: Request, _: CrewDep) -> dict[str, Any]:
     port = get_runtime(request).settings.http.port
     return {
         "version": __version__,

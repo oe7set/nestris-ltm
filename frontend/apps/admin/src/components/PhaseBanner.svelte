@@ -15,6 +15,7 @@
   // highscore) or fixed. FIX / reset winners / UNSEED right here, so nobody
   // has to look for them inside the tournament console. Shared by Regie,
   // Turnier and the dashboard (compact).
+  import { session } from "../lib/session.svelte";
   import { onMount } from "svelte";
   import { confirmAsync } from "../lib/confirm.svelte";
   import { poll } from "../lib/poll";
@@ -99,7 +100,9 @@
       </span>
     </div>
     <span class="spacer"></span>
-    {#if !phase.seeded}
+    {#if !session.isAdmin}
+      <!-- helpers see the phase only -->
+    {:else if !phase.seeded}
       <button
         class="primary"
         disabled={busy || phase.players < 2}

@@ -2,19 +2,20 @@
 
 from __future__ import annotations
 
+import json
 import re
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 from pydantic import AwareDatetime, BaseModel, Field, model_validator
-from sqlalchemy import delete, func, select
+from sqlalchemy import Select, Text, cast, delete, func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from nestris_ltm.api.auth import AdminDep
+from nestris_ltm.api.auth import AdminDep, CrewDep
 from nestris_ltm.api.deps import SessionDep, get_runtime
 from nestris_ltm.db.models import AuditLog, Event, EventHiddenStation, Game, Station
-from nestris_ltm.services import audit, events
+from nestris_ltm.services import audit, events, export
 
 router = APIRouter(prefix="/api", tags=["events"])
 
@@ -215,7 +216,7 @@ async def unhide_station(
 
 
 @router.get("/stations")
-async def list_stations(request: Request, _: AdminDep, session: SessionDep) -> list[dict[str, Any]]:
+async def list_stations(request: Request, _: CrewDep, session: SessionDep) -> list[dict[str, Any]]:
     """Stations known to the database, merged with their live state."""
     hub = get_runtime(request).hub
     live = {s["id"]: s for s in hub.snapshot()}
@@ -285,20 +286,56 @@ async def delete_station(
 # ---------------------------------------------------------------- audit log
 
 
+def _audit_query(
+    entity: str | None,
+    entity_id: str | None,
+    actor: str | None,
+    action: str | None,
+    since: AwareDatetime | None,
+    until: AwareDatetime | None,
+    q: str,
+) -> Select[AuditLog]:
+    stmt = select(AuditLog)
+    if entity:
+        stmt = stmt.where(AuditLog.entity == entity)
+    if entity_id:
+        stmt = stmt.where(AuditLog.entity_id == entity_id)
+    if actor:
+        stmt = stmt.where(AuditLog.actor == actor)
+    if action:
+        stmt = stmt.where(AuditLog.action == action)
+    if since:
+        stmt = stmt.where(AuditLog.ts >= since)
+    if until:
+        stmt = stmt.where(AuditLog.ts <= until)
+    if q.strip():
+        # Free text over the changed values (JSON as text) and the id.
+        pattern = f"%{q.strip()}%"
+        stmt = stmt.where(
+            or_(
+                AuditLog.entity_id.ilike(pattern),
+                cast(AuditLog.before, Text).ilike(pattern),
+                cast(AuditLog.after, Text).ilike(pattern),
+            )
+        )
+    return stmt
+
+
 @router.get("/audit")
 async def list_audit(
     _: AdminDep,
     session: SessionDep,
     entity: str | None = None,
     entity_id: str | None = None,
+    actor: str | None = Query(None, max_length=64),
+    action: str | None = Query(None, max_length=32),
+    since: AwareDatetime | None = None,
+    until: AwareDatetime | None = None,
+    q: str = Query("", max_length=64),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
 ) -> dict[str, Any]:
-    stmt = select(AuditLog)
-    if entity:
-        stmt = stmt.where(AuditLog.entity == entity)
-    if entity_id:
-        stmt = stmt.where(AuditLog.entity_id == entity_id)
+    stmt = _audit_query(entity, entity_id, actor, action, since, until, q)
     total = await session.scalar(select(func.count()).select_from(stmt.subquery()))
     rows = (
         await session.scalars(
@@ -311,3 +348,47 @@ async def list_audit(
         "limit": limit,
         "offset": offset,
     }
+
+
+@router.get("/audit/facets")
+async def audit_facets(_: AdminDep, session: SessionDep) -> dict[str, list[str]]:
+    """The values that occur, for the filter menus."""
+
+    async def distinct(column: Any) -> list[str]:
+        return sorted(str(v) for v in await session.scalars(select(column).distinct()))
+
+    return {
+        "entities": await distinct(AuditLog.entity),
+        "actions": await distinct(AuditLog.action),
+        "actors": await distinct(AuditLog.actor),
+    }
+
+
+@router.get("/audit.csv")
+async def audit_csv(
+    _: AdminDep,
+    session: SessionDep,
+    entity: str | None = None,
+    entity_id: str | None = None,
+    actor: str | None = Query(None, max_length=64),
+    action: str | None = Query(None, max_length=32),
+    since: AwareDatetime | None = None,
+    until: AwareDatetime | None = None,
+    q: str = Query("", max_length=64),
+) -> Response:
+    stmt = _audit_query(entity, entity_id, actor, action, since, until, q)
+    rows = (await session.scalars(stmt.order_by(AuditLog.ts).limit(100_000))).all()
+    data = export.to_csv(
+        ("Zeit", "Wer", "Aktion", "Objekt", "ID", "Vorher", "Nachher"),
+        (
+            (r.ts, r.actor, r.action, r.entity, r.entity_id,
+             json.dumps(r.before, ensure_ascii=False) if r.before else "",
+             json.dumps(r.after, ensure_ascii=False) if r.after else "")
+            for r in rows
+        ),
+    )  # fmt: skip
+    return Response(
+        data,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="nestrisltm-protokoll.csv"'},
+    )

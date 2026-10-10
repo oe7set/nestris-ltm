@@ -15,7 +15,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import FileResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
 
-from nestris_ltm.api.auth import AdminDep, get_principal
+from nestris_ltm.api.auth import AdminDep, CrewDep, get_principal
 from nestris_ltm.api.deps import get_runtime
 from nestris_ltm.core.bracket import MAX_SIZE, MIN_SIZE
 from nestris_ltm.services.tournament import NoActiveEventError, TournamentService
@@ -87,7 +87,7 @@ async def state(request: Request) -> dict[str, Any]:
 
 
 @router.get("/phase")
-async def phase(request: Request, _: AdminDep) -> dict[str, Any]:
+async def phase(request: Request, _: CrewDep) -> dict[str, Any]:
     """Small status for the admin pages: qualifying (not fixed) or tournament."""
     return _service(request).phase()
 

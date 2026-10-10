@@ -7,6 +7,7 @@
   // The bracket gets the room: the help is folded away, the console fills the
   // window down to its bottom edge, and focus mode hides everything else
   // (admin sidebar included, see App.svelte); full screen goes one step further.
+  import { session } from "../lib/session.svelte";
   import MatchesPanel from "../components/MatchesPanel.svelte";
   import PhaseBanner from "../components/PhaseBanner.svelte";
   import Tabs from "../components/Tabs.svelte";
@@ -16,7 +17,9 @@
   import { uiPrefs } from "../lib/uiPrefs.svelte";
 
   type Tab = "bracket" | "matches";
-  let tab = $state<Tab>(router.current.query.get("tab") === "matches" ? "matches" : "bracket");
+  let tab = $state<Tab>(
+    router.current.query.get("tab") === "matches" || !session.isAdmin ? "matches" : "bracket",
+  );
   let frameBox = $state<HTMLElement>();
 
   const focus = $derived(uiPrefs.tournamentFocus && tab === "bracket");
@@ -70,8 +73,8 @@
   <PhaseBanner />
   <Tabs
     tabs={[
-      { id: "bracket", label: t("tournament.tab_bracket") },
-      { id: "matches", label: t("tournament.tab_matches") },
+      ...(session.isAdmin ? [{ id: "bracket" as const, label: t("tournament.tab_bracket") }] : []),
+      { id: "matches" as const, label: t("tournament.tab_matches") },
     ]}
     active={tab}
     onchange={setTab}
