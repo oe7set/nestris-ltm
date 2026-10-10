@@ -129,7 +129,7 @@
             <span class="muted small mono">{m.match_id}</span>
             <span class="spacer"></span>
             {#each m.bound as b (`${b.scene_id}-${b.pair}`)}
-              <span class="badge accent">{sceneName(b.scene_id)}{b.pair > 0 ? ` · ${t("matches.pair")} ${b.pair + 1}` : ""}{b.bound_by === "auto" ? " (auto)" : ""}</span>
+              <span class="badge accent">{sceneName(b.scene_id)}{b.pair > 0 ? ` · ${t("matches.pair")} ${b.pair + 1}` : ""}{b.bound_by === "auto" ? ` (${t("scenes.match_auto")})` : ""}</span>
             {/each}
           </div>
           {#each m.players as p (p.id)}
@@ -187,7 +187,7 @@
 <style>
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr));
     gap: 14px;
   }
   .match {

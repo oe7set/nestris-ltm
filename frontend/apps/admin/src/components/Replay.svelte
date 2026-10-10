@@ -108,11 +108,11 @@
       aria-label={t("replay.time")}
     />
     <div class="row">
-      <button onclick={() => step(-60)} title="Shift + ←">⏪</button>
-      <button onclick={() => step(-1)} title="←">◀︎ 1</button>
-      <button class="primary" onclick={toggle} title={t("replay.space")}>{playing ? "⏸" : "▶"}</button>
-      <button onclick={() => step(1)} title="→">1 ▶︎</button>
-      <button onclick={() => step(60)} title="Shift + →">⏩</button>
+      <button onclick={() => step(-60)} title="Shift + ←" aria-label={t("replay.back_second")}>⏪</button>
+      <button onclick={() => step(-1)} title="←" aria-label={t("replay.back_frame")}>◀︎ 1</button>
+      <button class="primary" onclick={toggle} title={t("replay.space")} aria-label={playing ? t("replay.pause") : t("replay.play")}>{playing ? "⏸" : "▶"}</button>
+      <button onclick={() => step(1)} title="→" aria-label={t("replay.fwd_frame")}>1 ▶︎</button>
+      <button onclick={() => step(60)} title="Shift + →" aria-label={t("replay.fwd_second")}>⏩</button>
       <span class="spacer"></span>
       {#each SPEEDS as s (s)}
         <button aria-pressed={speed === s} class:on={speed === s} onclick={() => setSpeed(s)}>{s}×</button>

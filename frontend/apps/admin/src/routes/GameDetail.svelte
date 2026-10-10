@@ -5,6 +5,7 @@
   import Replay from "../components/Replay.svelte";
   import { confirmAsync } from "../lib/confirm.svelte";
   import { api } from "../lib/api";
+  import { neighbours } from "../lib/gameNav";
   import { poll } from "../lib/poll";
   import { dateTime, duration, fromLocalInput, num, pct, toLocalInput } from "../lib/format";
   import { i18n, t, tDynamic } from "../lib/i18n.svelte";
@@ -13,6 +14,7 @@
   import type { GameDetail } from "../lib/types";
 
   let { id }: { id: number } = $props();
+  const nav = $derived(neighbours(id));
 
   let game = $state<GameDetail | null>(null);
   let activeEvent = $state<{ id: number; name: string } | null>(null);
@@ -164,7 +166,12 @@
   });
 </script>
 
-<p><a href="#/games">‹ {t("games.title")}</a></p>
+<p class="row nav-row">
+  <a href={nav.back ?? "#/games"}>‹ {t("games.title")}</a>
+  <span class="spacer"></span>
+  {#if nav.prev !== null}<a href={`#/games/${nav.prev}`} title={t("game.prev")} aria-label={t("game.prev")}>← #{nav.prev}</a>{/if}
+  {#if nav.next !== null}<a href={`#/games/${nav.next}`} title={t("game.next")} aria-label={t("game.next")}>#{nav.next} →</a>{/if}
+</p>
 
 {#if error}
   <p class="error-box">{error}</p>
@@ -273,7 +280,7 @@
           <select bind:value={replayScene} aria-label={t("replay.scene")}>
             {#each replayScenes as s (s.slug)}<option value={s.slug}>{s.name}</option>{/each}
           </select>
-          <select bind:value={replaySpeed} aria-label="speed">
+          <select bind:value={replaySpeed} aria-label={t("replay.speed")}>
             {#each [0.5, 1, 2, 4] as v (v)}<option value={v}>{v}×</option>{/each}
           </select>
           <label class="check"><input type="checkbox" bind:checked={replayLoop} /> {t("replay.loop")}</label>
@@ -360,6 +367,9 @@
 {/if}
 
 <style>
+  .nav-row {
+    gap: 14px;
+  }
   .score {
     display: flex;
     align-items: baseline;

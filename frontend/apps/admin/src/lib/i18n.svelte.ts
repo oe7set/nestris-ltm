@@ -1060,6 +1060,29 @@ const de = {
   "audit.action.retry": "erneut versucht",
   "audit.action.export": "exportiert",
   "audit.action.replay": "Replay",
+
+  "nav.skip": "Zum Inhalt springen",
+  "palette.title": "Suchen",
+  "palette.placeholder": "Seite, Spieler oder Spielnummer (#123) …",
+  "palette.none": "Nichts gefunden",
+  "palette.game": "Spiel #{id} öffnen",
+  "palette.kind_page": "Seite",
+  "palette.kind_player": "Spieler",
+  "palette.kind_game": "Spiel",
+  "dash.capture": "Kamera",
+  "dash.rfid": "Kartenleser",
+  "dash.fps": "FPS",
+  "regie.obs_clients": "So viele OBS-Quellen zeigen diese Szene gerade",
+  "replay.back_second": "eine Sekunde zurück",
+  "replay.back_frame": "ein Frame zurück",
+  "replay.fwd_frame": "ein Frame vor",
+  "replay.fwd_second": "eine Sekunde vor",
+  "replay.play": "Abspielen",
+  "replay.pause": "Pause",
+  "game.prev": "Vorheriges Spiel",
+  "game.next": "Nächstes Spiel",
+
+  "replay.speed": "Geschwindigkeit",
 } as const;
 
 export type MessageKey = keyof typeof de;
@@ -2123,6 +2146,29 @@ const en: Record<MessageKey, string> = {
   "audit.action.retry": "retried",
   "audit.action.export": "exported",
   "audit.action.replay": "replay",
+
+  "nav.skip": "Skip to content",
+  "palette.title": "Search",
+  "palette.placeholder": "Page, player or game number (#123) …",
+  "palette.none": "Nothing found",
+  "palette.game": "Open game #{id}",
+  "palette.kind_page": "Page",
+  "palette.kind_player": "Player",
+  "palette.kind_game": "Game",
+  "dash.capture": "Camera",
+  "dash.rfid": "Card reader",
+  "dash.fps": "FPS",
+  "regie.obs_clients": "How many OBS sources show this scene right now",
+  "replay.back_second": "one second back",
+  "replay.back_frame": "one frame back",
+  "replay.fwd_frame": "one frame forward",
+  "replay.fwd_second": "one second forward",
+  "replay.play": "Play",
+  "replay.pause": "Pause",
+  "game.prev": "Previous game",
+  "game.next": "Next game",
+
+  "replay.speed": "Speed",
 };
 
 export type Locale = "de" | "en";

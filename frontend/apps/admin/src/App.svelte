@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import AttentionBell from "./components/AttentionBell.svelte";
+  import CommandPalette from "./components/CommandPalette.svelte";
   import ConfirmHost from "./components/ConfirmHost.svelte";
   import DatabaseProblem from "./components/DatabaseProblem.svelte";
   import Toasts from "./components/Toasts.svelte";
@@ -127,6 +128,25 @@
     void current.name;
     menuOpen = false;
   });
+
+  // Quick search: Ctrl+K / ⌘K anywhere.
+  let paletteOpen = $state(false);
+  const palettePages = $derived(
+    visibleGroups.flatMap((g) => g.items).map((i) => ({ label: t(i.label), href: i.href })),
+  );
+  function onGlobalKey(e: KeyboardEvent): void {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k" && session.me?.authenticated) {
+      e.preventDefault();
+      paletteOpen = !paletteOpen;
+    } else if (e.key === "Escape") {
+      menuOpen = false;
+    }
+  }
+
+  // The browser tab names the page (history, screen readers, many tabs).
+  $effect(() => {
+    document.title = currentLabel ? `${t(currentLabel)} · NestrisLTM` : "NestrisLTM";
+  });
 </script>
 
 {#if session.me === null && session.dbState}
@@ -136,6 +156,7 @@
 {:else if !session.me.authenticated}
   <Login />
 {:else}
+  <a class="skip" href="#main-content" onclick={(e) => { e.preventDefault(); document.getElementById("main-content")?.focus(); }}>{t("nav.skip")}</a>
   <div class="layout" class:focus>
     <aside class:open={menuOpen}>
       <div class="top">
@@ -151,11 +172,19 @@
           {currentLabel ? t(currentLabel) : t("nav.menu")}
         </button>
       </div>
+      <button class="search-btn" onclick={() => (paletteOpen = true)} aria-keyshortcuts="Control+K">
+        🔍 {t("palette.title")} <kbd>Strg K</kbd>
+      </button>
       <nav id="main-nav">
         {#each visibleGroups as group (group.label)}
           <span class="group">{t(group.label)}</span>
           {#each group.items as item (item.route)}
-            <a href={`#${item.href}`} class:active={isActive(item)} onclick={() => (menuOpen = false)}>{t(item.label)}</a>
+            <a
+              href={`#${item.href}`}
+              class:active={isActive(item)}
+              aria-current={isActive(item) ? "page" : undefined}
+              onclick={() => (menuOpen = false)}>{t(item.label)}</a
+            >
           {/each}
         {/each}
       </nav>
@@ -173,7 +202,7 @@
         {/if}
       </div>
     </aside>
-    <main>
+    <main id="main-content" tabindex="-1">
       {#if session.dbState && current.name !== "database"}
         <div class="db-banner" role="alert">
           <span class="dot bad"></span>
@@ -234,11 +263,42 @@
     </main>
   </div>
 {/if}
-<svelte:window onkeydown={(e) => e.key === "Escape" && (menuOpen = false)} />
+<svelte:window onkeydown={onGlobalKey} />
+{#if session.me?.authenticated}
+  <CommandPalette open={paletteOpen} onclose={() => (paletteOpen = false)} pages={palettePages} />
+{/if}
 <Toasts />
 <ConfirmHost />
 
 <style>
+  .search-btn {
+    justify-content: space-between;
+    width: 100%;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .search-btn kbd {
+    font-size: 10px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 0 4px;
+  }
+  .skip {
+    position: absolute;
+    left: 8px;
+    top: -40px;
+    z-index: 200;
+    background: var(--accent);
+    color: var(--accent-ink);
+    padding: 6px 12px;
+    border-radius: 6px;
+  }
+  .skip:focus {
+    top: 8px;
+  }
+  main:focus {
+    outline: none;
+  }
   .gate {
     padding: 24px 16px;
     display: grid;
@@ -388,6 +448,7 @@
       flex: none;
     }
     aside:not(.open) nav,
+    aside:not(.open) .search-btn,
     aside:not(.open) .foot {
       display: none;
     }

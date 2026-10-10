@@ -60,7 +60,7 @@
 
 {#if loadError}<ErrorBox text={loadError} onretry={() => void load()} />{/if}
 <div class="table-wrap">
-  <table>
+  <table class="table-cards">
     <thead>
       <tr>
         <th>{t("stations.id")}</th>
@@ -76,24 +76,24 @@
     <tbody>
       {#each stations ?? [] as s (s.id)}
         <tr>
-          <td class="mono">{s.id}</td>
-          <td>
+          <td class="mono card-title">{s.id}</td>
+          <td data-label={t("stations.rename")}>
             <form class="row" onsubmit={(e) => { e.preventDefault(); void run(() => api(`/api/stations/${encodeURIComponent(s.id)}`, { method: "PATCH", body: { name: names[s.id]?.trim() || null } }), t("common.saved")); }}>
               <input bind:value={names[s.id]} maxlength="128" aria-label={t("stations.name")} />
               <button type="submit">{t("common.save")}</button>
             </form>
           </td>
-          <td>
+          <td class="card-score">
             {#if s.live}
               <span class="dot {s.live.online && !s.live.stale ? 'ok' : s.live.online ? 'warn' : 'bad'}"></span>
               {s.live.online ? t("dash.online") : t("dash.offline")}
             {:else}–{/if}
           </td>
-          <td class="small">{String(s.live?.status?.version ?? "–")}</td>
-          <td class="num">{num(s.games, i18n.locale)}</td>
-          <td>{dateTime(s.last_seen_at, i18n.locale)}</td>
+          <td class="small" data-label={t("stations.version")}>{String(s.live?.status?.version ?? "–")}</td>
+          <td class="num" data-label={t("stations.games")}>{num(s.games, i18n.locale)}</td>
+          <td data-label={t("stations.last_seen")}>{dateTime(s.last_seen_at, i18n.locale)}</td>
           {#if active}
-            <td>
+            <td data-label={t("stations.hide")}>
               <input
                 type="checkbox"
                 checked={active.hidden_stations.includes(s.id)}

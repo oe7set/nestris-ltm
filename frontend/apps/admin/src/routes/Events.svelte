@@ -84,7 +84,7 @@
 
 {#if loadError}<ErrorBox text={loadError} onretry={() => void load()} />{/if}
 <div class="table-wrap">
-  <table>
+  <table class="table-cards">
     <thead>
       <tr>
         <th>{t("events.name")}</th>
@@ -99,16 +99,16 @@
     <tbody>
       {#each events ?? [] as e (e.id)}
         <tr>
-          <td>
+          <td class="card-title">
             <strong>{e.name}</strong>
             {#if e.is_active}<span class="badge ok">{t("events.active")}</span>{/if}
             <div class="muted small mono">{e.slug}</div>
           </td>
-          <td>{dateTime(e.starts_at, i18n.locale)}</td>
-          <td>{e.ends_at ? dateTime(e.ends_at, i18n.locale) : t("events.open_end")}</td>
-          <td class="num">{num(e.games, i18n.locale)}</td>
-          <td class="num">{num(e.players, i18n.locale)}</td>
-          <td>{e.hidden_stations.join(", ") || "–"}</td>
+          <td data-label={t("events.start")}>{dateTime(e.starts_at, i18n.locale)}</td>
+          <td data-label={t("events.end")}>{e.ends_at ? dateTime(e.ends_at, i18n.locale) : t("events.open_end")}</td>
+          <td class="num" data-label={t("events.games")}>{num(e.games, i18n.locale)}</td>
+          <td class="num" data-label={t("events.players")}>{num(e.players, i18n.locale)}</td>
+          <td data-label={t("events.hidden_stations")}>{e.hidden_stations.join(", ") || "–"}</td>
           <td><div class="row">
             {#if !e.is_active}
               <button onclick={() => run(() => api(`/api/events/${e.id}/activate`, { method: "POST" }))}>{t("events.activate")}</button>

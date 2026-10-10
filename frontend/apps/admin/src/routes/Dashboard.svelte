@@ -4,7 +4,7 @@
   import PhaseBanner from "../components/PhaseBanner.svelte";
   import { poll } from "../lib/poll";
   import { api } from "../lib/api";
-  import { dateTime, num } from "../lib/format";
+  import { dateTime, localeTag, num } from "../lib/format";
   import { i18n, t, tDynamic } from "../lib/i18n.svelte";
   import { live } from "../lib/live.svelte";
   import { fmt, overallLevel, pct, type StationPerf } from "../lib/perf";
@@ -138,19 +138,19 @@
   <span class="muted small"><span class="dot {live.connected ? 'ok' : 'bad'}"></span> {t("dash.live")}</span>
 </div>
 <div class="table-wrap">
-  <table>
+  <table class="table-cards">
     <thead>
       <tr>
         <th>{t("games.station")}</th>
         <th>{t("games.status")}</th>
-        <th>Capture</th>
-        <th>RFID</th>
+        <th>{t("dash.capture")}</th>
+        <th>{t("dash.rfid")}</th>
         <th>{t("games.player")}</th>
         <th>{t("dash.game_state")}</th>
         <th class="num">{t("games.score")}</th>
         <th class="num">{t("games.lines")}</th>
         <th class="num">{t("games.levels")}</th>
-        <th class="num">FPS</th>
+        <th class="num">{t("dash.fps")}</th>
       </tr>
     </thead>
     <tbody>
@@ -158,24 +158,24 @@
         {@const st = s.status ?? {}}
         {@const perf = (st.perf as StationPerf | undefined) ?? null}
         <tr>
-          <td>{s.name ?? s.id} {#if s.name}<span class="muted small">{s.id}</span>{/if}</td>
-          <td>
+          <td class="card-title">{s.name ?? s.id} {#if s.name}<span class="muted small">{s.id}</span>{/if}</td>
+          <td class="card-score">
             <span class="dot {stateClass(s.online, s.stale)}"></span>
             {s.online ? (s.stale ? t("dash.stale") : t("dash.online")) : t("dash.offline")}
           </td>
-          <td>{String(st.capture ?? "–")}</td>
-          <td>
+          <td data-label={t("dash.capture")}>{String(st.capture ?? "–")}</td>
+          <td data-label={t("dash.rfid")}>
             <span class:warn-text={st.rfid === "outdated"}>{String(st.rfid ?? "–")}</span>
             {#if st.reader_fw}<span class="muted small">fw {String(st.reader_fw)}</span>{/if}
           </td>
-          <td>
+          <td data-label={t("games.player")}>
             {s.player_nickname ?? s.card?.name ?? (s.card_present ? t("dash.blank_card") : t("dash.no_card"))}
           </td>
-          <td>{s.live?.game_state ?? String(st.game_state ?? "–")}</td>
-          <td class="num">{num(s.live?.score, i18n.locale)}</td>
-          <td class="num">{num(s.live?.lines, i18n.locale)}</td>
-          <td class="num">{num(s.live?.level, i18n.locale)}</td>
-          <td class="num">
+          <td data-label={t("dash.game_state")}>{s.live?.game_state ?? String(st.game_state ?? "–")}</td>
+          <td class="num" data-label={t("games.score")}>{num(s.live?.score, i18n.locale)}</td>
+          <td class="num" data-label={t("games.lines")}>{num(s.live?.lines, i18n.locale)}</td>
+          <td class="num" data-label={t("games.levels")}>{num(s.live?.level, i18n.locale)}</td>
+          <td class="num" data-label={t("dash.fps")}>
             {#if perf}
               <a href="#/stations?tab=perf" title={`${t("perf.dropped")} ${pct(perf.drop_rate)}`}>
                 <span class="dot {overallLevel(perf, s.link)}"></span>{fmt(perf.fps)}
@@ -198,7 +198,7 @@
     <div class="panel feed">
       {#each live.events as e (e.at.getTime() + e.station + e.kind)}
         <div class="row">
-          <span class="muted small mono">{e.at.toLocaleTimeString()}</span>
+          <span class="muted small mono">{e.at.toLocaleTimeString(localeTag(i18n.locale))}</span>
           <span class="badge {e.kind === 'cheat' ? 'bad' : e.kind === 'game_end' ? 'ok' : ''}">
             {tDynamic(`dash.kind.${e.kind}`, e.kind)}
           </span>

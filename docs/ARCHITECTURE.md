@@ -134,6 +134,12 @@ camera areas. The Stream Deck action *NestrisLTM Herzen*
    installer that installs or reuses PostgreSQL and Mosquitto (pinned,
    SHA-256 checked downloads), firewall rules, GitHub CI and release
    workflows, [OPERATIONS.md](OPERATIONS.md). ✅
-10. **Updates** (planned): check GitHub releases of `oe7set/*` automatically,
-   install on click, for NestrisLTM, the terminal, the stations and the
-   reader firmware: [UPDATES.md](UPDATES.md).
+10. **Updates**: check GitHub releases of `oe7set/*` automatically, install
+   on click, for NestrisLTM, the terminal, the stations and the reader
+   firmware: [UPDATES.md](UPDATES.md). ✅ (U1–U4; the end-to-end release test
+   U5 and some hardware runs are still open, see UPDATES.md)
+11. **Operations**: database problems explained with fixes (connection,
+   password, schema too new, backup restore), "needs attention" bell and
+   failed-results page, multi-select bulk actions, phone layout, results and
+   CSV exports, closing an event, automatic backups, helper role, audit log
+   filters, quick search (Ctrl+K). ✅

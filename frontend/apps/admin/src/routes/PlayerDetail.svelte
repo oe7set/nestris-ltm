@@ -262,7 +262,9 @@
       <tbody>
         {#each games as g (g.id)}
           <tr class="clickable" onclick={() => router.go(`/games/${g.id}`)}>
-            <td class="card-title" data-label={t("games.started")}>{dateTime(g.started_at, i18n.locale)}</td>
+            <td class="card-title" data-label={t("games.started")}>
+              <a href={`#/games/${g.id}`} onclick={(e) => e.stopPropagation()}>{dateTime(g.started_at, i18n.locale)}</a>
+            </td>
             <td data-label={t("games.station")}>{g.station_id ?? "–"}</td>
             <td class="num card-score" data-label={t("games.score")}><strong>{num(g.score, i18n.locale)}</strong></td>
             <td class="num" data-label={t("games.lines")}>{num(g.lines, i18n.locale)}</td>

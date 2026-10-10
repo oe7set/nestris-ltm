@@ -10,6 +10,7 @@
   import { dateTime, duration, num, pct } from "../lib/format";
   import { format, i18n, t, tDynamic } from "../lib/i18n.svelte";
   import { router } from "../lib/router.svelte";
+  import { saveGameNav } from "../lib/gameNav";
   import { poll } from "../lib/poll";
   import { Selection } from "../lib/selection.svelte";
   import { errorText, toasts } from "../lib/toast.svelte";
@@ -98,6 +99,7 @@
           hidden: hidden === "" ? null : hidden === "hidden", q, sort, limit: LIMIT, offset,
         },
       });
+      saveGameNav({ ids: page.items.map((g) => g.id), back: location.hash });
     } catch (e) {
       loadError = errorText(e);
     }
@@ -329,7 +331,9 @@
               aria-label={`${t("bulk.select_row")}: ${label(g)}`}
             />
           </td>
-          <td class="card-sub" data-label={t("games.started")}>{dateTime(g.started_at, i18n.locale)}</td>
+          <td class="card-sub" data-label={t("games.started")}>
+            <a href={`#/games/${g.id}`} onclick={(e) => e.stopPropagation()}>{dateTime(g.started_at, i18n.locale)}</a>
+          </td>
           <td class="card-title" data-label={t("games.player")}>
             {#if g.player_nickname}{g.player_nickname}
             {:else}<span class="badge warn">{t("games.unassigned")}</span>

@@ -13,6 +13,7 @@
   import { onMount } from "svelte";
   import PhaseBanner from "../components/PhaseBanner.svelte";
   import { poll } from "../lib/poll";
+  import { num } from "../lib/format";
   import { api } from "../lib/api";
   import { changeHeart } from "../lib/hearts";
   import { copyText } from "../lib/clipboard";
@@ -325,7 +326,7 @@
         <span class="badge">{layoutTitle(s)}</span>
         <span class="badge {quali ? 'quali' : 'accent'}">{roundText(s)}</span>
         <span class="spacer"></span>
-        <span class="muted small">OBS {s.clients}</span>
+        <span class="muted small" title={t("regie.obs_clients")}>OBS {s.clients}</span>
       </div>
 
       <div class="row controls">
@@ -369,7 +370,7 @@
               />
             {/if}
             <span class="badge {st.status === 'playing' ? 'ok' : st.status === 'finished' ? 'accent' : ''}">
-              {tDynamic(`scenes.status.${st.status}`, st.status)}{st.score !== null ? ` · ${st.score.toLocaleString()}` : ""}
+              {tDynamic(`scenes.status.${st.status}`, st.status)}{st.score !== null ? ` · ${num(st.score, i18n.locale)}` : ""}
             </span>
             {#if st.outcome && !quali}
               <span class="badge {st.outcome === 'eliminated' ? 'bad' : 'ok'}">{tDynamic(`scenes.outcome.${st.outcome}`, st.outcome)}</span>
@@ -495,6 +496,7 @@
   }
   .url code {
     color: var(--link);
+    overflow-wrap: anywhere;
   }
   .badge.quali {
     border-color: #3cbcfc;
