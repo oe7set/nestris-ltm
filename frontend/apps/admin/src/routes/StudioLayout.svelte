@@ -848,20 +848,20 @@
         <button class="icon" title={t("builder.undo")} aria-label={t("builder.undo")} disabled={!canUndo} onclick={undo}>↶</button>
         <button class="icon" title={t("builder.redo")} aria-label={t("builder.redo")} disabled={!canRedo} onclick={redo}>↷</button>
         <div class="seg">
-          <button class:on={zoom === "fit"} onclick={() => (zoom = "fit")}>{t("builder.zoom_fit")}</button>
+          <button aria-pressed={zoom === "fit"} class:on={zoom === "fit"} onclick={() => (zoom = "fit")}>{t("builder.zoom_fit")}</button>
           {#each [0.5, 0.75, 1] as z (z)}
-            <button class:on={zoom === z} onclick={() => (zoom = z)}>{z * 100}%</button>
+            <button aria-pressed={zoom === z} class:on={zoom === z} onclick={() => (zoom = z)}>{z * 100}%</button>
           {/each}
         </div>
         <label class="row inline"><input type="checkbox" bind:checked={showGrid} /> {t("builder.grid")}</label>
         <div class="seg" title={t("builder.style_preview")}>
-          <button class:on={style === "nes"} onclick={() => (style = "nes")}>NES</button>
-          <button class:on={style === "modern"} onclick={() => (style = "modern")}>Modern</button>
+          <button aria-pressed={style === "nes"} class:on={style === "nes"} onclick={() => (style = "nes")}>NES</button>
+          <button aria-pressed={style === "modern"} class:on={style === "modern"} onclick={() => (style = "modern")}>Modern</button>
         </div>
         <GuideTools />
         <div class="seg">
-          <button class:on={background === "checker"} onclick={() => (background = "checker")}>{t("studio.bg_checker")}</button>
-          <button class:on={background === "dark"} onclick={() => (background = "dark")}>{t("scenes.bg_dark")}</button>
+          <button aria-pressed={background === "checker"} class:on={background === "checker"} onclick={() => (background = "checker")}>{t("studio.bg_checker")}</button>
+          <button aria-pressed={background === "dark"} class:on={background === "dark"} onclick={() => (background = "dark")}>{t("scenes.bg_dark")}</button>
         </div>
         {#if sel.length > 1}
           <span class="sep"></span>
@@ -1189,20 +1189,6 @@
     width: 1px;
     height: 24px;
     background: var(--line);
-  }
-  .seg {
-    display: inline-flex;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    overflow: hidden;
-  }
-  .seg button {
-    border: 0;
-    border-radius: 0;
-  }
-  .seg button.on {
-    background: var(--accent);
-    color: var(--accent-ink);
   }
   .icon {
     min-width: 34px;

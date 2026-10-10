@@ -129,6 +129,7 @@ async def test_hearts_flow(runtime: Runtime) -> None:
 
         # Undo the last change: the heart comes back, the winner goes away.
         last = view["events"][-1]["id"]
+        assert view["event_id"] == last  # what the UI's undo toast uses
         view = (await client.post(f"/api/tournament/lives/undo/{last}", headers=shell)).json()
         assert view["winner_id"] is None and not view["decided_by_lives"]
         assert {p["nickname"]: p["lives"] for p in view["players"]} == {"Alice": 2, "Dan": 1}

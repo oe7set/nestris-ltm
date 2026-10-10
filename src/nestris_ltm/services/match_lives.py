@@ -300,6 +300,7 @@ class MatchLives:
                 )
                 session.add(row)
                 await session.flush()
+                event_id = row.id
                 self._events.append(_event(row))
                 await audit.record(
                     session, actor=actor, action="lives", entity="match", entity_id=0,
@@ -309,7 +310,8 @@ class MatchLives:
                 )  # fmt: skip
             await self._settle(match_id, actor)
         self._changed()
-        return self.match_view(match_id) or {}
+        # The new event's id lets the UI offer "undo" for exactly this change.
+        return {**(self.match_view(match_id) or {}), "event_id": event_id}
 
     async def round_complete(
         self, runtime: SceneRuntime, pair: int, round_number: int, scores: dict[int, int | None]

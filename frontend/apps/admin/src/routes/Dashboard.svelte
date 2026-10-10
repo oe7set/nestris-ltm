@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import AttentionList from "../components/AttentionList.svelte";
   import PhaseBanner from "../components/PhaseBanner.svelte";
+  import { poll } from "../lib/poll";
   import { api } from "../lib/api";
   import { dateTime, num } from "../lib/format";
   import { i18n, t, tDynamic } from "../lib/i18n.svelte";
@@ -56,12 +57,12 @@
     api<ActiveEvent | null>("/api/events/active")
       .then((e) => (event = e))
       .catch(() => (event = null));
-    const a = setInterval(refresh, 2000);
-    const b = setInterval(refreshLogs, 2000);
+    const stopDiag = poll(refresh, 2000);
+    const stopLogs = poll(refreshLogs, 2000);
     return () => {
       release();
-      clearInterval(a);
-      clearInterval(b);
+      stopDiag();
+      stopLogs();
     };
   });
 

@@ -3,6 +3,7 @@
   // reaches this host: the station's `perf` status (0.3.0+) and the host's
   // own reception statistics, with a short history.
   import { onMount } from "svelte";
+  import { poll } from "../lib/poll";
   import { api } from "../lib/api";
   import { t } from "../lib/i18n.svelte";
   import { live } from "../lib/live.svelte";
@@ -42,11 +43,11 @@
   onMount(() => {
     const release = live.acquire();
     const first = setTimeout(loadHistory, 500);
-    const timer = setInterval(loadHistory, 10_000);
+    const stop = poll(loadHistory, 10_000);
     return () => {
       release();
       clearTimeout(first);
-      clearInterval(timer);
+      stop();
     };
   });
 

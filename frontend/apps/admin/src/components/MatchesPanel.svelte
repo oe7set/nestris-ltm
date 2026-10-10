@@ -2,8 +2,11 @@
   // Hearts of the 1-vs-1 matches of the fixed bracket (Turnier → Matches &
   // Herzen): take/give hearts, hearts per match, which scene pair shows the
   // match, history with undo. The defaults live in Einstellungen.
+  import Hearts from "./Hearts.svelte";
   import { onMount } from "svelte";
+  import { ErrorOnce, poll } from "../lib/poll";
   import { api } from "../lib/api";
+  import { changeHeart } from "../lib/hearts";
   import { dateTime } from "../lib/format";
   import { i18n, t } from "../lib/i18n.svelte";
   import { toasts } from "../lib/toast.svelte";
@@ -51,11 +54,14 @@
   let busy = $state(false);
   let history = $state<string | null>(null);
 
+  const loadErrors = new ErrorOnce();
+
   async function load(): Promise<void> {
     try {
       info = await api<LivesState>("/api/tournament/matches");
+      loadErrors.ok();
     } catch (e) {
-      toasts.error(e);
+      loadErrors.report(e);
     }
   }
 
@@ -73,7 +79,7 @@
   }
 
   const change = (m: MatchRow, p: MatchPlayer, action: "lose" | "gain") =>
-    act(() => api(`/api/tournament/matches/${m.match_id}/lives`, { method: "POST", body: { player_id: p.id, action } }));
+    act(() => changeHeart(m.match_id, p.id, p.nickname, action, load));
   const setMax = (m: MatchRow, value: string) =>
     act(() =>
       api(`/api/tournament/matches/${m.match_id}/max-lives`, {
@@ -100,8 +106,7 @@
   onMount(() => {
     void load();
     void api<SceneRow[]>("/api/scenes").then((s) => (scenes = s)).catch(() => {});
-    const timer = setInterval(() => void load(), 3000);
-    return () => clearInterval(timer);
+    return poll(load, 3000);
   });
 </script>
 
@@ -130,13 +135,15 @@
           {#each m.players as p (p.id)}
             <div class="player row" class:winner={m.winner_id === p.id} class:loser={m.winner_id !== null && m.winner_id !== p.id}>
               <span class="nick">{#if p.seed}<span class="muted small">#{p.seed}</span> {/if}{p.nickname}</span>
-              <span class="hearts" aria-label="{p.lives}/{m.max_lives}">
-                {#each Array.from({ length: m.max_lives }, (_, i) => i) as i (i)}
-                  <span class="heart" class:empty={i >= p.lives}>♥</span>
-                {/each}
-              </span>
-              <button disabled={busy || p.lives <= 0} onclick={() => change(m, p, "lose")} title={t("matches.lose")}>−</button>
-              <button disabled={busy || p.lives >= m.max_lives} onclick={() => change(m, p, "gain")} title={t("matches.gain")}>+</button>
+              <Hearts
+                current={p.lives}
+                max={m.max_lives}
+                name={p.nickname}
+                size={22}
+                disabled={busy}
+                onlose={() => change(m, p, "lose")}
+                ongain={() => change(m, p, "gain")}
+              />
             </div>
           {/each}
           <div class="row foot">
@@ -173,6 +180,8 @@
       {/each}
     </div>
   {/if}
+{:else}
+  <p class="muted">{t("common.loading")}</p>
 {/if}
 
 <style>
@@ -202,25 +211,6 @@
   .player.loser .nick {
     text-decoration: line-through;
     opacity: 0.6;
-  }
-  .player button {
-    width: 36px;
-    padding: 2px 0;
-    font-size: 18px;
-  }
-  .hearts {
-    display: flex;
-    gap: 3px;
-    font-size: 22px;
-    line-height: 1;
-  }
-  .heart {
-    color: #e5343a;
-    text-shadow: 0 0 1px #000;
-  }
-  .heart.empty {
-    color: transparent;
-    -webkit-text-stroke: 1.5px #777;
   }
   .events {
     margin: 0;

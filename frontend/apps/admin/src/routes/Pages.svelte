@@ -49,6 +49,7 @@
   {/each}
 </div>
 
+{#if !pages.length}<p class="muted">{t("common.loading")}</p>{/if}
 {#each GROUPS as group (group)}
   {@const items = pages.filter((p) => p.group === group)}
   {#if items.length}

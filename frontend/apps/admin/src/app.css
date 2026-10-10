@@ -268,6 +268,23 @@ label.check {
   border-radius: 8px;
   padding: 8px 12px;
 }
+/* Joined toggle buttons (components/Segmented.svelte and editor toolbars). */
+.seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.seg button {
+  border: 0;
+  border-radius: 0;
+}
+.seg button.on {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
 /* Shared message styles (were scoped to single pages before). */
 .info-box {
   padding: 8px 12px;

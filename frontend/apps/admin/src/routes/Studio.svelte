@@ -1,6 +1,7 @@
 <script lang="ts">
   // Scene studio: gallery of scenes and own layouts with live thumbnails,
   // new scene from a layout gallery, duplicate, export and import.
+  import Tabs from "../components/Tabs.svelte";
   import { onMount } from "svelte";
   import Modal from "../components/Modal.svelte";
   import Thumb from "../components/Thumb.svelte";
@@ -18,10 +19,12 @@
     type LayoutInfo,
     type SceneRow,
   } from "../lib/studio";
+  import { tabFromQuery, tabToQuery } from "../lib/tabs";
   import { toasts } from "../lib/toast.svelte";
 
-  type Tab = "scenes" | "layouts";
-  let tab = $state<Tab>((router.current.query.get("tab") as Tab) ?? "scenes");
+  const TABS = ["scenes", "layouts"] as const;
+  type Tab = (typeof TABS)[number];
+  let tab = $state<Tab>(tabFromQuery(TABS));
   let scenes = $state<SceneRow[]>([]);
   let layouts = $state<LayoutInfo[]>([]);
   let customs = $state<CustomLayout[]>([]);
@@ -75,7 +78,7 @@
 
   function setTab(next: Tab): void {
     tab = next;
-    router.setQuery({ tab: next === "scenes" ? null : next });
+    tabToQuery(TABS, next);
   }
 
   // ---- scenes
@@ -233,13 +236,17 @@
 </div>
 <p class="hint">{t("studio.hint")}</p>
 
-<div class="tabs">
-  <button class:on={tab === "scenes"} onclick={() => setTab("scenes")}>{t("studio.tab_scenes")} ({scenes.length})</button>
-  <button class:on={tab === "layouts"} onclick={() => setTab("layouts")}>{t("studio.tab_layouts")} ({customs.length})</button>
-</div>
+<Tabs
+  tabs={[
+    { id: "scenes", label: `${t("studio.tab_scenes")} (${scenes.length})` },
+    { id: "layouts", label: `${t("studio.tab_layouts")} (${customs.length})` },
+  ]}
+  active={tab}
+  onchange={setTab}
+/>
 
 {#if loading}
-  <p class="muted">…</p>
+  <p class="muted">{t("common.loading")}</p>
 {:else if tab === "scenes"}
   {#if scenes.length === 0}
     <p class="muted">{t("studio.no_scenes")}</p>
@@ -336,7 +343,7 @@
     <p class="muted small">{t("studio.pick_layout")}</p>
     <div class="layout-pick">
       {#each creatable as l (l.id)}
-        <button class="pick" class:on={newLayout === l.id} onclick={() => (newLayout = l.id)}>
+        <button aria-pressed={newLayout === l.id} class="pick" class:on={newLayout === l.id} onclick={() => (newLayout = l.id)}>
           <Thumb config={previewOf({ slug: "preview", name: newName || l.title_de, layout: l.id, mode: "none", settings: defaultSettings() }, l)} />
           <span>{i18n.locale === "en" ? l.title_en : l.title_de}{l.custom ? " ★" : ""}</span>
         </button>
@@ -413,15 +420,6 @@
   }
   .head h1 {
     margin: 0;
-  }
-  .tabs {
-    display: flex;
-    gap: 8px;
-    margin: 10px 0 14px;
-  }
-  .tabs button.on {
-    border-color: var(--accent);
-    color: var(--accent);
   }
   .gallery {
     display: grid;

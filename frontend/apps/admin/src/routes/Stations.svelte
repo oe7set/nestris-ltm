@@ -1,18 +1,22 @@
 <script lang="ts">
+  import ErrorBox from "../components/ErrorBox.svelte";
   import { onMount } from "svelte";
   import { confirmAsync } from "../lib/confirm.svelte";
   import { api } from "../lib/api";
   import { dateTime, num } from "../lib/format";
   import { i18n, t } from "../lib/i18n.svelte";
-  import { toasts } from "../lib/toast.svelte";
+  import { errorText, toasts } from "../lib/toast.svelte";
   import type { EventInfo, StationRow } from "../lib/types";
 
   let stations = $state<StationRow[] | null>(null);
   let active = $state<EventInfo | null>(null);
   let names = $state<Record<string, string>>({});
 
+  let loadError = $state<string | null>(null);
+
   async function load(): Promise<void> {
     try {
+      loadError = null;
       const previous = new Map((stations ?? []).map((s) => [s.id, s.name ?? ""]));
       stations = await api<StationRow[]>("/api/stations");
       // Keep names typed but not saved yet (another action reloads the list).
@@ -26,7 +30,7 @@
       const events = await api<EventInfo[]>("/api/events");
       active = events.find((e) => e.is_active) ?? null;
     } catch (e) {
-      toasts.error(e);
+      loadError = errorText(e);
     }
   }
 
@@ -52,6 +56,7 @@
 
 <h1>{t("stations.title")}</h1>
 
+{#if loadError}<ErrorBox text={loadError} onretry={() => void load()} />{/if}
 <div class="table-wrap">
   <table>
     <thead>
@@ -106,7 +111,7 @@
           </td>
         </tr>
       {:else}
-        <tr><td colspan="8" class="empty">{stations ? t("stations.none") : t("common.loading")}</td></tr>
+        <tr><td colspan="8" class="empty">{stations ? t("stations.none") : loadError ? "–" : t("common.loading")}</td></tr>
       {/each}
     </tbody>
   </table>

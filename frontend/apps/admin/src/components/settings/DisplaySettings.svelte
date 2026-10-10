@@ -118,6 +118,8 @@
       <button onclick={() => { scroll = 100; void post("/api/tournament/view/scroll", { position: 1 }); }}>{t("display.bottom")}</button>
     </div>
   </section>
+{:else}
+  <p class="muted">{t("common.loading")}</p>
 {/if}
 
 <section class="panel block">

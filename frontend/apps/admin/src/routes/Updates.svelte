@@ -235,6 +235,8 @@
       </table>
     {/if}
   </section>
+{:else}
+  <p class="muted">{t("common.loading")}</p>
 {/if}
 
 {#if target && askRunning === null}

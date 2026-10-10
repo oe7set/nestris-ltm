@@ -1,12 +1,13 @@
 <script lang="ts">
+  import Tabs from "../components/Tabs.svelte";
   import { confirmAsync } from "../lib/confirm.svelte";
+  import { tabFromQuery, tabToQuery } from "../lib/tabs";
   import { session } from "../lib/session.svelte";
   import { copyText } from "../lib/clipboard";
   import { onMount } from "svelte";
   import Modal from "../components/Modal.svelte";
   import DisplaySettings from "../components/settings/DisplaySettings.svelte";
   import TournamentSettings from "../components/settings/TournamentSettings.svelte";
-  import { router } from "../lib/router.svelte";
   import { api } from "../lib/api";
   import { dateTime } from "../lib/format";
   import { i18n, t, tDynamic } from "../lib/i18n.svelte";
@@ -30,11 +31,10 @@
   // Tabs: general, tournament & scenes, highscore display, access.
   const TABS = ["general", "tournament", "display", "access"] as const;
   type Tab = (typeof TABS)[number];
-  const wanted = router.current.query.get("tab");
-  let tab = $state<Tab>(TABS.includes(wanted as Tab) ? (wanted as Tab) : "general");
+  let tab = $state<Tab>(tabFromQuery(TABS));
   function setTab(next: Tab): void {
     tab = next;
-    router.setQuery({ tab: next === "general" ? null : next });
+    tabToQuery(TABS, next);
   }
 
   let admins = $state<Admin[]>([]);
@@ -109,11 +109,7 @@
 
 <h1>{t("settings.title")}</h1>
 
-<div class="tabs">
-  {#each TABS as name (name)}
-    <button class:on={tab === name} onclick={() => setTab(name)}>{tDynamic(`settings.tab_${name}`, name)}</button>
-  {/each}
-</div>
+<Tabs tabs={TABS.map((id) => ({ id, label: tDynamic(`settings.tab_${id}`, id) }))} active={tab} onchange={setTab} />
 
 {#if tab === "tournament"}
   <TournamentSettings />
@@ -240,16 +236,6 @@
 {/if}
 
 <style>
-  .tabs {
-    display: flex;
-    gap: 6px;
-    margin-bottom: 14px;
-    flex-wrap: wrap;
-  }
-  .tabs button.on {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
   .block {
     margin-bottom: 16px;
   }

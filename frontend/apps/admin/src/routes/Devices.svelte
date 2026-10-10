@@ -3,6 +3,7 @@
   // newest release; stations (and their readers) update from here (U4).
   import { onMount } from "svelte";
   import Modal from "../components/Modal.svelte";
+  import { ErrorOnce, poll } from "../lib/poll";
   import { api } from "../lib/api";
   import { dateTime } from "../lib/format";
   import { i18n, t, type MessageKey } from "../lib/i18n.svelte";
@@ -68,11 +69,14 @@
     null,
   );
 
+  const loadErrors = new ErrorOnce();
+
   async function load(): Promise<void> {
     try {
       info = await api<DevicesState>("/api/devices");
+      loadErrors.ok();
     } catch (e) {
-      toasts.error(e);
+      loadErrors.report(e);
     }
   }
 
@@ -131,13 +135,7 @@
   onMount(() => {
     void load();
     // Faster while a station reports progress.
-    let timer: ReturnType<typeof setTimeout>;
-    const tick = (): void => {
-      const busy = info?.stations.some(running) ?? false;
-      timer = setTimeout(() => void load().then(tick), busy ? 1000 : 4000);
-    };
-    tick();
-    return () => clearTimeout(timer);
+    return poll(load, () => ((info?.stations.some(running) ?? false) ? 1000 : 4000));
   });
 </script>
 
@@ -261,6 +259,8 @@
       </table>
     {/if}
   </section>
+{:else}
+  <p class="muted">{t("common.loading")}</p>
 {/if}
 
 {#if dialog}

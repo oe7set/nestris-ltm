@@ -4,6 +4,7 @@
   // it and restarts its recognition after the running game.
   import { onMount } from "svelte";
   import { confirmAsync } from "../lib/confirm.svelte";
+  import { ErrorOnce, poll } from "../lib/poll";
   import { api } from "../lib/api";
   import { dateTime } from "../lib/format";
   import { i18n, t, tDynamic } from "../lib/i18n.svelte";
@@ -44,12 +45,15 @@
   const template = $derived<Values | null>(data?.template ?? null);
   const extraKeys = $derived(leafPaths(draft).filter((k) => !FORM_KEYS.has(k)));
 
+  const loadErrors = new ErrorOnce();
+
   async function load(): Promise<void> {
     try {
       data = await api<ConfigOverview>("/api/station-config");
+      loadErrors.ok();
       if (!dirty) resetDraft();
     } catch (e) {
-      toasts.error(e);
+      loadErrors.report(e);
     }
   }
 
@@ -162,8 +166,7 @@
   onMount(() => {
     void load();
     // Reports change after an apply (pending -> restarting -> applied).
-    const timer = setInterval(load, 3000);
-    return () => clearInterval(timer);
+    return poll(load, 3000);
   });
 
   function stateClass(s: ConfigStation): string {
@@ -193,12 +196,12 @@
 
 <div class="layout">
   <nav class="panel list">
-    <button class:on={selected === TEMPLATE} onclick={() => select(TEMPLATE)}>
+    <button aria-pressed={selected === TEMPLATE} class:on={selected === TEMPLATE} onclick={() => select(TEMPLATE)}>
       <strong>{t("sconf.template")}</strong>
       <span class="muted small">{t("sconf.template_hint")}</span>
     </button>
     {#each data?.stations ?? [] as s (s.id)}
-      <button class:on={selected === s.id} onclick={() => select(s.id)}>
+      <button aria-pressed={selected === s.id} class:on={selected === s.id} onclick={() => select(s.id)}>
         <span class="dot {s.online ? 'ok' : 'bad'}"></span>
         <strong>{s.name ?? s.id}</strong>
         {#if s.report}

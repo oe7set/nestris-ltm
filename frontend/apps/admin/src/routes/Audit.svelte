@@ -1,10 +1,11 @@
 <script lang="ts">
+  import ErrorBox from "../components/ErrorBox.svelte";
   import { onMount } from "svelte";
   import Pager from "../components/Pager.svelte";
   import { api } from "../lib/api";
   import { dateTime } from "../lib/format";
   import { i18n, t } from "../lib/i18n.svelte";
-  import { toasts } from "../lib/toast.svelte";
+  import { errorText, toasts } from "../lib/toast.svelte";
   import type { AuditEntry } from "../lib/types";
 
   const LIMIT = 100;
@@ -13,11 +14,14 @@
   let offset = $state(0);
   let page = $state<{ items: AuditEntry[]; total: number } | null>(null);
 
+  let loadError = $state<string | null>(null);
+
   async function load(): Promise<void> {
     try {
+      loadError = null;
       page = await api("/api/audit", { query: { entity, limit: LIMIT, offset } });
     } catch (e) {
-      toasts.error(e);
+      loadError = errorText(e);
     }
   }
 
@@ -51,6 +55,7 @@
   </select>
 </div>
 
+{#if loadError}<ErrorBox text={loadError} onretry={() => void load()} />{/if}
 <div class="table-wrap">
   <table>
     <thead>
@@ -77,7 +82,7 @@
           </td>
         </tr>
       {:else}
-        <tr><td colspan="5" class="empty">{page ? t("audit.none") : t("common.loading")}</td></tr>
+        <tr><td colspan="5" class="empty">{page ? t("audit.none") : loadError ? "–" : t("common.loading")}</td></tr>
       {/each}
     </tbody>
   </table>

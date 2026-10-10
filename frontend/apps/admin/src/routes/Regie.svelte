@@ -3,9 +3,13 @@
   // tournament phase (qualifying / fixed, FIX), the global run switches, and
   // per scene: how it runs, the live slots with hearts -/+, the match each
   // pair shows, new round, reset slot. Designing scenes is the studio's job.
+  import Hearts from "../components/Hearts.svelte";
+  import Segmented from "../components/Segmented.svelte";
   import { onMount } from "svelte";
   import PhaseBanner from "../components/PhaseBanner.svelte";
+  import { poll } from "../lib/poll";
   import { api } from "../lib/api";
+  import { changeHeart } from "../lib/hearts";
   import { copyText } from "../lib/clipboard";
   import { i18n, t, tDynamic } from "../lib/i18n.svelte";
   import { FLOWS, type Flow, type LayoutInfo, type SceneRow } from "../lib/studio";
@@ -145,10 +149,9 @@
   function heart(s: SceneRow, st: SlotState, action: "lose" | "gain"): void {
     const pair = layoutOf(s)?.pairs.findIndex((p) => p.includes(st.slot)) ?? -1;
     const match = live[s.slug]?.matches?.find((m) => m.pair === pair);
-    if (!match || st.player_id === undefined) return;
-    void run(() =>
-      api(`/api/tournament/matches/${match.match_id}/lives`, { method: "POST", body: { player_id: st.player_id, action } }),
-    );
+    if (!match || st.player_id === undefined || st.player_id === null) return;
+    const playerId = st.player_id;
+    void run(() => changeHeart(match.match_id, playerId, st.name ?? "–", action, pollLive));
   }
   const matchLabel = (m: MatchOption): string => `${m.round_name}: ${m.players.map((p) => p.nickname).join(" vs ")}`;
   const roundText = (s: SceneRow): string => {
@@ -172,11 +175,11 @@
     api<{ base_urls: string[] }>("/api/meta/pages")
       .then((m) => (origin = m.base_urls[1] ?? m.base_urls[0] ?? location.origin))
       .catch(() => {});
-    const timer = setInterval(pollLive, 1500);
-    const matchTimer = setInterval(() => void loadMatches(), 5000);
+    const stopLive = poll(pollLive, 1500);
+    const stopMatches = poll(loadMatches, 5000);
     return () => {
-      clearInterval(timer);
-      clearInterval(matchTimer);
+      stopLive();
+      stopMatches();
     };
   });
 </script>
@@ -190,13 +193,15 @@
 <PhaseBanner onchange={() => void pollLive()} />
 
 <section class="panel switches">
-  <label class="field">
-    {t("regie.next_round")}
-    <div class="seg">
-      <button class:on={nextRound === "manual"} onclick={() => setNextRound("manual")}>{t("regie.next_round_manual")}</button>
-      <button class:on={nextRound === "auto"} onclick={() => setNextRound("auto")}>{t("regie.next_round_auto")}</button>
-    </div>
-  </label>
+  <Segmented
+    label={t("regie.next_round")}
+    options={[
+      { value: "manual", label: t("regie.next_round_manual") },
+      { value: "auto", label: t("regie.next_round_auto") },
+    ]}
+    value={nextRound}
+    onchange={setNextRound}
+  />
   {#if lives}
     <label class="check" title={t("regie.auto_bind_hint")}>
       <input type="checkbox" checked={lives.auto_bind} onchange={(e) => setLives({ auto_bind: e.currentTarget.checked })} />
@@ -253,13 +258,14 @@
             <span class="muted small">{t("scenes.slot")} {st.slot + 1} · {st.station_id ?? "–"}</span>
             <strong>{st.name ?? "–"}</strong>
             {#if st.lives && !quali}
-              <div class="row hearts-row">
-                <span class="hearts" title="{st.lives.current}/{st.lives.max}">
-                  {#each Array.from({ length: st.lives.max }, (_, i) => i) as i (i)}<span class:empty={i >= (st.lives.current ?? 0)}>♥</span>{/each}
-                </span>
-                <button class="mini" disabled={busy || (st.lives.current ?? 0) <= 0} title={t("matches.lose")} onclick={() => heart(s, st, "lose")}>−</button>
-                <button class="mini" disabled={busy || (st.lives.current ?? 0) >= st.lives.max} title={t("matches.gain")} onclick={() => heart(s, st, "gain")}>+</button>
-              </div>
+              <Hearts
+                current={st.lives.current ?? 0}
+                max={st.lives.max}
+                name={st.name ?? "–"}
+                disabled={busy}
+                onlose={() => heart(s, st, "lose")}
+                ongain={() => heart(s, st, "gain")}
+              />
             {/if}
             <span class="badge {st.status === 'playing' ? 'ok' : st.status === 'finished' ? 'accent' : ''}">
               {tDynamic(`scenes.status.${st.status}`, st.status)}{st.score !== null ? ` · ${st.score.toLocaleString()}` : ""}
@@ -323,20 +329,6 @@
     align-items: end;
     margin-bottom: 14px;
   }
-  .seg {
-    display: inline-flex;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    overflow: hidden;
-  }
-  .seg button {
-    border: 0;
-    border-radius: 0;
-  }
-  .seg button.on {
-    background: var(--accent);
-    color: var(--accent-ink);
-  }
   .list {
     display: grid;
     gap: 14px;
@@ -373,24 +365,6 @@
     border: 1px solid var(--line);
     border-radius: 8px;
     justify-items: start;
-  }
-  .hearts-row {
-    gap: 6px;
-    align-items: center;
-  }
-  .hearts {
-    color: #e5343a;
-    font-size: 18px;
-    letter-spacing: 1px;
-  }
-  .hearts .empty {
-    color: transparent;
-    -webkit-text-stroke: 1px #777;
-  }
-  .mini {
-    width: 30px;
-    padding: 0;
-    font-size: 16px;
   }
   .pair {
     gap: 10px;

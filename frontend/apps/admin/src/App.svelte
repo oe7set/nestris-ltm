@@ -149,8 +149,8 @@
       </nav>
       <div class="foot">
         <div class="lang">
-          <button class:on={i18n.locale === "de"} onclick={() => i18n.set("de")}>DE</button>
-          <button class:on={i18n.locale === "en"} onclick={() => i18n.set("en")}>EN</button>
+          <button aria-pressed={i18n.locale === "de"} class:on={i18n.locale === "de"} onclick={() => i18n.set("de")}>DE</button>
+          <button aria-pressed={i18n.locale === "en"} class:on={i18n.locale === "en"} onclick={() => i18n.set("en")}>EN</button>
         </div>
         <div class="muted small">{t("nav.signed_in", { name: session.me.name ?? "" })}</div>
         {#if session.me.kind === "session"}
@@ -358,13 +358,17 @@
       gap: 8px;
     }
     .menu-btn {
-      display: inline-flex;
+      display: block;
       margin-left: auto;
       min-height: 40px;
-      max-width: 60%;
+      min-width: 0;
+      flex: 0 1 auto;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+    .brand {
+      flex: none;
     }
     aside:not(.open) nav,
     aside:not(.open) .foot {

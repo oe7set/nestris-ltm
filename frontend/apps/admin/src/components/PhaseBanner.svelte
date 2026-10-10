@@ -17,6 +17,7 @@
   // Turnier and the dashboard (compact).
   import { onMount } from "svelte";
   import { confirmAsync } from "../lib/confirm.svelte";
+  import { poll } from "../lib/poll";
   import { api } from "../lib/api";
   import { attention, attentionText } from "../lib/attention.svelte";
   import { dateTime } from "../lib/format";
@@ -73,8 +74,7 @@
 
   onMount(() => {
     void load();
-    const timer = setInterval(() => void load(), 3000);
-    return () => clearInterval(timer);
+    return poll(load, 3000);
   });
 </script>
 

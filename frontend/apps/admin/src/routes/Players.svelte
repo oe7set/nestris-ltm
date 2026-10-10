@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ErrorBox from "../components/ErrorBox.svelte";
   import { onMount } from "svelte";
   import BulkBar from "../components/BulkBar.svelte";
   import Modal from "../components/Modal.svelte";
@@ -8,7 +9,7 @@
   import { format, i18n, t, tDynamic } from "../lib/i18n.svelte";
   import { router } from "../lib/router.svelte";
   import { Selection } from "../lib/selection.svelte";
-  import { toasts } from "../lib/toast.svelte";
+  import { errorText, toasts } from "../lib/toast.svelte";
   import type { Page, Player } from "../lib/types";
 
   interface BulkResult {
@@ -41,14 +42,17 @@
     if (pageBox) pageBox.indeterminate = pageState === "some";
   });
 
+  let loadError = $state<string | null>(null);
+
   async function load(): Promise<void> {
     router.setQuery({ q, deleted: includeDeleted, auto: onlyAuto, offset: offset || null });
     try {
+      loadError = null;
       page = await api<Page<Player>>("/api/players", {
         query: { q, include_deleted: includeDeleted, only_auto_created: onlyAuto, limit: LIMIT, offset },
       });
     } catch (e) {
-      toasts.error(e);
+      loadError = errorText(e);
     }
   }
 
@@ -118,6 +122,7 @@
   <label class="check"><input type="checkbox" bind:checked={includeDeleted} onchange={searchSoon} /> {t("players.include_deleted")}</label>
 </div>
 
+{#if loadError}<ErrorBox text={loadError} onretry={() => void load()} />{/if}
 <div class="table-wrap">
   <table class="table-cards">
     <thead>
@@ -165,7 +170,7 @@
           </div></td>
         </tr>
       {:else}
-        <tr><td colspan="7" class="empty">{page ? t("players.none") : t("common.loading")}</td></tr>
+        <tr><td colspan="7" class="empty">{page ? t("players.none") : loadError ? "–" : t("common.loading")}</td></tr>
       {/each}
     </tbody>
   </table>

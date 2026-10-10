@@ -228,8 +228,8 @@
       <section class="panel block">
         <h2>{t("studio.look")}</h2>
         <div class="seg">
-          <button class:on={settings.style === "nes"} onclick={() => (settings.style = "nes")}>NES</button>
-          <button class:on={settings.style === "modern"} onclick={() => (settings.style = "modern")}>Modern</button>
+          <button aria-pressed={settings.style === "nes"} class:on={settings.style === "nes"} onclick={() => (settings.style = "nes")}>NES</button>
+          <button aria-pressed={settings.style === "modern"} class:on={settings.style === "modern"} onclick={() => (settings.style = "modern")}>Modern</button>
         </div>
         <label class="field">{t("scenes.title_override")}<input bind:value={settings.title} maxlength="64" placeholder={name} /></label>
         <div class="two">
@@ -298,12 +298,12 @@
     <section class="stage-col">
       <div class="row tools">
         <div class="seg">
-          <button class:on={source === "demo"} onclick={() => (source = "demo")}>{t("studio.demo")}</button>
-          <button class:on={source === "live"} onclick={() => (source = "live")}>{t("studio.live")}</button>
+          <button aria-pressed={source === "demo"} class:on={source === "demo"} onclick={() => (source = "demo")}>{t("studio.demo")}</button>
+          <button aria-pressed={source === "live"} class:on={source === "live"} onclick={() => (source = "live")}>{t("studio.live")}</button>
         </div>
         <div class="seg">
-          <button class:on={background === "checker"} onclick={() => (background = "checker")}>{t("studio.bg_checker")}</button>
-          <button class:on={background === "dark"} onclick={() => (background = "dark")}>{t("scenes.bg_dark")}</button>
+          <button aria-pressed={background === "checker"} class:on={background === "checker"} onclick={() => (background = "checker")}>{t("studio.bg_checker")}</button>
+          <button aria-pressed={background === "dark"} class:on={background === "dark"} onclick={() => (background = "dark")}>{t("scenes.bg_dark")}</button>
         </div>
         <GuideTools />
         <span class="spacer"></span>
@@ -322,7 +322,7 @@
   <Modal title={t("studio.pick_layout")} onclose={() => (picking = false)} wide>
     <div class="layout-pick">
       {#each layouts.filter((l) => l.id !== "replay" || layout === "replay") as l (l.id)}
-        <button class="pick" class:on={layout === l.id} onclick={() => chooseLayout(l.id)}>
+        <button aria-pressed={layout === l.id} class="pick" class:on={layout === l.id} onclick={() => chooseLayout(l.id)}>
           <Thumb config={previewOf({ slug: "preview", name, layout: l.id, mode: "none", settings }, l, { definition: customs.find((c) => c.key === l.id)?.definition ?? null })} />
           <span>{i18n.locale === "en" ? l.title_en : l.title_de}{l.custom ? " ★" : ""}</span>
         </button>
@@ -373,20 +373,6 @@
   .tools {
     gap: 10px;
     align-items: center;
-  }
-  .seg {
-    display: inline-flex;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    overflow: hidden;
-  }
-  .seg button {
-    border: 0;
-    border-radius: 0;
-  }
-  .seg button.on {
-    background: var(--accent);
-    color: var(--accent-ink);
   }
   .two {
     display: grid;

@@ -1,6 +1,7 @@
 <script lang="ts">
   // Einstellungen → Turnier & Szenen: how the scenes run and the hearts
   // defaults. The same switches sit on the Regie page for quick access.
+  import Segmented from "../Segmented.svelte";
   import { onMount } from "svelte";
   import { api } from "../../lib/api";
   import { t } from "../../lib/i18n.svelte";
@@ -52,13 +53,15 @@
 <section class="panel block">
   <h2>{t("settings.flow_title")}</h2>
   <p class="hint">{t("settings.flow_hint")}</p>
-  <label class="field">
-    {t("regie.next_round")}
-    <div class="seg">
-      <button class:on={nextRound === "manual"} onclick={() => setNextRound("manual")}>{t("regie.next_round_manual")}</button>
-      <button class:on={nextRound === "auto"} onclick={() => setNextRound("auto")}>{t("regie.next_round_auto")}</button>
-    </div>
-  </label>
+  <Segmented
+    label={t("regie.next_round")}
+    options={[
+      { value: "manual", label: t("regie.next_round_manual") },
+      { value: "auto", label: t("regie.next_round_auto") },
+    ]}
+    value={nextRound}
+    onchange={setNextRound}
+  />
   <p class="muted small">{t("settings.flow_per_scene")} <a href="#/regie">{t("nav.regie")} →</a></p>
 </section>
 
@@ -84,6 +87,8 @@
     </div>
   {:else if noEvent}
     <p class="info-box">{t("phase.no_event")} <a href="#/events">{t("nav.events")} →</a></p>
+  {:else}
+    <p class="muted">{t("common.loading")}</p>
   {/if}
 </section>
 
@@ -101,20 +106,5 @@
     flex-wrap: wrap;
     gap: 24px;
     align-items: end;
-  }
-  .seg {
-    display: inline-flex;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    overflow: hidden;
-    width: fit-content;
-  }
-  .seg button {
-    border: 0;
-    border-radius: 0;
-  }
-  .seg button.on {
-    background: var(--accent);
-    color: var(--accent-ink);
   }
 </style>

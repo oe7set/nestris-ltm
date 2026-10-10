@@ -963,6 +963,13 @@ const de = {
   "spool.discard_text": "Die Datei wird gelöscht. Das Spiel fehlt dann in NestrisLTM, wenn die Station es nicht noch einmal schickt.",
   "spool.reason": "Grund",
   "spool.payload": "Inhalt",
+
+  "hearts.label": "{n} von {max} Herzen",
+  "hearts.lose": "Herz abziehen: {name}",
+  "hearts.gain": "Herz zurückgeben: {name}",
+  "hearts.lost": "{name}: ein Herz weniger",
+  "hearts.gained": "{name}: ein Herz mehr",
+  "hearts.undone": "Herz-Änderung zurückgenommen",
 } as const;
 
 export type MessageKey = keyof typeof de;
@@ -1929,6 +1936,13 @@ const en: Record<MessageKey, string> = {
   "spool.discard_text": "The file is deleted. The game is then missing in NestrisLTM unless the station sends it again.",
   "spool.reason": "Reason",
   "spool.payload": "Content",
+
+  "hearts.label": "{n} of {max} hearts",
+  "hearts.lose": "Take a heart: {name}",
+  "hearts.gain": "Give a heart back: {name}",
+  "hearts.lost": "{name}: one heart less",
+  "hearts.gained": "{name}: one heart more",
+  "hearts.undone": "Heart change undone",
 };
 
 export type Locale = "de" | "en";

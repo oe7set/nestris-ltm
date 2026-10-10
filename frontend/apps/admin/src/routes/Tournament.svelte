@@ -9,6 +9,7 @@
   // (admin sidebar included, see App.svelte); full screen goes one step further.
   import MatchesPanel from "../components/MatchesPanel.svelte";
   import PhaseBanner from "../components/PhaseBanner.svelte";
+  import Tabs from "../components/Tabs.svelte";
   import { fillHeight } from "../lib/fillHeight";
   import { t } from "../lib/i18n.svelte";
   import { router } from "../lib/router.svelte";
@@ -48,12 +49,12 @@
 {/if}
 
 {#snippet tools()}
-  <button
+  <button aria-pressed={uiPrefs.tournamentHelp}
     class:on={uiPrefs.tournamentHelp}
     aria-expanded={uiPrefs.tournamentHelp}
     onclick={() => uiPrefs.toggle("tournamentHelp")}>? {t("tournament.help_toggle")}</button
   >
-  <button class:on={focus} title={t("tournament.focus_title")} onclick={() => uiPrefs.toggle("tournamentFocus")}>
+  <button aria-pressed={focus} class:on={focus} title={t("tournament.focus_title")} onclick={() => uiPrefs.toggle("tournamentFocus")}>
     {focus ? t("tournament.focus_end") : t("tournament.focus")}
   </button>
   <button onclick={fullscreen}>⛶ {t("tournament.fullscreen_now")}</button>
@@ -67,14 +68,16 @@
   </div>
 {:else}
   <PhaseBanner />
-  <div class="tabs row">
-    <button class:on={tab === "bracket"} onclick={() => setTab("bracket")}>{t("tournament.tab_bracket")}</button>
-    <button class:on={tab === "matches"} onclick={() => setTab("matches")}>{t("tournament.tab_matches")}</button>
-    {#if tab === "bracket"}
-      <span class="spacer"></span>
-      {@render tools()}
-    {/if}
-  </div>
+  <Tabs
+    tabs={[
+      { id: "bracket", label: t("tournament.tab_bracket") },
+      { id: "matches", label: t("tournament.tab_matches") },
+    ]}
+    active={tab}
+    onchange={setTab}
+  >
+    {#if tab === "bracket"}{@render tools()}{/if}
+  </Tabs>
 {/if}
 
 {#if tab === "bracket"}
@@ -98,12 +101,8 @@
   .head {
     margin-bottom: 10px;
   }
-  .tabs {
-    gap: 6px;
-    margin-bottom: 8px;
-  }
-  .tabs button.on,
-  .focus-bar button.on {
+  .focus-bar :global(button.on),
+  :global(.tabs) :global(button.on) {
     border-color: var(--accent);
     color: var(--accent);
   }

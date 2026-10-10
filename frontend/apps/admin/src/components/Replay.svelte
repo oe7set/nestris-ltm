@@ -115,7 +115,7 @@
       <button onclick={() => step(60)} title="Shift + →">⏩</button>
       <span class="spacer"></span>
       {#each SPEEDS as s (s)}
-        <button class:on={speed === s} onclick={() => setSpeed(s)}>{s}×</button>
+        <button aria-pressed={speed === s} class:on={speed === s} onclick={() => setSpeed(s)}>{s}×</button>
       {/each}
     </div>
     <p class="muted small">{t("replay.keys")}</p>
