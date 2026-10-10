@@ -28,6 +28,7 @@ export interface Player {
   games_total?: number;
   best_score?: number | null;
   best_score_event?: number | null;
+  last_played_at?: string | null;
   hide_everywhere?: boolean;
   hide_from_bracket?: boolean;
 }

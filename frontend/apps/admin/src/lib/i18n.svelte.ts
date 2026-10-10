@@ -603,9 +603,6 @@ const de = {
   "games.visibility": "Sichtbarkeit",
   "games.visible": "sichtbar",
   "games.hidden": "ausgeblendet",
-  "games.sort": "Sortierung",
-  "games.sort_time": "neueste zuerst",
-  "games.sort_score": "höchster Score",
   "games.started": "Start",
   "games.player": "Spieler",
   "games.score": "Score",
@@ -1083,6 +1080,17 @@ const de = {
   "game.next": "Nächstes Spiel",
 
   "replay.speed": "Geschwindigkeit",
+
+  "list.sort": "Sortieren",
+  "list.sort_asc": "aufsteigend (zum Umdrehen klicken)",
+  "list.sort_desc": "absteigend (zum Umdrehen klicken)",
+  "games.min_score": "Score ab",
+  "games.max_score": "Score bis",
+  "games.score_hint": "Score-Bereich, z. B. 100000, 100.000, 100k oder 1,5m",
+  "players.created": "Angelegt",
+  "players.last_played": "Zuletzt gespielt",
+
+  "display.link_portrait": "Highscore + Turnierbaum, Hochformat (9:16)",
 } as const;
 
 export type MessageKey = keyof typeof de;
@@ -1689,9 +1697,6 @@ const en: Record<MessageKey, string> = {
   "games.visibility": "Visibility",
   "games.visible": "visible",
   "games.hidden": "hidden",
-  "games.sort": "Sort",
-  "games.sort_time": "newest first",
-  "games.sort_score": "highest score",
   "games.started": "Start",
   "games.player": "Player",
   "games.score": "Score",
@@ -2169,6 +2174,17 @@ const en: Record<MessageKey, string> = {
   "game.next": "Next game",
 
   "replay.speed": "Speed",
+
+  "list.sort": "Sort",
+  "list.sort_asc": "ascending (click to turn)",
+  "list.sort_desc": "descending (click to turn)",
+  "games.min_score": "Score from",
+  "games.max_score": "Score to",
+  "games.score_hint": "Score range, e.g. 100000, 100,000, 100k or 1.5m",
+  "players.created": "Created",
+  "players.last_played": "Last played",
+
+  "display.link_portrait": "Highscore + bracket, portrait (9:16)",
 };
 
 export type Locale = "de" | "en";

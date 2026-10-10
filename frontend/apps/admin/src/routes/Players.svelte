@@ -5,8 +5,10 @@
   import BulkBar from "../components/BulkBar.svelte";
   import Modal from "../components/Modal.svelte";
   import Pager from "../components/Pager.svelte";
+  import SortHeader from "../components/SortHeader.svelte";
   import { api } from "../lib/api";
-  import { num } from "../lib/format";
+  import { dateTime, num } from "../lib/format";
+  import { defaultDir, nextSort, readSort, sortParams, type SortState } from "../lib/listSort";
   import { format, i18n, t, tDynamic } from "../lib/i18n.svelte";
   import { router } from "../lib/router.svelte";
   import { Selection } from "../lib/selection.svelte";
@@ -19,8 +21,19 @@
   }
 
   const LIMIT = 50;
+  const SORTS = ["nickname", "created", "games", "best", "best_event", "last_played"] as const;
+  const TEXT_SORTS = ["nickname"];
+  const SORT_LABELS: Record<(typeof SORTS)[number], string> = {
+    nickname: "players.nickname",
+    created: "players.created",
+    games: "players.games",
+    best: "players.best",
+    best_event: "players.best_event",
+    last_played: "players.last_played",
+  };
   const query = router.current.query;
   let q = $state(query.get("q") ?? "");
+  let sort = $state<SortState>(readSort(query, SORTS, "nickname", TEXT_SORTS));
   let includeDeleted = $state(query.get("deleted") === "true");
   let onlyAuto = $state(query.get("auto") === "true");
   let offset = $state(Number(query.get("offset") ?? 0));
@@ -46,11 +59,17 @@
   let loadError = $state<string | null>(null);
 
   async function load(): Promise<void> {
-    router.setQuery({ q, deleted: includeDeleted, auto: onlyAuto, offset: offset || null });
+    router.setQuery({
+      q, deleted: includeDeleted, auto: onlyAuto, ...sortParams(sort, "nickname", TEXT_SORTS),
+      offset: offset || null,
+    });
     try {
       loadError = null;
       page = await api<Page<Player>>("/api/players", {
-        query: { q, include_deleted: includeDeleted, only_auto_created: onlyAuto, limit: LIMIT, offset },
+        query: {
+          q, include_deleted: includeDeleted, only_auto_created: onlyAuto,
+          sort: sort.key, dir: sort.dir, limit: LIMIT, offset,
+        },
       });
     } catch (e) {
       loadError = errorText(e);
@@ -62,6 +81,24 @@
     offset = 0;
     selection.clear();
     timer = setTimeout(load, 250);
+  }
+
+  function sortBy(key: string): void {
+    sort = nextSort(sort, key, TEXT_SORTS);
+    offset = 0;
+    void load();
+  }
+
+  function sortKeyChanged(key: string): void {
+    sort = { key, dir: defaultDir(key, TEXT_SORTS) };
+    offset = 0;
+    void load();
+  }
+
+  function turnSort(): void {
+    sort = { key: sort.key, dir: sort.dir === "asc" ? "desc" : "asc" };
+    offset = 0;
+    void load();
   }
 
   async function create(event: SubmitEvent): Promise<void> {
@@ -138,6 +175,17 @@
   <input type="search" placeholder={t("players.search")} bind:value={q} oninput={searchSoon} />
   <label class="check"><input type="checkbox" bind:checked={onlyAuto} onchange={searchSoon} /> {t("players.only_auto")}</label>
   <label class="check"><input type="checkbox" bind:checked={includeDeleted} onchange={searchSoon} /> {t("players.include_deleted")}</label>
+  <span class="sort-pick">
+    <select value={sort.key} onchange={(e) => sortKeyChanged(e.currentTarget.value)} aria-label={t("list.sort")}>
+      {#each SORTS as key (key)}<option value={key}>{t("list.sort")}: {tDynamic(SORT_LABELS[key], key)}</option>{/each}
+    </select>
+    <button
+      class="sort-dir"
+      onclick={turnSort}
+      aria-label={sort.dir === "asc" ? t("list.sort_asc") : t("list.sort_desc")}
+      title={sort.dir === "asc" ? t("list.sort_asc") : t("list.sort_desc")}>{sort.dir === "asc" ? "▲" : "▼"}</button
+    >
+  </span>
 </div>
 
 {#if loadError}<ErrorBox text={loadError} onretry={() => void load()} />{/if}
@@ -156,11 +204,12 @@
             title={t("bulk.select_page")}
           />
         </th>
-        <th>{t("players.nickname")}</th>
+        <SortHeader key="nickname" label={t("players.nickname")} {sort} onsort={sortBy} />
         <th>{t("players.name")}</th>
-        <th class="num">{t("players.games")}</th>
-        <th class="num">{t("players.best")}</th>
-        <th class="num">{t("players.best_event")}</th>
+        <SortHeader key="games" label={t("players.games")} {sort} onsort={sortBy} num />
+        <SortHeader key="best" label={t("players.best")} {sort} onsort={sortBy} num />
+        <SortHeader key="best_event" label={t("players.best_event")} {sort} onsort={sortBy} num />
+        <SortHeader key="last_played" label={t("players.last_played")} {sort} onsort={sortBy} />
         <th></th>
       </tr>
     </thead>
@@ -180,6 +229,7 @@
           <td class="num" data-label={t("players.games")}>{num(p.games_total, i18n.locale)}</td>
           <td class="num" data-label={t("players.best")}>{num(p.best_score, i18n.locale)}</td>
           <td class="num" data-label={t("players.best_event")}>{num(p.best_score_event, i18n.locale)}</td>
+          <td data-label={t("players.last_played")}>{dateTime(p.last_played_at, i18n.locale)}</td>
           <td class="card-badges"><div class="badges">
             {#if p.auto_created}<span class="badge warn">{t("players.auto")}</span>{/if}
             {#if p.hide_everywhere}<span class="badge bad">{t("players.hidden")}</span>{/if}
@@ -188,7 +238,7 @@
           </div></td>
         </tr>
       {:else}
-        <tr><td colspan="7" class="empty">{page ? t("players.none") : loadError ? "–" : t("common.loading")}</td></tr>
+        <tr><td colspan="8" class="empty">{page ? t("players.none") : loadError ? "–" : t("common.loading")}</td></tr>
       {/each}
     </tbody>
   </table>
@@ -246,6 +296,15 @@
   .filters input[type="search"] {
     width: min(320px, 100%);
   }
+  .sort-pick {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .sort-dir {
+    min-width: 36px;
+    justify-content: center;
+  }
   .badges {
     display: flex;
     gap: 4px;
@@ -261,6 +320,16 @@
     }
     .filters input[type="search"] {
       width: 100%;
+    }
+    .sort-pick {
+      width: 100%;
+    }
+    .sort-pick select {
+      flex: 1;
+      min-height: 40px;
+    }
+    .sort-dir {
+      min-height: 40px;
     }
   }
 </style>

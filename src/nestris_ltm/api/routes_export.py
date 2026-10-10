@@ -63,10 +63,13 @@ async def games_csv(
     flagged: bool = False,
     hidden: bool | None = None,
     q: str = Query("", max_length=64),
+    min_score: int | None = Query(None, ge=0),
+    max_score: int | None = Query(None, ge=0),
 ) -> Response:
     stmt, event = await games_query(
         session, event_id=event_id, all_time=all_time, station_id=station_id, status_=status_,
         unassigned=unassigned, flagged=flagged, hidden=hidden, q=q,
+        min_score=min_score, max_score=max_score,
     )  # fmt: skip
     rows = (await session.execute(stmt.order_by(Game.started_at).limit(MAX_GAMES))).all()
     data = export.to_csv(export.GAME_HEADER, export.game_rows(rows))

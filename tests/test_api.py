@@ -716,3 +716,90 @@ async def test_audit_filters(runtime: Runtime, admin: httpx.AsyncClient) -> None
     assert future["total"] == 0
     csv = (await admin.get("/api/audit.csv", params={"q": "Findme"})).content.decode("utf-8")
     assert csv.count("\r\n") == 2 and "Findme" in csv
+
+
+# ---------------------------------------------------------------- filters and sorting
+
+
+async def test_games_score_filter_and_sorting(runtime: Runtime, admin: httpx.AsyncClient) -> None:
+    a = (await admin.post("/api/players", json={"nickname": "alpha"})).json()["id"]
+    b = (await admin.post("/api/players", json={"nickname": "Beta"})).json()["id"]
+    base = datetime(2026, 1, 1, 12, tzinfo=UTC)
+    specs = [(a, 100, 5), (b, 300, None), (a, 200, 20), (b, 300, 10)]
+    ids = []
+    for i, (player, score, lines) in enumerate(specs):
+        r = await admin.post(
+            "/api/games",
+            json={
+                "player_id": player, "score": score, "lines": lines,
+                "started_at": (base + timedelta(minutes=i)).isoformat(),
+            },
+        )  # fmt: skip
+        assert r.status_code == 201, r.text
+        ids.append(r.json()["id"])
+    g100, g300a, g200, g300b = ids
+
+    async def listed(**params: object) -> list[int]:
+        r = await admin.get("/api/games", params={"all_time": "true", **params})
+        assert r.status_code == 200, r.text
+        return [g["id"] for g in r.json()["items"]]
+
+    # Score filter, inclusive at both ends; total follows the filter.
+    assert set(await listed(min_score=200)) == {g300a, g200, g300b}
+    assert set(await listed(max_score=200)) == {g100, g200}
+    assert await listed(min_score=200, max_score=200) == [g200]
+    r = await admin.get("/api/games", params={"all_time": "true", "min_score": 250})
+    assert r.json()["total"] == 2
+    r = await admin.get("/api/games", params={"min_score": 300, "max_score": 100})
+    assert r.status_code == 422
+    r = await admin.get("/api/export/games.csv", params={"all_time": "true", "min_score": 250})
+    assert r.status_code == 200
+    assert r.text.count("\n") == 3  # header + two games
+
+    # Sorting: default direction per key, ties by the earlier game, empty last.
+    assert await listed() == [g300b, g200, g300a, g100]
+    assert await listed(dir="asc") == [g100, g300a, g200, g300b]
+    assert await listed(sort="score") == [g300a, g300b, g200, g100]
+    assert await listed(sort="score", dir="asc") == [g100, g200, g300a, g300b]
+    assert await listed(sort="lines") == [g200, g300b, g100, g300a]
+    assert await listed(sort="lines", dir="asc") == [g100, g300b, g200, g300a]
+    r = await admin.post("/api/games/bulk", json={"ids": [g100], "action": "unassign"})
+    assert r.status_code == 200, r.text
+    assert await listed(sort="player") == [g200, g300a, g300b, g100]  # alpha < Beta
+    assert await listed(sort="player", dir="desc") == [g300a, g300b, g200, g100]
+    r = await admin.get("/api/games", params={"sort": "nope"})
+    assert r.status_code == 422
+
+
+async def test_players_sorting(runtime: Runtime, admin: httpx.AsyncClient) -> None:
+    ids = {}
+    for name in ("carl", "Anna", "bert"):
+        ids[name] = (await admin.post("/api/players", json={"nickname": name})).json()["id"]
+    early = datetime(2026, 1, 1, 12, tzinfo=UTC)
+    for player, score, started in [
+        ("carl", 500, early),
+        ("carl", 100, early + timedelta(hours=2)),
+        ("Anna", 900, early + timedelta(hours=1)),
+    ]:
+        r = await admin.post(
+            "/api/games",
+            json={"player_id": ids[player], "score": score, "started_at": started.isoformat()},
+        )
+        assert r.status_code == 201, r.text
+
+    async def names(**params: object) -> list[str]:
+        r = await admin.get("/api/players", params=params)
+        assert r.status_code == 200, r.text
+        return [p["nickname"] for p in r.json()["items"]]
+
+    assert await names() == ["Anna", "bert", "carl"]
+    assert await names(dir="desc") == ["carl", "bert", "Anna"]
+    assert await names(sort="best") == ["Anna", "carl", "bert"]
+    assert await names(sort="best", dir="asc") == ["carl", "Anna", "bert"]
+    assert await names(sort="games") == ["carl", "Anna", "bert"]
+    assert await names(sort="last_played") == ["carl", "Anna", "bert"]
+    assert await names(sort="created") == ["bert", "Anna", "carl"]
+    r = await admin.get("/api/players", params={"sort": "last_played"})
+    carl = r.json()["items"][0]
+    assert datetime.fromisoformat(carl["last_played_at"]) == early + timedelta(hours=2)
+    assert r.json()["items"][2]["last_played_at"] is None

@@ -3,6 +3,22 @@
 The section of a version is the text of its GitHub release and what the
 built-in updater shows before installing (`.github/scripts/release_notes.py`).
 
+## Unreleased
+
+- **Games: score filter**: *Score ab* / *Score bis* (inclusive) in the
+  filters; accepts `250000`, `250.000`, `250k` or `1,5m`. The CSV export and
+  previous/next game follow the filter.
+- **Sorting**: click a column header in *Spiele* (start, player, score,
+  lines, level, Tetris rate, duration) or *Spieler* (nickname, games, best,
+  best in the event, last played; also *angelegt*) to sort, click again to
+  turn the direction. On phones a sort menu with a direction button. The
+  sort stays in the address, so links and reloads keep it. *Spieler* has a
+  new column *Zuletzt gespielt*.
+- **Portrait display** for a screen turned upright (9:16, e.g. 1080×1920):
+  `/view/highscore?layout=portrait`, highscore on top, the bracket below,
+  zoomed automatically so the whole tree is visible (8 to 64 players). Listed
+  in the page overview and under *Einstellungen* → *Highscore-Anzeige*.
+
 ## 0.4.0
 
 - **Database problems explained**: instead of a raw error the app shows

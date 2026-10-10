@@ -6,8 +6,10 @@
   import Modal from "../components/Modal.svelte";
   import Pager from "../components/Pager.svelte";
   import PlayerPicker from "../components/PlayerPicker.svelte";
+  import SortHeader from "../components/SortHeader.svelte";
   import { api, buildUrl } from "../lib/api";
-  import { dateTime, duration, num, pct } from "../lib/format";
+  import { dateTime, duration, num, parseScore, pct } from "../lib/format";
+  import { defaultDir, nextSort, readSort, sortParams, type SortState } from "../lib/listSort";
   import { format, i18n, t, tDynamic } from "../lib/i18n.svelte";
   import { router } from "../lib/router.svelte";
   import { saveGameNav } from "../lib/gameNav";
@@ -19,6 +21,17 @@
   type BulkAction = "delete" | "hide" | "unhide" | "assign" | "unassign";
 
   const LIMIT = 50;
+  const SORTS = ["started_at", "player", "score", "lines", "level", "trt", "duration"] as const;
+  const TEXT_SORTS = ["player"];
+  const SORT_LABELS: Record<(typeof SORTS)[number], string> = {
+    started_at: "games.started",
+    player: "games.player",
+    score: "games.score",
+    lines: "games.lines",
+    level: "games.levels",
+    trt: "games.trt",
+    duration: "games.duration",
+  };
   const query = router.current.query;
   let allTime = $state(query.get("all") === "true");
   let station = $state(query.get("station") ?? "");
@@ -26,8 +39,10 @@
   let unassigned = $state(query.get("unassigned") === "true");
   let flagged = $state(query.get("flagged") === "true");
   let hidden = $state(query.get("hidden") ?? "");
-  let sort = $state(query.get("sort") ?? "started_at");
+  let sort = $state<SortState>(readSort(query, SORTS, "started_at", TEXT_SORTS));
   let q = $state(query.get("q") ?? "");
+  let minText = $state(query.get("min_score") ?? "");
+  let maxText = $state(query.get("max_score") ?? "");
   let offset = $state(Number(query.get("offset") ?? 0));
   let page = $state<Page<Game> | null>(null);
   let stations = $state<StationRow[]>([]);
@@ -48,11 +63,25 @@
 
   const rows = $derived(page?.items ?? []);
   const pageState = $derived(selection.pageState(rows));
-  const activeFilters = $derived(
-    [allTime, station !== "", status !== "", hidden !== "", sort !== "started_at", unassigned, flagged].filter(
-      Boolean,
-    ).length,
+  const minScore = $derived(parseScore(minText));
+  const maxScore = $derived(parseScore(maxText));
+  // undefined: not a score; a range the wrong way round is no filter either.
+  const scoreRangeBad = $derived(
+    typeof minScore === "number" && typeof maxScore === "number" && minScore > maxScore,
   );
+  const defaultSort = $derived(sort.key === "started_at" && sort.dir === "desc");
+  const activeFilters = $derived(
+    [
+      allTime, station !== "", status !== "", hidden !== "", !defaultSort, unassigned, flagged,
+      minScore !== null, maxScore !== null,
+    ].filter(Boolean).length,
+  );
+  /** The filter as the API takes it (list, CSV, new-games check). */
+  const filterQuery = $derived({
+    all_time: allTime, station_id: station, status, unassigned, flagged,
+    hidden: hidden === "" ? null : hidden === "hidden", q,
+    min_score: minScore ?? null, max_score: maxScore ?? null,
+  });
 
   $effect(() => {
     if (pageBox) pageBox.indeterminate = pageState === "some";
@@ -86,18 +115,18 @@
   let loadError = $state<string | null>(null);
 
   async function load(): Promise<void> {
+    // A half-typed score waits until it is a number again.
+    if (minScore === undefined || maxScore === undefined || scoreRangeBad) return;
     router.setQuery({
       all: allTime, station, status, unassigned, flagged, hidden, q,
-      sort: sort === "started_at" ? null : sort, offset: offset || null,
+      min_score: minScore, max_score: maxScore,
+      ...sortParams(sort, "started_at", TEXT_SORTS), offset: offset || null,
     });
     try {
       loadError = null;
       newCount = 0;
       page = await api<Page<Game>>("/api/games", {
-        query: {
-          all_time: allTime, station_id: station, status, unassigned, flagged,
-          hidden: hidden === "" ? null : hidden === "hidden", q, sort, limit: LIMIT, offset,
-        },
+        query: { ...filterQuery, sort: sort.key, dir: sort.dir, limit: LIMIT, offset },
       });
       saveGameNav({ ids: page.items.map((g) => g.id), back: location.hash });
     } catch (e) {
@@ -105,25 +134,17 @@
     }
   }
 
-  const csvUrl = $derived(
-    buildUrl("/api/export/games.csv", {
-      all_time: allTime, station_id: station, status, unassigned, flagged,
-      hidden: hidden === "" ? null : hidden === "hidden", q,
-    }),
-  );
+  const csvUrl = $derived(buildUrl("/api/export/games.csv", filterQuery));
 
   // New games arrive all the time; the list does not jump under the
   // operator's hands, it offers them instead.
   let newCount = $state(0);
 
   async function checkNew(): Promise<void> {
-    if (!page || offset !== 0 || sort !== "started_at") return;
+    if (!page || offset !== 0 || !defaultSort) return;
     try {
       const head = await api<Page<Game>>("/api/games", {
-        query: {
-          all_time: allTime, station_id: station, status, unassigned, flagged,
-          hidden: hidden === "" ? null : hidden === "hidden", q, sort, limit: 1, offset: 0,
-        },
+        query: { ...filterQuery, limit: 1, offset: 0 },
       });
       newCount = Math.max(0, head.total - page.total);
     } catch {
@@ -146,6 +167,24 @@
   function searchSoon(): void {
     clearTimeout(timer);
     timer = setTimeout(reload, 250);
+  }
+
+  function sortBy(key: string): void {
+    sort = nextSort(sort, key, TEXT_SORTS);
+    offset = 0;
+    void load();
+  }
+
+  function sortKeyChanged(key: string): void {
+    sort = { key, dir: defaultDir(key, TEXT_SORTS) };
+    offset = 0;
+    void load();
+  }
+
+  function turnSort(): void {
+    sort = { key: sort.key, dir: sort.dir === "asc" ? "desc" : "asc" };
+    offset = 0;
+    void load();
   }
 
   function toggleRow(g: Game): void {
@@ -280,10 +319,36 @@
     <option value="visible">{t("games.visible")}</option>
     <option value="hidden">{t("games.hidden")}</option>
   </select>
-  <select bind:value={sort} onchange={reload} aria-label={t("games.sort")}>
-    <option value="started_at">{t("games.sort_time")}</option>
-    <option value="score">{t("games.sort_score")}</option>
-  </select>
+  <span class="sort-pick">
+    <select value={sort.key} onchange={(e) => sortKeyChanged(e.currentTarget.value)} aria-label={t("list.sort")}>
+      {#each SORTS as key (key)}<option value={key}>{t("list.sort")}: {tDynamic(SORT_LABELS[key], key)}</option>{/each}
+    </select>
+    <button
+      class="sort-dir"
+      onclick={turnSort}
+      aria-label={sort.dir === "asc" ? t("list.sort_asc") : t("list.sort_desc")}
+      title={sort.dir === "asc" ? t("list.sort_asc") : t("list.sort_desc")}>{sort.dir === "asc" ? "▲" : "▼"}</button
+    >
+  </span>
+  <span class="score-range" title={t("games.score_hint")}>
+    <input
+      inputmode="numeric"
+      placeholder={t("games.min_score")}
+      aria-label={t("games.min_score")}
+      aria-invalid={minScore === undefined || scoreRangeBad}
+      bind:value={minText}
+      oninput={searchSoon}
+    />
+    <span aria-hidden="true">–</span>
+    <input
+      inputmode="numeric"
+      placeholder={t("games.max_score")}
+      aria-label={t("games.max_score")}
+      aria-invalid={maxScore === undefined || scoreRangeBad}
+      bind:value={maxText}
+      oninput={searchSoon}
+    />
+  </span>
   <label class="check"><input type="checkbox" bind:checked={unassigned} onchange={reload} /> {t("games.unassigned")}</label>
   <label class="check"><input type="checkbox" bind:checked={flagged} onchange={reload} /> {t("games.flagged")}</label>
 </div>
@@ -304,14 +369,14 @@
             title={t("bulk.select_page")}
           />
         </th>
-        <th>{t("games.started")}</th>
-        <th>{t("games.player")}</th>
+        <SortHeader key="started_at" label={t("games.started")} {sort} onsort={sortBy} />
+        <SortHeader key="player" label={t("games.player")} {sort} onsort={sortBy} />
         <th>{t("games.station")}</th>
-        <th class="num">{t("games.score")}</th>
-        <th class="num">{t("games.lines")}</th>
-        <th class="num">{t("games.levels")}</th>
-        <th class="num">{t("games.trt")}</th>
-        <th class="num">{t("games.duration")}</th>
+        <SortHeader key="score" label={t("games.score")} {sort} onsort={sortBy} num />
+        <SortHeader key="lines" label={t("games.lines")} {sort} onsort={sortBy} num />
+        <SortHeader key="level" label={t("games.levels")} {sort} onsort={sortBy} num />
+        <SortHeader key="trt" label={t("games.trt")} {sort} onsort={sortBy} num />
+        <SortHeader key="duration" label={t("games.duration")} {sort} onsort={sortBy} num />
         <th></th>
       </tr>
     </thead>
@@ -430,6 +495,22 @@
   .filters {
     margin-bottom: 12px;
   }
+  .sort-pick,
+  .score-range {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .sort-dir {
+    min-width: 36px;
+    justify-content: center;
+  }
+  .score-range input {
+    width: 110px;
+  }
+  .score-range input[aria-invalid="true"] {
+    border-color: var(--bad);
+  }
   .badges {
     display: flex;
     gap: 4px;
@@ -464,11 +545,23 @@
     }
     .filters.open {
       display: grid;
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
       gap: 8px;
     }
     .filters select {
+      width: 100%;
+      min-width: 0;
+    }
+    .filters select,
+    .filters input,
+    .filters .sort-dir {
       min-height: 40px;
+    }
+    .sort-pick select,
+    .score-range input {
+      flex: 1;
+      width: auto;
+      min-width: 0;
     }
   }
 </style>

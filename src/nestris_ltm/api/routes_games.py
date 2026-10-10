@@ -7,7 +7,7 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import AwareDatetime, BaseModel, Field, model_validator
-from sqlalchemy import Select, exists, func, or_, select
+from sqlalchemy import ColumnElement, Select, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from nestris_ltm.api.auth import AdminDep, CrewDep
@@ -100,6 +100,37 @@ async def _player_exists(session: AsyncSession, player_id: int) -> None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "player does not exist")
 
 
+GameSort = Literal["started_at", "score", "lines", "level", "trt", "duration", "player"]
+SortDir = Literal["asc", "desc"]
+
+_GAME_SORT: dict[str, Any] = {
+    "started_at": Game.started_at,
+    "score": Game.score,
+    "lines": Game.lines,
+    "level": Game.end_level,
+    "trt": Game.tetris_rate,
+    "duration": Game.duration_s,
+    "player": func.lower(Player.nickname),
+}
+
+
+def game_order(sort: GameSort, direction: SortDir | None = None) -> list[ColumnElement[Any]]:
+    """ORDER BY for the games list; empty values always last.
+
+    Without a direction names sort A-Z and numbers and times high/new first.
+    Ties: the earlier game first (it reached the score first), then the id.
+    """
+    column = _GAME_SORT[sort]
+    if direction is None:
+        direction = "asc" if sort == "player" else "desc"
+    key = column.asc() if direction == "asc" else column.desc()
+    order = [key.nulls_last()]
+    if sort != "started_at":
+        order.append(Game.started_at.asc())
+    order.append(Game.id.asc() if direction == "asc" else Game.id.desc())
+    return order
+
+
 def _live_values(request: Request) -> dict[str, dict[str, Any]]:
     """Current score/lines/level of running games, keyed by station game id."""
     out: dict[str, dict[str, Any]] = {}
@@ -122,8 +153,18 @@ async def games_query(
     flagged: bool = False,
     hidden: bool | None = None,
     q: str = "",
+    min_score: int | None = None,
+    max_score: int | None = None,
 ) -> tuple[Select[Game, str], Event | None]:
-    """The games list filter (also used by the CSV export)."""
+    """The games list filter (also used by the CSV export).
+
+    ``min_score``/``max_score`` are inclusive; games without a score never
+    match a score filter.
+    """
+    if min_score is not None and max_score is not None and min_score > max_score:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT, "min_score must not be above max_score"
+        )
     event = None if all_time else await _event(session, event_id)
     hidden_expr = (
         exists().where(EventHiddenGame.event_id == event.id, EventHiddenGame.game_id == Game.id)
@@ -150,6 +191,10 @@ async def games_query(
     if q.strip():
         pattern = f"%{q.strip()}%"
         stmt = stmt.where(or_(Player.nickname.ilike(pattern), Game.card_name.ilike(pattern)))
+    if min_score is not None:
+        stmt = stmt.where(Game.score >= min_score)
+    if max_score is not None:
+        stmt = stmt.where(Game.score <= max_score)
     return stmt, event
 
 
@@ -167,7 +212,10 @@ async def list_games(
     flagged: bool = Query(False, description="cheat, failed validation or self-reported"),
     hidden: bool | None = Query(None, description="filter by hidden state in the event"),
     q: str = Query("", max_length=64, description="player nickname or card name"),
-    sort: Literal["started_at", "score"] = "started_at",
+    min_score: int | None = Query(None, ge=0, description="score at least (inclusive)"),
+    max_score: int | None = Query(None, ge=0, description="score at most (inclusive)"),
+    sort: GameSort = "started_at",
+    dir_: Literal["asc", "desc"] | None = Query(None, alias="dir", description="default: per key"),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ) -> dict[str, Any]:
@@ -182,14 +230,12 @@ async def list_games(
         flagged=flagged,
         hidden=hidden,
         q=q,
+        min_score=min_score,
+        max_score=max_score,
     )
 
     total = await session.scalar(select(func.count()).select_from(stmt.subquery()))
-    order = (
-        [Game.score.desc().nulls_last(), Game.started_at.asc()]
-        if sort == "score"
-        else [Game.started_at.desc()]
-    )
+    order = game_order(sort, dir_)
     rows = (await session.execute(stmt.order_by(*order).limit(limit).offset(offset))).all()
 
     hidden_ids: set[int] = set()

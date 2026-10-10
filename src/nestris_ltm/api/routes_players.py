@@ -81,6 +81,9 @@ class MergeIn(BaseModel):
     into_id: int
 
 
+PlayerSort = Literal["nickname", "created", "games", "best", "best_event", "last_played"]
+
+
 def _out(player: Player, extra: dict[str, Any] | None = None) -> dict[str, Any]:
     data = audit.snapshot(player)
     data.update(extra or {})
@@ -109,6 +112,10 @@ async def list_players(
     q: str = Query("", max_length=64),
     include_deleted: bool = False,
     only_auto_created: bool = False,
+    sort: PlayerSort = "nickname",
+    dir_: Literal["asc", "desc"] | None = Query(
+        None, alias="dir", description="default: names A-Z, numbers and dates high/new first"
+    ),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
 ) -> dict[str, Any]:
@@ -116,8 +123,9 @@ async def list_players(
     games_total = func.count(Game.id).label("games_total")
     best = func.max(Game.score).label("best_score")
     best_event = func.max(Game.score).filter(events.in_window(event)).label("best_score_event")
+    last_played = func.max(Game.started_at).label("last_played_at")
     stmt = (
-        select(Player, games_total, best, best_event)
+        select(Player, games_total, best, best_event, last_played)
         .outerjoin(Game, Game.player_id == Player.id)
         .group_by(Player.id)
     )
@@ -136,11 +144,18 @@ async def list_players(
             )
         )
     total = await session.scalar(select(func.count()).select_from(stmt.subquery()))
-    rows = (
-        await session.execute(
-            stmt.order_by(func.lower(Player.nickname)).limit(limit).offset(offset)
-        )
-    ).all()
+    column: Any = {
+        "nickname": func.lower(Player.nickname),
+        "created": Player.created_at,
+        "games": games_total,
+        "best": best,
+        "best_event": best_event,
+        "last_played": last_played,
+    }[sort]
+    direction = dir_ or ("asc" if sort == "nickname" else "desc")
+    key = (column.asc() if direction == "asc" else column.desc()).nulls_last()
+    order = [key, Player.id.asc() if direction == "asc" else Player.id.desc()]
+    rows = (await session.execute(stmt.order_by(*order).limit(limit).offset(offset))).all()
 
     flags: dict[int, EventPlayerFlags] = {}
     if event is not None and rows:
@@ -153,7 +168,7 @@ async def list_players(
         flags = {f.player_id: f for f in result}
 
     items = []
-    for player, n_games, best_score, best_score_event in rows:
+    for player, n_games, best_score, best_score_event, last_played_at in rows:
         f = flags.get(player.id)
         items.append(
             _out(
@@ -162,6 +177,7 @@ async def list_players(
                     "games_total": n_games,
                     "best_score": best_score,
                     "best_score_event": best_score_event,
+                    "last_played_at": last_played_at,
                     "hide_everywhere": bool(f and f.hide_everywhere),
                     "hide_from_bracket": bool(f and f.hide_from_bracket),
                 },

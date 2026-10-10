@@ -49,3 +49,20 @@ export function fromLocalInput(value: string): string | null {
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
+
+/**
+ * A score typed into a filter field: "250000", "250.000", "250 000", "250k",
+ * "1,5m". Returns null for an empty field and undefined for anything else
+ * that is not a whole score.
+ */
+export function parseScore(text: string): number | null | undefined {
+  const s = text.trim().toLowerCase().replace(/[\s'’]/g, "");
+  if (s === "") return null;
+  const m = /^(\d+(?:[.,]\d+)?)([km])$/.exec(s);
+  if (m) {
+    const value = Number(m[1]!.replace(",", ".")) * (m[2] === "k" ? 1_000 : 1_000_000);
+    return Number.isInteger(Math.round(value)) ? Math.round(value) : undefined;
+  }
+  if (!/^\d{1,3}([.,]\d{3})*$|^\d+$/.test(s)) return undefined;
+  return Number(s.replace(/[.,]/g, ""));
+}
