@@ -66,7 +66,11 @@
     dirty = false;
   }
 
-  function select(id: string): void {
+  async function select(id: string): Promise<void> {
+    if (id === selected) return;
+    if (dirty && !(await confirmAsync({ title: t("common.unsaved_confirm"), danger: true, confirmLabel: t("common.discard") }))) {
+      return;
+    }
     selected = id;
     dirty = false;
     copyTargets = [];

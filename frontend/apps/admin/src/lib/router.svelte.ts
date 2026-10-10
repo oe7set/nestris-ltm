@@ -15,14 +15,27 @@ export type { Match } from "./routes";
 class Router {
   current = $state<Match>(resolve());
   // A page with unsaved changes may veto leaving it (e.g. the scene editor).
-  #guard: ((to: Match) => boolean) | null = null;
+  // The answer may come later (an in-app question): the address is put back
+  // at once and followed when the guard says yes.
+  #guard: ((to: Match) => boolean | Promise<boolean>) | null = null;
+  #passing = false;
 
   constructor() {
     window.addEventListener("hashchange", (event) => {
       const next = resolve();
-      if (this.#guard && !this.#guard(next)) {
-        // Stay: restore the old address without a new hashchange event.
+      const answer = this.#guard && !this.#passing ? this.#guard(next) : true;
+      if (answer !== true) {
+        const target = location.hash;
+        // Stay for now: restore the old address without a new hashchange event.
         history.replaceState(null, "", new URL(event.oldURL).hash || "#/");
+        if (answer === false) return;
+        void answer.then((ok) => {
+          if (!ok) return;
+          this.#passing = true;
+          history.replaceState(null, "", target);
+          this.current = resolve();
+          this.#passing = false;
+        });
         return;
       }
       this.current = next;
@@ -30,7 +43,7 @@ class Router {
   }
 
   /** Ask before leaving the current page; returns the function that removes the guard. */
-  setGuard(guard: (to: Match) => boolean): () => void {
+  setGuard(guard: (to: Match) => boolean | Promise<boolean>): () => void {
     this.#guard = guard;
     return () => {
       if (this.#guard === guard) this.#guard = null;

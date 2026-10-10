@@ -9,6 +9,7 @@
   import { errorText, toasts } from "../lib/toast.svelte";
   import type { EventInfo } from "../lib/types";
 
+  let formBase = $state("");
   let events = $state<EventInfo[] | null>(null);
   let editing = $state<EventInfo | null>(null);
   let creating = $state(false);
@@ -31,12 +32,14 @@
     form = { name: "", starts_at: toLocalInput(start.toISOString()), ends_at: "" };
     editing = null;
     creating = true;
+    formBase = JSON.stringify(form);
   }
 
   function openEdit(event: EventInfo): void {
     form = { name: event.name, starts_at: toLocalInput(event.starts_at), ends_at: toLocalInput(event.ends_at) };
     editing = event;
     creating = true;
+    formBase = JSON.stringify(form);
   }
 
   async function save(): Promise<void> {
@@ -127,7 +130,7 @@
 </div>
 
 {#if creating}
-  <Modal title={editing ? editing.name : t("events.new")} onclose={() => (creating = false)}>
+  <Modal title={editing ? editing.name : t("events.new")} dirty={JSON.stringify(form) !== formBase} onclose={() => (creating = false)}>
     <label class="field">{t("events.name")}<input bind:value={form.name} required maxlength="128" /></label>
     <div class="form-grid">
       <label class="field">{t("events.start")}<input type="datetime-local" bind:value={form.starts_at} required /></label>

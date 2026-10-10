@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { confirmAsync } from "../lib/confirm.svelte";
+  import { onMount } from "svelte";
   import PlayerPicker from "../components/PlayerPicker.svelte";
   import { api } from "../lib/api";
   import { fromLocalInput, toLocalInput } from "../lib/format";
@@ -15,6 +17,16 @@
   let startedAt = $state(toLocalInput(new Date().toISOString()));
   let notes = $state("");
   let busy = $state(false);
+  let saved = false;
+
+  const dirty = $derived(playerId !== null || score !== null || lines !== null || notes.trim() !== "");
+
+  onMount(() => {
+    const unguard = router.setGuard(async () =>
+      saved || !dirty || (await confirmAsync({ title: t("common.unsaved_confirm"), danger: true, confirmLabel: t("common.discard") })),
+    );
+    return unguard;
+  });
 
   async function submit(event: SubmitEvent): Promise<void> {
     event.preventDefault();
@@ -34,6 +46,7 @@
         },
       });
       toasts.ok(t("common.saved"));
+      saved = true;
       router.go(`/games/${game.id}`);
     } catch (e) {
       toasts.error(e);

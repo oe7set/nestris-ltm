@@ -208,7 +208,7 @@
 {/if}
 
 {#if passwordFor}
-  <Modal title={t("settings.new_password", { name: passwordFor.username })} onclose={() => (passwordFor = null)}>
+  <Modal title={t("settings.new_password", { name: passwordFor.username })} dirty={newPassword !== ""} onclose={() => (passwordFor = null)}>
     <input type="password" bind:value={newPassword} minlength="8" autocomplete="new-password" />
     {#snippet footer()}
       <button onclick={() => (passwordFor = null)}>{t("common.cancel")}</button>

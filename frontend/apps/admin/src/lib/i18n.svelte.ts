@@ -986,6 +986,9 @@ const de = {
   "regie.key_help": "diese Hilfe",
   "regie.key_new_round_confirm": "Neue Runde in „{scene}“ starten?",
   "games.new_since": "{n} neue Spiele – anzeigen",
+
+  "common.undone": "Rückgängig gemacht",
+  "player.card_removed": "Karte {uid} entfernt",
 } as const;
 
 export type MessageKey = keyof typeof de;
@@ -1975,6 +1978,9 @@ const en: Record<MessageKey, string> = {
   "regie.key_help": "this help",
   "regie.key_new_round_confirm": "Start a new round in \"{scene}\"?",
   "games.new_since": "{n} new games – show",
+
+  "common.undone": "Undone",
+  "player.card_removed": "Card {uid} removed",
 };
 
 export type Locale = "de" | "en";

@@ -86,7 +86,22 @@
         method: "POST",
         body: { ids: selection.ids, action },
       });
-      toasts.ok(format(tDynamic(`bulk.players_done.${action}`, action), { n: res.affected }));
+      const done = format(tDynamic(`bulk.players_done.${action}`, action), { n: res.affected });
+      const skippedIds = new Set(res.skipped.map((s) => s.id));
+      const changed = selection.ids.filter((id) => !skippedIds.has(id));
+      if (changed.length) {
+        const back = action === "delete" ? "restore" : "delete";
+        toasts.withAction(done, {
+          label: t("common.undo"),
+          run: async () => {
+            await api("/api/players/bulk", { method: "POST", body: { ids: changed, action: back } });
+            toasts.ok(t("common.undone"));
+            await load();
+          },
+        });
+      } else {
+        toasts.ok(done);
+      }
       if (res.skipped.length) {
         const names = new Map(selection.rows.map((p) => [p.id, p.nickname]));
         const list = res.skipped
@@ -205,7 +220,7 @@
 {/if}
 
 {#if creating}
-  <Modal title={t("players.new")} onclose={() => (creating = false)}>
+  <Modal title={t("players.new")} dirty={newNickname.trim() !== ""} onclose={() => (creating = false)}>
     <form id="new-player" onsubmit={create}>
       <label class="field">
         {t("players.nickname")}

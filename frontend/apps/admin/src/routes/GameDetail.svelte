@@ -344,7 +344,14 @@
         onclick={() =>
           run(() =>
             api(`/api/games/${id}/hidden/${activeEvent!.id}`, { method: "PUT", body: { reason: hideReason.trim() || null } }),
-          ).then(() => (hiding = false))}
+          ).then(() => {
+            hiding = false;
+            const eventId = activeEvent!.id;
+            toasts.withAction(t("bulk.done.hide", { n: 1 }), {
+              label: t("common.undo"),
+              run: () => run(() => api(`/api/games/${id}/hidden/${eventId}`, { method: "DELETE" })),
+            });
+          })}
       >
         {t("game.hide")}
       </button>

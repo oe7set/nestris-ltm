@@ -696,7 +696,7 @@
     const beforeUnload = (e: BeforeUnloadEvent): void => {
       if (dirty) e.preventDefault();
     };
-    const unguard = router.setGuard(() => !dirty || confirm(t("studio.unsaved_confirm")));
+    const unguard = router.setGuard(async () => !dirty || (await confirmAsync({ title: t("studio.unsaved_confirm"), danger: true, confirmLabel: t("common.discard") })));
     addEventListener("beforeunload", beforeUnload);
     addEventListener("keydown", onKey);
     return () => {

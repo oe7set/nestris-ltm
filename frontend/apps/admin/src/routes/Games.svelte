@@ -149,12 +149,16 @@
   async function bulk(action: BulkAction, extra: Record<string, unknown> = {}): Promise<void> {
     bulkBusy = true;
     const ids = selection.ids;
+    const before = selection.rows.map((g) => ({ id: g.id, player_id: g.player_id }));
     try {
       const res = await api<{ affected: number }>("/api/games/bulk", {
         method: "POST",
         body: { ids, action, ...extra },
       });
-      toasts.ok(format(tDynamic(`bulk.done.${action}`, action), { n: res.affected }));
+      const text = format(tDynamic(`bulk.done.${action}`, action), { n: res.affected });
+      const undo = undoFor(action, ids, before);
+      if (undo) toasts.withAction(text, { label: t("common.undo"), run: undo });
+      else toasts.ok(text);
       if (action === "delete") selection.forget(ids);
       else selection.clear();
       confirmDelete = false;
@@ -166,6 +170,35 @@
     } finally {
       bulkBusy = false;
     }
+  }
+
+  /** How to take a bulk action back (deleting cannot be undone). */
+  function undoFor(
+    action: BulkAction,
+    ids: number[],
+    before: { id: number; player_id: number | null }[],
+  ): (() => Promise<void>) | null {
+    const post = (body: Record<string, unknown>) => api("/api/games/bulk", { method: "POST", body });
+    if (action === "hide" || action === "unhide") {
+      return async () => {
+        await post({ ids, action: action === "hide" ? "unhide" : "hide" });
+        toasts.ok(t("common.undone"));
+        await load();
+      };
+    }
+    if (action === "assign" || action === "unassign") {
+      return async () => {
+        // Back to each game's own previous player.
+        const groups = new Map<number | null, number[]>();
+        for (const g of before) groups.set(g.player_id, [...(groups.get(g.player_id) ?? []), g.id]);
+        for (const [playerId, gameIds] of groups) {
+          await post(playerId === null ? { ids: gameIds, action: "unassign" } : { ids: gameIds, action: "assign", player_id: playerId });
+        }
+        toasts.ok(t("common.undone"));
+        await load();
+      };
+    }
+    return null;
   }
 
   function label(g: Game): string {
@@ -188,7 +221,7 @@
 </div>
 
 {#if importing}
-  <Modal title={t("games.import")} onclose={() => (importing = false)}>
+  <Modal title={t("games.import")} dirty={importFile !== null} onclose={() => (importing = false)}>
     <p class="hint">{t("games.import_hint")}</p>
     <label class="field">
       {t("games.import_file")}

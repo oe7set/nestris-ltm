@@ -97,7 +97,11 @@
   async function remove(): Promise<void> {
     if (!player) return;
     if (!(await confirmAsync({ title: t("player.delete_confirm", { name: player.nickname }), danger: true, confirmLabel: t("common.delete") }))) return;
-    await action(() => api(`/api/players/${id}`, { method: "DELETE" }), t("common.deleted"));
+    await action(() => api(`/api/players/${id}`, { method: "DELETE" }));
+    toasts.withAction(t("common.deleted"), {
+      label: t("common.undo"),
+      run: () => action(() => api(`/api/players/${id}/restore`, { method: "POST" }), t("common.undone")),
+    });
   }
 
   async function merge(): Promise<void> {
@@ -117,7 +121,7 @@
   // onMount, not $effect: load() reads state that must not re-trigger it.
   onMount(() => {
     void load();
-    const unguard = router.setGuard(() => !formDirty || confirm(t("common.unsaved_confirm")));
+    const unguard = router.setGuard(async () => !formDirty || (await confirmAsync({ title: t("common.unsaved_confirm"), danger: true, confirmLabel: t("common.discard") })));
     const beforeUnload = (e: BeforeUnloadEvent) => {
       if (formDirty) e.preventDefault();
     };
@@ -190,7 +194,12 @@
               title={t("player.card_remove", { uid: card.uid })}
               onclick={async () =>
                 (await confirmAsync({ title: t("player.card_remove", { uid: card.uid }), text: t("player.card_remove_text"), danger: true })) &&
-                action(() => api(`/api/players/${id}/cards/${card.uid}`, { method: "DELETE" }))}>✕</button
+                action(() => api(`/api/players/${id}/cards/${card.uid}`, { method: "DELETE" })).then(() =>
+                  toasts.withAction(t("player.card_removed", { uid: card.uid }), {
+                    label: t("common.undo"),
+                    run: () => action(() => api(`/api/players/${id}/cards`, { method: "POST", body: { uid: card.uid } }), t("common.undone")),
+                  }),
+                )}>✕</button
             >
           </div>
           <div class="muted small">

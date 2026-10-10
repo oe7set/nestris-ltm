@@ -9,8 +9,21 @@
     footer?: Snippet;
     /** Wider dialog (tables, previews). */
     wide?: boolean;
+    /** Unsaved input: Esc and ✕ ask before closing. */
+    dirty?: boolean;
   }
-  let { title, onclose, children, footer, wide = false }: Props = $props();
+  let { title, onclose, children, footer, wide = false, dirty = false }: Props = $props();
+
+  const titleId = `dlg-${Math.random().toString(36).slice(2, 8)}`;
+
+  async function requestClose(): Promise<void> {
+    if (dirty) {
+      const { confirmAsync } = await import("../lib/confirm.svelte");
+      const ok = await confirmAsync({ title: t("common.unsaved_confirm"), danger: true, confirmLabel: t("common.discard") });
+      if (!ok) return;
+    }
+    onclose();
+  }
 
   let dialog: HTMLDialogElement;
 
@@ -20,10 +33,10 @@
   });
 </script>
 
-<dialog bind:this={dialog} class:wide oncancel={(e) => { e.preventDefault(); onclose(); }}>
+<dialog bind:this={dialog} class:wide aria-labelledby={titleId} oncancel={(e) => { e.preventDefault(); void requestClose(); }}>
   <header>
-    <strong>{title}</strong>
-    <button class="link" onclick={onclose} aria-label={t("common.close")}>✕</button>
+    <strong id={titleId}>{title}</strong>
+    <button class="link" onclick={() => void requestClose()} aria-label={t("common.close")}>✕</button>
   </header>
   <div class="body">{@render children()}</div>
   {#if footer}
