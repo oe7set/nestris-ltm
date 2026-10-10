@@ -18,6 +18,7 @@
   import { onMount } from "svelte";
   import { confirmAsync } from "../lib/confirm.svelte";
   import { api } from "../lib/api";
+  import { attention, attentionText } from "../lib/attention.svelte";
   import { dateTime } from "../lib/format";
   import { i18n, t } from "../lib/i18n.svelte";
   import { toasts } from "../lib/toast.svelte";
@@ -44,9 +45,20 @@
     }
   }
 
+  // Before FIX: games without a player, suspicious games and unchecked
+  // players would be frozen into the seeding.
+  const FIX_CHECKS = ["unassigned_games", "suspicious_games", "auto_players"];
+
   async function act(path: string, question: string): Promise<void> {
     if (busy) return;
-    if (!(await confirmAsync({ title: question, danger: path !== "/api/tournament/fix" }))) return;
+    const fixing = path === "/api/tournament/fix";
+    let text: string | undefined;
+    if (fixing) {
+      await attention.refresh();
+      const open = attention.items.filter((i) => FIX_CHECKS.includes(i.code));
+      if (open.length) text = `${t("phase.fix_open")}\n${open.map((i) => `• ${attentionText(i)}`).join("\n")}`;
+    }
+    if (!(await confirmAsync({ title: question, text, danger: !fixing }))) return;
     busy = true;
     try {
       await api(path, { method: "POST" });

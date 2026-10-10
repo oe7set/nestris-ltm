@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import threading
 import time
 import uuid
 from collections.abc import Iterator
@@ -107,6 +108,13 @@ def test_shell_starts_serves_and_quits(tmp_path: Path, qapp: QCoreApplication) -
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
     )  # fmt: skip
+    # Read the output while the app runs: Qt WebEngine logs a lot when rendering
+    # offscreen, and a full pipe would block the app.
+    chunks: list[bytes] = []
+    stdout = proc.stdout
+    assert stdout is not None
+    reader = threading.Thread(target=lambda: chunks.extend(iter(stdout.readline, b"")))
+    reader.start()
     try:
         deadline = time.monotonic() + 30
         status = None
@@ -119,11 +127,16 @@ def test_shell_starts_serves_and_quits(tmp_path: Path, qapp: QCoreApplication) -
         assert status is not None, "HTTP server did not come up"
         assert status["status"] == "degraded"  # no database, but serving
         assert httpx.get(f"http://127.0.0.1:{port}/", timeout=2).status_code == 200
+        # Let the tray's status refresh (every 2 s) run with the database down.
+        time.sleep(4.5)
 
         assert send_to_running("quit", server_name(port), timeout_ms=2000)
         assert proc.wait(timeout=30) == 0
     finally:
         if proc.poll() is None:
             proc.kill()
-        output = proc.communicate()[0].decode("utf-8", "replace")
+        reader.join(timeout=10)
+        output = b"".join(chunks).decode("utf-8", "replace")
         print(output[-3000:])
+    # A failing Qt slot only prints its traceback; the app keeps running.
+    assert "Traceback" not in output

@@ -6,6 +6,7 @@ const KEY = "nltm.ui";
 interface Stored {
   tournamentHelp: boolean;
   tournamentFocus: boolean;
+  alertSound: boolean;
 }
 
 export class UiPrefs {
@@ -13,6 +14,8 @@ export class UiPrefs {
   tournamentHelp = $state(false);
   /** Turnier: focus mode (bracket only, admin sidebar hidden). */
   tournamentFocus = $state(false);
+  /** A short beep when a new problem appears (bell). */
+  alertSound = $state(false);
 
   constructor() {
     try {
@@ -21,6 +24,7 @@ export class UiPrefs {
       const s = JSON.parse(raw) as Partial<Stored>;
       this.tournamentHelp = s.tournamentHelp === true;
       this.tournamentFocus = s.tournamentFocus === true;
+      this.alertSound = s.alertSound === true;
     } catch {
       // nothing stored or unreadable: defaults
     }
@@ -28,7 +32,11 @@ export class UiPrefs {
 
   save(): void {
     try {
-      const data: Stored = { tournamentHelp: this.tournamentHelp, tournamentFocus: this.tournamentFocus };
+      const data: Stored = {
+        tournamentHelp: this.tournamentHelp,
+        tournamentFocus: this.tournamentFocus,
+        alertSound: this.alertSound,
+      };
       globalThis.localStorage?.setItem(KEY, JSON.stringify(data));
     } catch {
       // storage blocked: the choice lasts for this visit only

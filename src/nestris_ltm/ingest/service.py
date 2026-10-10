@@ -177,6 +177,10 @@ class IngestService:
 
     # ------------------------------------------------------------ event worker
 
+    def wake(self) -> None:
+        """Process the spool now (e.g. after an event was put back)."""
+        self._wake.set()
+
     async def run_worker(self) -> None:
         self.spool.cleanup_temp()
         while True:

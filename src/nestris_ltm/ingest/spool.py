@@ -13,12 +13,15 @@ from __future__ import annotations
 import itertools
 import json
 import os
+import re
 import threading
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+_NAME_RE = re.compile(r"\d{20}-\d{6}\.json")
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,6 +87,45 @@ class EventSpool:
         os.replace(path, target)
         target.with_suffix(".reason.txt").write_text(reason, encoding="utf-8")
         return target
+
+    # ------------------------------------------------------------ failed queue
+    # The admin UI lists failed events and puts them back (after a fix, e.g. a
+    # newer app that understands the payload) or discards them.
+
+    @staticmethod
+    def valid_name(name: str) -> bool:
+        return _NAME_RE.fullmatch(name) is not None
+
+    def failed_path(self, name: str) -> Path | None:
+        if not self.valid_name(name):
+            return None
+        path = self.failed_dir / name
+        return path if path.is_file() else None
+
+    @staticmethod
+    def reason(path: Path) -> str | None:
+        note = path.with_suffix(".reason.txt")
+        try:
+            return note.read_text(encoding="utf-8")
+        except OSError:
+            return None
+
+    def retry(self, name: str) -> bool:
+        """Move a failed event back into the queue (keeps its arrival order)."""
+        path = self.failed_path(name)
+        if path is None:
+            return False
+        os.replace(path, self.directory / name)
+        path.with_suffix(".reason.txt").unlink(missing_ok=True)
+        return True
+
+    def discard(self, name: str) -> bool:
+        path = self.failed_path(name)
+        if path is None:
+            return False
+        path.unlink(missing_ok=True)
+        path.with_suffix(".reason.txt").unlink(missing_ok=True)
+        return True
 
     def cleanup_temp(self) -> None:
         """Remove half-written files left by a crash during ``append``."""

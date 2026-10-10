@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 
 from nestris_ltm import __version__
 from nestris_ltm.api import (
+    routes_attention,
     routes_auth,
     routes_dbadmin,
     routes_devices,
@@ -73,6 +74,7 @@ def create_app(runtime: Runtime) -> FastAPI:
 
     for module in (
         routes_health,
+        routes_attention,
         routes_auth,
         routes_players,
         routes_recordings,

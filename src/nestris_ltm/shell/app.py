@@ -24,6 +24,7 @@ from nestris_ltm import __version__
 from nestris_ltm.config import Settings
 from nestris_ltm.db import diagnosis
 from nestris_ltm.runtime import Runtime
+from nestris_ltm.services import attention
 from nestris_ltm.shell import autostart
 from nestris_ltm.shell.core_thread import CoreThread
 from nestris_ltm.shell.icon import Health, app_icon, tray_icon
@@ -70,6 +71,8 @@ class ShellApp:
         self._start_minimized = minimized
         self._notified_update: str | None = None
         self._notified_db_state: str | None = None
+        self._mqtt_was_ok = True
+        self._stations_gone: set[str] = set()
 
         self._build_tray()
         self.window.hidden_to_tray.connect(self._on_hidden_to_tray)
@@ -234,24 +237,53 @@ class ShellApp:
         if not self.window.loaded:
             self.window.load_app("/")
 
-        db_ok = rt.db.is_ready
+        db_state = rt.db.state
+        db_ok = rt.db.is_ready and db_state == diagnosis.READY
         mqtt_ok = rt.mqtt.connected or not rt.settings.mqtt.enabled
         stations = rt.hub.stations()
         now = datetime.now(UTC)
         online = sum(1 for s in stations if s.online(now))
-        self._set_health(Health.OK if db_ok and mqtt_ok else Health.DEGRADED)
+        if db_state in diagnosis.BLOCKING_STATES:
+            self._set_health(Health.DOWN)
+        else:
+            self._set_health(Health.OK if db_ok and mqtt_ok else Health.DEGRADED)
+        self._db_action.setVisible(not db_ok)
         self.tray.setToolTip(
             "\n".join(
                 [
                     f"NestrisLTM {__version__}",
-                    f"Datenbank: {'ok' if db_ok else 'nicht verbunden'}",
+                    f"Datenbank: {diagnosis.title(db_state)}",
                     f"MQTT: {'verbunden' if rt.mqtt.connected else 'nicht verbunden'}",
                     f"Stationen online: {online}/{len(stations)}",
                     *self._update_lines(),
                 ]
             )
         )
+        self._notify_db_problem(db_state)
+        self._notify_operations(mqtt_ok, attention.stations_gone(rt, set(), now))
         self._notify_update()
+
+    def _notify_operations(self, mqtt_ok: bool, gone: list[str]) -> None:
+        """Balloons when the broker goes away or a station in use drops out."""
+        if not self.tray.supportsMessages():
+            return
+        if not mqtt_ok and self._mqtt_was_ok:
+            self.tray.showMessage(
+                "MQTT-Broker nicht verbunden",
+                "Stationen können keine Ergebnisse senden. Dienst „Mosquitto Broker“ prüfen.",
+                app_icon(),
+                8000,
+            )
+        self._mqtt_was_ok = mqtt_ok
+        new = [s for s in gone if s not in self._stations_gone]
+        if new:
+            self.tray.showMessage(
+                "Station offline" if len(new) == 1 else f"{len(new)} Stationen offline",
+                ", ".join(new),
+                app_icon(),
+                6000,
+            )
+        self._stations_gone = set(gone)
 
     def _notify_db_problem(self, state: str) -> None:
         """One balloon per problem that needs the operator (wrong password, ...)."""

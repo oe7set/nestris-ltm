@@ -540,3 +540,46 @@ async def test_sessions_end_with_account_password_and_logout_all(
     assert (await admin.get("/api/players")).status_code == 200
     assert (await other.get("/api/players")).status_code == 401
     await other.aclose()
+
+
+# ---------------------------------------------------------------- attention + failed spool
+
+
+async def test_attention_and_failed_spool(runtime: Runtime, admin: httpx.AsyncClient) -> None:
+    def codes(body: dict[str, object]) -> dict[str, int]:
+        return {i["code"]: i["count"] for i in body["items"]}  # type: ignore[attr-defined,index]
+
+    # No event yet: that is the first thing to fix.
+    assert "no_event" in codes((await admin.get("/api/attention")).json())
+
+    now = datetime.now(UTC)
+    await admin.post(
+        "/api/events", json={"name": "Att", "starts_at": (now - timedelta(days=1)).isoformat()}
+    )
+    p = (await admin.post("/api/players", json={"nickname": "Watch"})).json()["id"]
+    g1 = (await admin.post("/api/games", json={"player_id": p, "score": 1})).json()["id"]
+    await admin.post("/api/games", json={"player_id": p, "score": 2})
+    await admin.post("/api/games/bulk", json={"ids": [g1], "action": "unassign"})
+    found = codes((await admin.get("/api/attention")).json())
+    assert found.get("unassigned_games") == 1
+    assert "no_event" not in found
+    # Hidden games do not count.
+    await admin.post("/api/games/bulk", json={"ids": [g1], "action": "hide"})
+    assert "unassigned_games" not in codes((await admin.get("/api/attention")).json())
+
+    # A failed spool event: listed, put back, discarded.
+    spool = runtime.spool
+    path = spool.append("station-9", "event/game_end", '{"broken": true}')
+    spool.fail(path, "unknown payload")
+    assert codes((await admin.get("/api/attention")).json()).get("spool_failed") == 1
+    listed = (await admin.get("/api/spool/failed")).json()["items"]
+    assert [(i["station"], i["reason"]) for i in listed] == [("station-9", "unknown payload")]
+    name = listed[0]["name"]
+    assert (await admin.post(f"/api/spool/failed/{name}/retry")).status_code == 200
+    assert spool.failed() == [] and [x.name for x in spool.pending()] == [name]
+
+    spool.fail(spool.pending()[0], "still unknown")
+    assert (await admin.delete(f"/api/spool/failed/{name}")).status_code == 200
+    assert spool.failed() == [] and spool.pending() == []
+    assert (await admin.delete(f"/api/spool/failed/{name}")).status_code == 404
+    assert (await admin.post("/api/spool/failed/..%2Fx/retry")).status_code == 404

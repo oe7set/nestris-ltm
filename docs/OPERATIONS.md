@@ -73,6 +73,18 @@ The admin UI is grouped by task: **Betrieb** (Dashboard, *Regie*, *Turnier*),
 Übersicht). Old addresses (`#/scenes`, `#/matches`, `#/devices`) lead to
 their new place.
 
+**Needs attention.** The bell next to *NestrisLTM* (and the first card on
+the dashboard) lists what needs a look, each entry a link to where it is
+fixed: MQTT broker down, stations that were active in the last hours and are
+offline now, results that could not be stored (*System → Fehlgeschlagene
+Ergebnisse*: reason and content, *Erneut versuchen* puts one back into the
+queue, *Verwerfen* deletes it), games without a player, games with a suspected
+cheat or failed validation, no active event, automatically created players to
+check, an available update. A new or growing problem also shows a toast;
+*Ton bei neuen Problemen* in the bell adds a beep (per browser). FIX lists the
+open games and players in its confirmation. The tray shows a balloon when the
+broker goes away or a station drops out.
+
 *Spiele* and *Spieler* work on a phone too: the menu folds into a button
 at the top, the lists turn into cards, and the game filters fold behind
 *Filter*. Both lists have a checkbox per row (the head box selects the whole

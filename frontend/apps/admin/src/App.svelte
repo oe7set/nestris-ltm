@@ -1,9 +1,11 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import AttentionBell from "./components/AttentionBell.svelte";
   import ConfirmHost from "./components/ConfirmHost.svelte";
   import DatabaseProblem from "./components/DatabaseProblem.svelte";
   import Toasts from "./components/Toasts.svelte";
   import { api } from "./lib/api";
+  import { attention } from "./lib/attention.svelte";
   import { i18n, t, tDynamic, type MessageKey } from "./lib/i18n.svelte";
   import { router } from "./lib/router.svelte";
   import { session } from "./lib/session.svelte";
@@ -20,6 +22,7 @@
   import Players from "./routes/Players.svelte";
   import Regie from "./routes/Regie.svelte";
   import Settings from "./routes/Settings.svelte";
+  import Spool from "./routes/Spool.svelte";
   import StationsHub from "./routes/StationsHub.svelte";
   import Tournament from "./routes/Tournament.svelte";
   import Studio from "./routes/Studio.svelte";
@@ -57,6 +60,7 @@
         { route: "audit", href: "/audit", label: "nav.audit" },
         { route: "updates", href: "/updates", label: "nav.updates" },
         { route: "database", href: "/database", label: "nav.database" },
+        { route: "spool", href: "/spool", label: "nav.spool" },
         { route: "settings", href: "/settings", label: "nav.settings" },
         { route: "pages", href: "/pages", label: "nav.pages" },
       ],
@@ -85,6 +89,12 @@
       }
     }, 3000);
     return () => clearInterval(timer);
+  });
+
+  // The bell polls only while someone is signed in.
+  const signedIn = $derived(session.me?.authenticated === true);
+  $effect(() => {
+    if (signedIn) return attention.start();
   });
 
   function isActive(item: NavItem): boolean {
@@ -118,6 +128,7 @@
     <aside class:open={menuOpen}>
       <div class="top">
         <a class="brand" href="#/">NestrisLTM</a>
+        <AttentionBell />
         <button
           class="menu-btn"
           aria-expanded={menuOpen}
@@ -197,6 +208,8 @@
           <Pages />
         {:else if current.name === "database"}
           <DatabaseProblem />
+        {:else if current.name === "spool"}
+          <Spool />
         {:else}
           <p class="muted">{t("common.not_found")}</p>
         {/if}
@@ -246,6 +259,11 @@
     position: sticky;
     top: 0;
     height: 100vh;
+  }
+  .top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
   .brand {
     color: var(--accent);

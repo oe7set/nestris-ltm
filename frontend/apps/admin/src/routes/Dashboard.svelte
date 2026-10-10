@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import AttentionList from "../components/AttentionList.svelte";
   import PhaseBanner from "../components/PhaseBanner.svelte";
   import { api } from "../lib/api";
   import { dateTime, num } from "../lib/format";
@@ -80,6 +81,11 @@
     ({dateTime(event.starts_at, i18n.locale)} – {event.ends_at ? dateTime(event.ends_at, i18n.locale) : t("events.open_end")})
   </p>
 {/if}
+
+<section class="panel attention">
+  <h2>{t("attention.title")}</h2>
+  <AttentionList />
+</section>
 
 <section class="cards">
   <div class="panel">
@@ -210,6 +216,9 @@
 </div>
 
 <style>
+  .attention {
+    margin-bottom: 12px;
+  }
   .warn-text {
     color: var(--warn);
     font-weight: 600;
