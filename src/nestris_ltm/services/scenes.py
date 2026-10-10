@@ -550,6 +550,11 @@ class SceneEngine:
                     "name": name,
                     "status": status,
                     "online": bool(station and station.online(datetime.now(UTC))),
+                    # For the control room: is the station really there, and
+                    # which game the slot shows (station game id).
+                    "stale": bool(station is None or station.stale(datetime.now(UTC))),
+                    "card_present": bool(station and station.player and station.player.present),
+                    "game_external_id": entry.game_id if entry else None,
                     "score": score,
                     "lines": entry.lines if entry else None,
                     "level": level,

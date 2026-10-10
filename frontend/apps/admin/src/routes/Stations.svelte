@@ -3,6 +3,7 @@
   import { onMount } from "svelte";
   import { confirmAsync } from "../lib/confirm.svelte";
   import { api } from "../lib/api";
+  import { poll } from "../lib/poll";
   import { dateTime, num } from "../lib/format";
   import { i18n, t } from "../lib/i18n.svelte";
   import { errorText, toasts } from "../lib/toast.svelte";
@@ -51,6 +52,7 @@
 
   onMount(() => {
     void load();
+    return poll(load, 5000);
   });
 </script>
 

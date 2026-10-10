@@ -5,6 +5,7 @@
   import Replay from "../components/Replay.svelte";
   import { confirmAsync } from "../lib/confirm.svelte";
   import { api } from "../lib/api";
+  import { poll } from "../lib/poll";
   import { dateTime, duration, fromLocalInput, num, pct, toLocalInput } from "../lib/format";
   import { i18n, t, tDynamic } from "../lib/i18n.svelte";
   import { router } from "../lib/router.svelte";
@@ -139,7 +140,19 @@
     }
   }
 
+  // A running game: refresh score and state until it ends (not while editing).
+  async function refreshLive(): Promise<void> {
+    if (game?.status !== "live" || editing) return;
+    try {
+      const fresh = await api<GameDetail>(`/api/games/${id}`);
+      if (game) Object.assign(game, fresh);
+    } catch {
+      // keep what is shown
+    }
+  }
+
   onMount(() => {
+    const stopLive = poll(refreshLive, 3000);
     void load();
     api<{ slug: string; name: string; layout: string }[]>("/api/scenes")
       .then((all) => {
@@ -147,6 +160,7 @@
         replayScene = replayScenes[0]?.slug ?? "";
       })
       .catch(() => {});
+    return stopLive;
   });
 </script>
 

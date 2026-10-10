@@ -583,3 +583,18 @@ async def test_attention_and_failed_spool(runtime: Runtime, admin: httpx.AsyncCl
     assert spool.failed() == [] and spool.pending() == []
     assert (await admin.delete(f"/api/spool/failed/{name}")).status_code == 404
     assert (await admin.post("/api/spool/failed/..%2Fx/retry")).status_code == 404
+
+
+async def test_game_by_external_id_and_scene_states(
+    runtime: Runtime, admin: httpx.AsyncClient
+) -> None:
+    await _ingest_game(runtime, game_id="station-1-ext")
+    r = await admin.get("/api/games/external/station-1-ext")
+    assert r.status_code == 200
+    game = r.json()
+    assert (await admin.get(f"/api/games/{game['id']}")).json()["external_id"] == "station-1-ext"
+    assert (await admin.get("/api/games/external/nope")).status_code == 404
+
+    # No scenes loaded in this runtime: an empty map, not an error.
+    states = await admin.get("/api/scenes/states")
+    assert states.status_code == 200 and isinstance(states.json(), dict)

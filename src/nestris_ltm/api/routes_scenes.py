@@ -485,6 +485,19 @@ async def stop_replay(
     return {"ok": True}
 
 
+@router.get("/states")
+async def scene_states(request: Request, _: AdminDep) -> dict[str, Any]:
+    """All scenes' current state at once (the control room polls this)."""
+    engine = _engine(request)
+    out: dict[str, Any] = {}
+    for slug in list(engine.scenes):
+        try:
+            out[slug] = engine.snapshot(slug)["state"]
+        except KeyError:  # deleted meanwhile
+            continue
+    return out
+
+
 @router.get("/{slug}/state")
 async def scene_state(slug: str, request: Request) -> dict[str, Any]:
     """Public: what the overlay currently shows."""

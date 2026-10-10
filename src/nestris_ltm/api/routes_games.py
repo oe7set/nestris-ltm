@@ -191,6 +191,21 @@ async def list_games(
     }
 
 
+@router.get("/external/{external_id}")
+async def game_by_external_id(external_id: str, _: AdminDep, session: SessionDep) -> dict[str, Any]:
+    """The game a station reported under its own id (scenes know only that)."""
+    row = (
+        await session.execute(
+            select(Game.id, Game.player_id, Player.nickname)
+            .outerjoin(Player, Player.id == Game.player_id)
+            .where(Game.external_id == external_id)
+        )
+    ).one_or_none()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "game not found")
+    return {"id": row.id, "player_id": row.player_id, "player_nickname": row.nickname}
+
+
 @router.get("/{game_id}")
 async def get_game(game_id: int, _: AdminDep, session: SessionDep) -> dict[str, Any]:
     game = await _game(session, game_id)

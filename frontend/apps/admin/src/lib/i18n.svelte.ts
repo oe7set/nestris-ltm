@@ -970,6 +970,22 @@ const de = {
   "hearts.lost": "{name}: ein Herz weniger",
   "hearts.gained": "{name}: ein Herz mehr",
   "hearts.undone": "Herz-Änderung zurückgenommen",
+
+  "regie.station_offline": "Station offline",
+  "regie.station_silent": "Station meldet sich nicht",
+  "regie.no_card": "keine Karte",
+  "regie.station_ok": "Station bereit",
+  "regie.open_game": "Spiel öffnen",
+  "regie.assign_player": "Spieler …",
+  "regie.assign_title": "Spieler für Slot {slot}",
+  "regie.assign_current": "Jetzt: {name}",
+  "regie.assigned": "Spieler zugewiesen",
+  "regie.keys_title": "Tastenkürzel",
+  "regie.key_pick": "Szene wählen",
+  "regie.key_new_round": "neue Runde in der gewählten Szene",
+  "regie.key_help": "diese Hilfe",
+  "regie.key_new_round_confirm": "Neue Runde in „{scene}“ starten?",
+  "games.new_since": "{n} neue Spiele – anzeigen",
 } as const;
 
 export type MessageKey = keyof typeof de;
@@ -1943,6 +1959,22 @@ const en: Record<MessageKey, string> = {
   "hearts.lost": "{name}: one heart less",
   "hearts.gained": "{name}: one heart more",
   "hearts.undone": "Heart change undone",
+
+  "regie.station_offline": "Station offline",
+  "regie.station_silent": "Station not reporting",
+  "regie.no_card": "no card",
+  "regie.station_ok": "Station ready",
+  "regie.open_game": "Open game",
+  "regie.assign_player": "Player …",
+  "regie.assign_title": "Player for slot {slot}",
+  "regie.assign_current": "Now: {name}",
+  "regie.assigned": "Player assigned",
+  "regie.keys_title": "Keyboard shortcuts",
+  "regie.key_pick": "pick a scene",
+  "regie.key_new_round": "new round in the picked scene",
+  "regie.key_help": "this help",
+  "regie.key_new_round_confirm": "Start a new round in \"{scene}\"?",
+  "games.new_since": "{n} new games – show",
 };
 
 export type Locale = "de" | "en";

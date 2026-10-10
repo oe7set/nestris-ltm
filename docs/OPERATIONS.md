@@ -116,6 +116,15 @@ round starts by itself (everyone finished, someone starts again) is one
 global switch: *Regie* or *Einstellungen* → *Turnier & Szenen* → *Neue Runde*
 per Knopf / automatisch.
 
+**Regie.** Each slot shows whether its station is ready, offline or silent
+(or has no card), *Spiel öffnen* opens the game the slot shows and *Spieler …*
+assigns or changes its player. Keys: 1–9 pick a scene, N starts a new round in
+it (after a question), ? shows the keys. Taking or giving a heart (Regie or
+*Matches & Herzen*) offers *Rückgängig* in its message for a few seconds. The
+games list offers games that arrived meanwhile (*N neue Spiele – anzeigen*)
+instead of jumping; a running game's page and the stations tab update by
+themselves.
+
 **Room for the bracket** (*Turnier* → *Turnierbaum*). The explanation sits
 behind *? Hilfe*; the console fills the window down to its bottom edge.
 *Fokus* hides the page header, the tabs and the admin menu and leaves one

@@ -3,6 +3,10 @@
   // tournament phase (qualifying / fixed, FIX), the global run switches, and
   // per scene: how it runs, the live slots with hearts -/+, the match each
   // pair shows, new round, reset slot. Designing scenes is the studio's job.
+  import Modal from "../components/Modal.svelte";
+  import PlayerPicker from "../components/PlayerPicker.svelte";
+  import { confirmAsync } from "../lib/confirm.svelte";
+  import { router } from "../lib/router.svelte";
   import Hearts from "../components/Hearts.svelte";
   import Segmented from "../components/Segmented.svelte";
   import { onMount } from "svelte";
@@ -27,6 +31,10 @@
     lives?: { current: number | null; max: number };
     match_result?: "won" | "lost" | null;
     player_id?: number;
+    online?: boolean;
+    stale?: boolean;
+    card_present?: boolean;
+    game_external_id?: string | null;
   }
   interface PairMatch {
     pair: number;
@@ -89,12 +97,89 @@
   }
 
   async function pollLive(): Promise<void> {
-    for (const s of scenes) {
-      try {
-        live[s.slug] = (await api<{ state: SceneState }>(`/api/scenes/${s.slug}/state`)).state;
-      } catch {
-        // the scene may just have been deleted
+    try {
+      live = await api<Record<string, SceneState>>("/api/scenes/states");
+    } catch {
+      // server or database away: the bell and the banner say so
+    }
+  }
+
+  // ---- the game a slot shows: open it, or (re)assign its player
+  interface GameRef {
+    id: number;
+    player_id: number | null;
+    player_nickname: string | null;
+  }
+  let assigning = $state<{ slot: SlotState; game: GameRef } | null>(null);
+  let assignTo = $state<number | null>(null);
+
+  async function gameOf(st: SlotState): Promise<GameRef | null> {
+    if (!st.game_external_id) return null;
+    try {
+      return await api<GameRef>(`/api/games/external/${encodeURIComponent(st.game_external_id)}`);
+    } catch (e) {
+      toasts.error(e);
+      return null;
+    }
+  }
+
+  async function openGame(st: SlotState): Promise<void> {
+    const game = await gameOf(st);
+    if (game) router.go(`/games/${game.id}`);
+  }
+
+  async function startAssign(st: SlotState): Promise<void> {
+    const game = await gameOf(st);
+    if (!game) return;
+    assignTo = game.player_id;
+    assigning = { slot: st, game };
+  }
+
+  function saveAssign(): void {
+    const target = assigning;
+    if (!target || assignTo === null) return;
+    assigning = null;
+    void run(
+      () => api(`/api/games/${target.game.id}`, { method: "PATCH", body: { player_id: assignTo } }),
+      t("regie.assigned"),
+    );
+  }
+
+  /** Station state of a slot as a short text and a colour. */
+  function health(st: SlotState): { cls: string; text: string } | null {
+    if (!st.station_id) return null;
+    if (!st.online) return { cls: "bad", text: t("regie.station_offline") };
+    if (st.stale) return { cls: "warn", text: t("regie.station_silent") };
+    if (st.card_present === false && st.status === "waiting") return { cls: "", text: t("regie.no_card") };
+    return { cls: "ok", text: t("regie.station_ok") };
+  }
+
+  // ---- keyboard: 1-9 pick a scene, N new round in it, ? shows the keys
+  let picked = $state(0);
+  let showKeys = $state(false);
+
+  function typing(e: KeyboardEvent): boolean {
+    const el = e.target as HTMLElement | null;
+    return !!el && (el.isContentEditable || ["INPUT", "SELECT", "TEXTAREA"].includes(el.tagName));
+  }
+
+  async function onkey(e: KeyboardEvent): Promise<void> {
+    if (typing(e) || e.ctrlKey || e.metaKey || e.altKey || document.querySelector("dialog[open]")) return;
+    if (/^[1-9]$/.test(e.key)) {
+      const index = Number(e.key) - 1;
+      if (index < scenes.length) {
+        picked = index;
+        document.getElementById(`scene-${scenes[index]!.id}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
       }
+    } else if (e.key === "n" || e.key === "N") {
+      const scene = scenes[picked];
+      if (!scene || isQuali(scene)) return;
+      e.preventDefault();
+      if (await confirmAsync({ title: t("regie.key_new_round_confirm", { scene: scene.name }), confirmLabel: t("scenes.new_round") })) {
+        newRound(scene);
+      }
+    } else if (e.key === "?") {
+      showKeys = !showKeys;
     }
   }
 
@@ -176,10 +261,12 @@
       .then((m) => (origin = m.base_urls[1] ?? m.base_urls[0] ?? location.origin))
       .catch(() => {});
     const stopLive = poll(pollLive, 1500);
+    addEventListener("keydown", onkey);
     const stopMatches = poll(loadMatches, 5000);
     return () => {
       stopLive();
       stopMatches();
+      removeEventListener("keydown", onkey);
     };
   });
 </script>
@@ -187,8 +274,18 @@
 <div class="row head">
   <h1>{t("regie.title")}</h1>
   <span class="spacer"></span>
+  <button aria-expanded={showKeys} onclick={() => (showKeys = !showKeys)} title={t("regie.keys_title")}>⌨ ?</button>
   <a class="button" href="#/studio">{t("regie.design")} →</a>
 </div>
+
+{#if showKeys}
+  <div class="panel keys small">
+    <strong>{t("regie.keys_title")}</strong>
+    <span><kbd>1</kbd>–<kbd>9</kbd> {t("regie.key_pick")}</span>
+    <span><kbd>N</kbd> {t("regie.key_new_round")}</span>
+    <span><kbd>?</kbd> {t("regie.key_help")}</span>
+  </div>
+{/if}
 
 <PhaseBanner onchange={() => void pollLive()} />
 
@@ -216,12 +313,13 @@
 </section>
 
 <div class="list">
-  {#each scenes as s (s.id)}
+  {#each scenes as s, index (s.id)}
     {@const state = live[s.slug]}
     {@const layout = layoutOf(s)}
     {@const quali = isQuali(s)}
-    <section class="panel scene">
+    <section class="panel scene" id={`scene-${s.id}`} class:picked={index === picked && scenes.length > 1}>
       <div class="row">
+        {#if index < 9 && scenes.length > 1}<kbd title={t("regie.key_pick")}>{index + 1}</kbd>{/if}
         <strong>{s.name}</strong>
         <span class="badge">{layoutTitle(s)}</span>
         <span class="badge {quali ? 'quali' : 'accent'}">{roundText(s)}</span>
@@ -254,8 +352,10 @@
 
       <div class="slots">
         {#each state?.slots ?? [] as st (st.slot)}
+          {@const h = health(st)}
           <div class="slot">
             <span class="muted small">{t("scenes.slot")} {st.slot + 1} · {st.station_id ?? "–"}</span>
+            {#if h}<span class="health small"><span class="dot {h.cls}"></span>{h.text}</span>{/if}
             <strong>{st.name ?? "–"}</strong>
             {#if st.lives && !quali}
               <Hearts
@@ -272,6 +372,12 @@
             </span>
             {#if st.outcome && !quali}
               <span class="badge {st.outcome === 'eliminated' ? 'bad' : 'ok'}">{tDynamic(`scenes.outcome.${st.outcome}`, st.outcome)}</span>
+            {/if}
+            {#if st.game_external_id}
+              <div class="row slot-links">
+                <button class="link small" onclick={() => openGame(st)}>{t("regie.open_game")}</button>
+                <button class="link small" onclick={() => startAssign(st)}>{t("regie.assign_player")}</button>
+              </div>
             {/if}
             {#if st.status === "finished" || st.status === "playing"}
               <button class="link small" onclick={() => resetSlot(s, st.slot)}>{t("scenes.reset_slot")}</button>
@@ -318,7 +424,47 @@
   {/each}
 </div>
 
+{#if assigning}
+  <Modal title={t("regie.assign_title", { slot: assigning.slot.slot + 1 })} onclose={() => (assigning = null)}>
+    <p class="muted small">{t("regie.assign_current", { name: assigning.game.player_nickname ?? t("games.unassigned") })}</p>
+    <PlayerPicker value={assignTo} initialLabel={assigning.game.player_nickname} onselect={(p) => (assignTo = p.id)} />
+    {#snippet footer()}
+      <button onclick={() => (assigning = null)}>{t("common.cancel")}</button>
+      <button class="primary" disabled={assignTo === null || assignTo === assigning?.game.player_id} onclick={saveAssign}>
+        {t("bulk.assign")}
+      </button>
+    {/snippet}
+  </Modal>
+{/if}
+
 <style>
+  .keys {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    margin-bottom: 12px;
+  }
+  kbd {
+    font-family: Consolas, monospace;
+    font-size: 11px;
+    border: 1px solid var(--line);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    padding: 0 5px;
+    color: var(--muted);
+  }
+  .scene.picked {
+    border-color: var(--accent);
+  }
+  .health {
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+    color: var(--muted);
+  }
+  .slot-links {
+    gap: 12px;
+  }
   .head {
     margin-bottom: 8px;
   }

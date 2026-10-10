@@ -9,6 +9,7 @@
   import { dateTime, duration, num, pct } from "../lib/format";
   import { format, i18n, t, tDynamic } from "../lib/i18n.svelte";
   import { router } from "../lib/router.svelte";
+  import { poll } from "../lib/poll";
   import { Selection } from "../lib/selection.svelte";
   import { errorText, toasts } from "../lib/toast.svelte";
   import type { Game, Page, StationRow } from "../lib/types";
@@ -89,6 +90,7 @@
     });
     try {
       loadError = null;
+      newCount = 0;
       page = await api<Page<Game>>("/api/games", {
         query: {
           all_time: allTime, station_id: station, status, unassigned, flagged,
@@ -98,6 +100,30 @@
     } catch (e) {
       loadError = errorText(e);
     }
+  }
+
+  // New games arrive all the time; the list does not jump under the
+  // operator's hands, it offers them instead.
+  let newCount = $state(0);
+
+  async function checkNew(): Promise<void> {
+    if (!page || offset !== 0 || sort !== "started_at") return;
+    try {
+      const head = await api<Page<Game>>("/api/games", {
+        query: {
+          all_time: allTime, station_id: station, status, unassigned, flagged,
+          hidden: hidden === "" ? null : hidden === "hidden", q, sort, limit: 1, offset: 0,
+        },
+      });
+      newCount = Math.max(0, head.total - page.total);
+    } catch {
+      // the next check will tell
+    }
+  }
+
+  function showNew(): void {
+    newCount = 0;
+    void load();
   }
 
   function reload(): void {
@@ -150,6 +176,7 @@
   onMount(() => {
     void load();
     api<StationRow[]>("/api/stations").then((s) => (stations = s)).catch(() => {});
+    return poll(checkNew, 10_000);
   });
 </script>
 
@@ -176,6 +203,10 @@
       <button class="primary" disabled={!importFile || importBusy} onclick={runImport}>{t("games.import")}</button>
     {/snippet}
   </Modal>
+{/if}
+
+{#if newCount > 0}
+  <button class="new-games" onclick={showNew}>↑ {t("games.new_since", { n: newCount })}</button>
 {/if}
 
 <div class="row searchbar">
@@ -330,6 +361,13 @@
 {/if}
 
 <style>
+  .new-games {
+    width: 100%;
+    justify-content: center;
+    margin-bottom: 8px;
+    border-color: var(--accent);
+    color: var(--accent);
+  }
   .searchbar {
     margin-bottom: 8px;
   }
