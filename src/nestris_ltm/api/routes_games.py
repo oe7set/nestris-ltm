@@ -7,7 +7,7 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import AwareDatetime, BaseModel, Field, model_validator
-from sqlalchemy import exists, func, or_, select
+from sqlalchemy import Select, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from nestris_ltm.api.auth import AdminDep
@@ -110,24 +110,20 @@ def _live_values(request: Request) -> dict[str, dict[str, Any]]:
     return out
 
 
-@router.get("")
-async def list_games(
-    request: Request,
-    _: AdminDep,
-    session: SessionDep,
-    event_id: int | None = Query(None, description="default: the active event"),
-    all_time: bool = Query(False, description="ignore the event window"),
+async def games_query(
+    session: AsyncSession,
+    *,
+    event_id: int | None = None,
+    all_time: bool = False,
     player_id: int | None = None,
     station_id: str | None = None,
-    status_: Literal["live", "finished", "abandoned"] | None = Query(None, alias="status"),
+    status_: str | None = None,
     unassigned: bool = False,
-    flagged: bool = Query(False, description="cheat, failed validation or self-reported"),
-    hidden: bool | None = Query(None, description="filter by hidden state in the event"),
-    q: str = Query("", max_length=64, description="player nickname or card name"),
-    sort: Literal["started_at", "score"] = "started_at",
-    limit: int = Query(50, ge=1, le=500),
-    offset: int = Query(0, ge=0),
-) -> dict[str, Any]:
+    flagged: bool = False,
+    hidden: bool | None = None,
+    q: str = "",
+) -> tuple[Select[Game, str], Event | None]:
+    """The games list filter (also used by the CSV export)."""
     event = None if all_time else await _event(session, event_id)
     hidden_expr = (
         exists().where(EventHiddenGame.event_id == event.id, EventHiddenGame.game_id == Game.id)
@@ -154,6 +150,39 @@ async def list_games(
     if q.strip():
         pattern = f"%{q.strip()}%"
         stmt = stmt.where(or_(Player.nickname.ilike(pattern), Game.card_name.ilike(pattern)))
+    return stmt, event
+
+
+@router.get("")
+async def list_games(
+    request: Request,
+    _: AdminDep,
+    session: SessionDep,
+    event_id: int | None = Query(None, description="default: the active event"),
+    all_time: bool = Query(False, description="ignore the event window"),
+    player_id: int | None = None,
+    station_id: str | None = None,
+    status_: Literal["live", "finished", "abandoned"] | None = Query(None, alias="status"),
+    unassigned: bool = False,
+    flagged: bool = Query(False, description="cheat, failed validation or self-reported"),
+    hidden: bool | None = Query(None, description="filter by hidden state in the event"),
+    q: str = Query("", max_length=64, description="player nickname or card name"),
+    sort: Literal["started_at", "score"] = "started_at",
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+) -> dict[str, Any]:
+    stmt, event = await games_query(
+        session,
+        event_id=event_id,
+        all_time=all_time,
+        player_id=player_id,
+        station_id=station_id,
+        status_=status_,
+        unassigned=unassigned,
+        flagged=flagged,
+        hidden=hidden,
+        q=q,
+    )
 
     total = await session.scalar(select(func.count()).select_from(stmt.subquery()))
     order = (

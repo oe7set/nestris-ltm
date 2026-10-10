@@ -212,6 +212,58 @@
     }
   }
 
+  interface Schedule {
+    interval_min: number;
+    only_during_event: boolean;
+    copy_dir: string;
+    last_at: string | null;
+    next_at: string | null;
+    last_error: string | null;
+    last_copy_error: string | null;
+  }
+  let schedule = $state<Schedule | null>(null);
+
+  async function loadSchedule(): Promise<void> {
+    try {
+      schedule = await api<Schedule>("/api/db/schedule");
+    } catch {
+      schedule = null; // remote viewer without login, or database down
+    }
+  }
+
+  async function saveSchedule(): Promise<void> {
+    if (!schedule) return;
+    busy = true;
+    try {
+      schedule = await api<Schedule>("/api/db/schedule", {
+        method: "PUT",
+        body: { interval_min: Number(schedule.interval_min), only_during_event: schedule.only_during_event, copy_dir: schedule.copy_dir.trim() },
+      });
+      toasts.ok(t("common.saved"));
+    } catch (e) {
+      toasts.error(e);
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function runSchedule(): Promise<void> {
+    busy = true;
+    try {
+      schedule = await api<Schedule>("/api/db/schedule/run", { method: "POST" });
+      toasts.ok(t("db.backups.created", { file: "" }).trim());
+      await loadBackups();
+    } catch (e) {
+      toasts.error(e);
+    } finally {
+      busy = false;
+    }
+  }
+
+  $effect(() => {
+    if (ready && schedule === null) void loadSchedule();
+  });
+
   function size(bytes: number): string {
     if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
     return `${Math.max(1, Math.round(bytes / 1024))} kB`;
@@ -319,6 +371,38 @@
           {/if}
         </p>
       {/if}
+    </section>
+  {/if}
+
+  {#if ready && schedule}
+    <section class="panel">
+      <h2>{t("sched.title")}</h2>
+      <p class="hint">{t("sched.intro")}</p>
+      <div class="form-grid">
+        <label class="field">
+          {t("sched.interval")}
+          <select bind:value={schedule.interval_min}>
+            {#each [0, 15, 30, 60, 120] as m (m)}
+              <option value={m}>{m === 0 ? t("sched.off") : t("sched.every", { n: m })}</option>
+            {/each}
+          </select>
+        </label>
+        <label class="field">
+          {t("sched.copy_dir")}
+          <input bind:value={schedule.copy_dir} placeholder="E:\\Backups" autocomplete="off" />
+        </label>
+      </div>
+      <label class="check small"><input type="checkbox" bind:checked={schedule.only_during_event} /> {t("sched.only_event")}</label>
+      <div class="row">
+        <button class="primary" disabled={busy} onclick={saveSchedule}>{t("common.save")}</button>
+        <button disabled={busy} onclick={runSchedule}>{t("db.backups.create")}</button>
+        <span class="muted small">
+          {#if schedule.last_at}{t("sched.last", { at: dateTime(schedule.last_at, i18n.locale) })}{/if}
+          {#if schedule.next_at} · {t("sched.next", { at: dateTime(schedule.next_at, i18n.locale) })}{/if}
+        </span>
+      </div>
+      {#if schedule.last_error}<p class="error-box small">{schedule.last_error}</p>{/if}
+      {#if schedule.last_copy_error}<p class="error-box small">{t("sched.copy_failed")}: {schedule.last_copy_error}</p>{/if}
     </section>
   {/if}
 

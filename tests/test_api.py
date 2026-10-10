@@ -598,3 +598,55 @@ async def test_game_by_external_id_and_scene_states(
     # No scenes loaded in this runtime: an empty map, not an error.
     states = await admin.get("/api/scenes/states")
     assert states.status_code == 200 and isinstance(states.json(), dict)
+
+
+# ---------------------------------------------------------------- export, results, schedule
+
+
+async def test_exports_and_results(runtime: Runtime, admin: httpx.AsyncClient) -> None:
+    now = datetime.now(UTC)
+    await admin.post(
+        "/api/events",
+        json={"name": "Export Cup", "starts_at": (now - timedelta(days=1)).isoformat()},
+    )
+    a = (await admin.post("/api/players", json={"nickname": "Ärger", "email": "a@x.at"})).json()[
+        "id"
+    ]
+    b = (await admin.post("/api/players", json={"nickname": "Bea"})).json()["id"]
+    await _manual_games(admin, a, [300_000])
+    await _manual_games(admin, b, [500_000, 100])
+
+    res = (await admin.get("/api/results")).json()
+    assert res["event"]["name"] == "Export Cup"
+    assert [(e["nickname"], e["score"]) for e in res["leaderboard"]] == [
+        ("Bea", 500_000),
+        ("Ärger", 300_000),
+    ]
+    assert res["podium"] is None  # not fixed
+
+    r = await admin.get("/api/export/highscore.csv")
+    assert r.status_code == 200 and "attachment" in r.headers["content-disposition"]
+    text = r.content.decode("utf-8")
+    assert text.startswith("﻿Rang;Spieler;Score")
+    assert "1;Bea;500000" in text and "Ärger" in text
+
+    plain = (await admin.get("/api/export/players.csv")).content.decode("utf-8")
+    assert "a@x.at" not in plain and "E-Mail" not in plain
+    full = (await admin.get("/api/export/players.csv", params={"contact": True})).content.decode()
+    assert "a@x.at" in full
+
+    games = (await admin.get("/api/export/games.csv", params={"q": "Bea"})).content.decode()
+    assert games.count("\r\n") == 3  # header + two games
+
+
+async def test_backup_schedule_settings(runtime: Runtime, admin: httpx.AsyncClient) -> None:
+    r = await admin.put(
+        "/api/db/schedule", json={"interval_min": 30, "only_during_event": True, "copy_dir": ""}
+    )
+    assert r.status_code == 200 and r.json()["interval_min"] == 30
+    await runtime.backups.load()
+    assert runtime.backups.settings.interval_min == 30
+    # No active event: nothing is due.
+    assert await runtime.backups._due() is False
+    bad = await admin.put("/api/db/schedule", json={"interval_min": -5})
+    assert bad.status_code == 422

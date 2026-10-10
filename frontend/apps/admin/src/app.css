@@ -456,3 +456,45 @@ tr.selected td {
     background: var(--panel-2);
   }
 }
+
+/* ---------------------------------------------------------------- print */
+
+@media print {
+  :root {
+    --bg: #fff;
+    --panel: #fff;
+    --panel-2: #fff;
+    --line: #bbb;
+    --text: #000;
+    --muted: #444;
+    --link: #000;
+    color-scheme: light;
+  }
+  aside,
+  .no-print,
+  .db-banner,
+  .toasts,
+  .bulk,
+  button {
+    display: none !important;
+  }
+  body,
+  main {
+    background: #fff;
+    color: #000;
+  }
+  .layout {
+    display: block !important;
+  }
+  main {
+    padding: 0 !important;
+  }
+  .panel,
+  .table-wrap {
+    border-color: #bbb;
+    break-inside: avoid;
+  }
+  tr {
+    break-inside: avoid;
+  }
+}

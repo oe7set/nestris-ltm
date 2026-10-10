@@ -247,3 +247,25 @@ def test_resolve_backup_rejects_paths_outside(tmp_path: Path) -> None:
     for bad in ("../secret.dump", "missing.dump", "nestrisltm-20261004-181500-manual.txt"):
         with pytest.raises(db_backup.BackupError):
             db_backup.resolve_backup(settings, bad)
+
+
+def test_auto_backups_are_pruned_separately(tmp_path: Path) -> None:
+    import os
+
+    from nestris_ltm.services.backup_schedule import prune_auto
+    from nestris_ltm.services.updates import prune_backups
+
+    assert db_backup.parse_name("nestrisltm-20261010-120000-auto.dump")[1] == "auto"
+    for i in range(5):
+        for kind in ("auto", "manual"):
+            f = tmp_path / f"nestrisltm-2026101{i}-120000-{kind}.dump"
+            f.write_bytes(b"PGDMP")
+            os.utime(f, (1_700_000_000 + i, 1_700_000_000 + i))
+    prune_backups(tmp_path, keep=2)  # manual/update dumps only
+    prune_auto(tmp_path, keep=3)
+    names = sorted(p.name for p in tmp_path.glob("*.dump"))
+    assert [n for n in names if n.endswith("-manual.dump")] == [
+        "nestrisltm-20261013-120000-manual.dump",
+        "nestrisltm-20261014-120000-manual.dump",
+    ]
+    assert len([n for n in names if n.endswith("-auto.dump")]) == 3

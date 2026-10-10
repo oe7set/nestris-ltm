@@ -21,6 +21,7 @@
   import PlayerDetail from "./routes/PlayerDetail.svelte";
   import Players from "./routes/Players.svelte";
   import Regie from "./routes/Regie.svelte";
+  import Results from "./routes/Results.svelte";
   import Settings from "./routes/Settings.svelte";
   import Spool from "./routes/Spool.svelte";
   import StationsHub from "./routes/StationsHub.svelte";
@@ -47,6 +48,7 @@
         { route: "players", href: "/players", label: "nav.players", also: ["player"] },
         { route: "games", href: "/games", label: "nav.games", also: ["game", "game-new"] },
         { route: "events", href: "/events", label: "nav.events" },
+        { route: "results", href: "/results", label: "nav.results" },
       ],
     },
     {
@@ -181,6 +183,8 @@
           <GameDetail id={Number(current.params.id)} />
         {:else if current.name === "events"}
           <Events />
+        {:else if current.name === "results"}
+          <Results />
         {:else if current.name === "tournament"}
           <Tournament />
         {:else if current.name === "regie"}

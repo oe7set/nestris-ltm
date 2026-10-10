@@ -24,6 +24,7 @@ from nestris_ltm.ingest.mqtt_client import MqttIngest
 from nestris_ltm.ingest.service import IngestService
 from nestris_ltm.ingest.spool import EventSpool
 from nestris_ltm.live.hub import LiveHub
+from nestris_ltm.services.backup_schedule import BackupSchedule
 from nestris_ltm.services.devices import DeviceUpdates
 from nestris_ltm.services.match_lives import MatchLives
 from nestris_ltm.services.scenes import SceneEngine
@@ -75,6 +76,8 @@ class Runtime:
         # Remote configuration of the stations.
         self.station_config = StationConfigService(self.db, self.hub, self.mqtt.publish_command)
         self.ingest.config_listener = self.station_config.on_report
+        # Automatic database backups during an event.
+        self.backups = BackupSchedule(self)
         # Set when the app should end (e.g. the updater handed over to the
         # installer); the shell then quits instead of reporting a dead core.
         self.quit_requested = False
@@ -118,6 +121,7 @@ class Runtime:
         self.spawn(self.lives.run(), name="hearts")
         self.spawn(self.updates.run(), name="updates")
         self.spawn(self.devices.run(), name="device-updates")
+        self.spawn(self.backups.run(), name="backup-schedule")
 
     async def stop(self) -> None:
         for task in list(self._tasks):

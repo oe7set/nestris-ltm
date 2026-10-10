@@ -33,7 +33,7 @@ log = structlog.get_logger(__name__)
 
 RESTORE_TIMEOUT_S = 1800.0
 INSPECT_TIMEOUT_S = 60.0
-_NAME_RE = re.compile(r"^nestrisltm-(\d{8}-\d{6})(?:-before-(.+?)|-(manual))?\.dump$")
+_NAME_RE = re.compile(r"^nestrisltm-(\d{8}-\d{6})(?:-before-(.+?)|-(manual|auto))?\.dump$")
 ASIDE_INFIX = "_pre_restore_"
 
 
@@ -51,7 +51,7 @@ class BackupInfo:
     file: str
     size: int
     created_at: str
-    kind: str  # "update" | "manual" | "other"
+    kind: str  # "update" | "manual" | "auto" | "other"
     before_version: str | None
     revision: str | None  # None = could not be read
     compatible: bool | None  # None = unknown (revision not readable)
@@ -79,7 +79,7 @@ def parse_name(name: str) -> tuple[datetime | None, str, str | None]:
         return None, "other", None
     stamp = datetime.strptime(m.group(1), "%Y%m%d-%H%M%S")
     if m.group(3):
-        return stamp, "manual", None
+        return stamp, m.group(3), None
     if m.group(2):
         return stamp, "update", m.group(2)
     return stamp, "other", None

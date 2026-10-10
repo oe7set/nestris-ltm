@@ -406,6 +406,24 @@ without a password from this PC, so do it quickly and undo it:
 6. `nestris-ltm.exe configure --db-password new-password`, then start
    NestrisLTM (or enter the password on the problem screen).
 
+## Results, exports, closing an event
+
+*Daten → Ergebnisse* shows the podium (once the bracket is decided) and the
+full highscore of the active event; *Drucken* prints it without the menu.
+CSV files (`;`, UTF-8, open directly in Excel): highscore, games (the games
+list's *CSV* button uses its current filters) and players; contact data only
+with *Spieler mit Kontaktdaten* (that export is logged in the audit log).
+
+*Events → Event abschließen …* on the active event: database backup (if it
+fails, nothing else happens), highscore and games as CSV, end the event now,
+and optionally create and activate the next event.
+
+**Automatic backups** (*System → Datenbank*): every 15/30/60/120 minutes,
+by default only while an event is active, optionally copied to a second
+folder (USB stick, other disk; a missing folder is reported, the backup
+itself still happens). The last 24 automatic dumps are kept; they do not
+count against the 10 update/manual dumps.
+
 ## Backup and restore
 
 All tournament data is in the PostgreSQL database. *System → Datenbank →

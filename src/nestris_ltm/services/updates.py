@@ -293,7 +293,9 @@ async def run_pg_dump(settings: Settings, target: Path) -> Path:
 
 def prune_backups(directory: Path, keep: int = BACKUPS_KEPT) -> None:
     dumps = sorted(
-        directory.glob("nestrisltm-*.dump"), key=lambda p: p.stat().st_mtime, reverse=True
+        (p for p in directory.glob("nestrisltm-*.dump") if not p.name.endswith("-auto.dump")),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
     )
     for old in dumps[keep:]:
         with contextlib.suppress(OSError):

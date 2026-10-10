@@ -5,7 +5,7 @@
   import Modal from "../components/Modal.svelte";
   import Pager from "../components/Pager.svelte";
   import PlayerPicker from "../components/PlayerPicker.svelte";
-  import { api } from "../lib/api";
+  import { api, buildUrl } from "../lib/api";
   import { dateTime, duration, num, pct } from "../lib/format";
   import { format, i18n, t, tDynamic } from "../lib/i18n.svelte";
   import { router } from "../lib/router.svelte";
@@ -101,6 +101,13 @@
       loadError = errorText(e);
     }
   }
+
+  const csvUrl = $derived(
+    buildUrl("/api/export/games.csv", {
+      all_time: allTime, station_id: station, status, unassigned, flagged,
+      hidden: hidden === "" ? null : hidden === "hidden", q,
+    }),
+  );
 
   // New games arrive all the time; the list does not jump under the
   // operator's hands, it offers them instead.
@@ -216,6 +223,7 @@
 <div class="row head">
   <h1>{t("games.title")}</h1>
   <span class="spacer"></span>
+  <a class="button" href={csvUrl} download>CSV</a>
   <button onclick={() => (importing = true)}>{t("games.import")}</button>
   <a class="button primary" href="#/games/new">+ {t("games.new")}</a>
 </div>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import ErrorBox from "../components/ErrorBox.svelte";
   import { onMount } from "svelte";
+  import EventClose from "../components/EventClose.svelte";
   import Modal from "../components/Modal.svelte";
   import { confirmAsync } from "../lib/confirm.svelte";
   import { api } from "../lib/api";
@@ -10,6 +11,7 @@
   import type { EventInfo } from "../lib/types";
 
   let formBase = $state("");
+  let closing = $state<EventInfo | null>(null);
   let events = $state<EventInfo[] | null>(null);
   let editing = $state<EventInfo | null>(null);
   let creating = $state(false);
@@ -112,6 +114,9 @@
               <button onclick={() => run(() => api(`/api/events/${e.id}/activate`, { method: "POST" }))}>{t("events.activate")}</button>
             {/if}
             <button onclick={() => openEdit(e)}>{t("common.edit")}</button>
+            {#if e.is_active}
+              <button onclick={() => (closing = e)}>{t("close.open")}</button>
+            {/if}
             {#if !e.is_active}
               <button
                 class="danger"
@@ -143,3 +148,7 @@
     {/snippet}
   </Modal>
 {/if}
+{#if closing}
+  <EventClose event={closing} onclose={() => (closing = null)} ondone={() => void load()} />
+{/if}
+
