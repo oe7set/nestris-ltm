@@ -104,6 +104,18 @@ round starts by itself (everyone finished, someone starts again) is one
 global switch: *Regie* or *Einstellungen* → *Turnier & Szenen* → *Neue Runde*
 per Knopf / automatisch.
 
+**Room for the bracket** (*Turnier* → *Turnierbaum*). The explanation sits
+behind *? Hilfe*; the console fills the window down to its bottom edge.
+*Fokus* hides the page header, the tabs and the admin menu and leaves one
+slim line with the phase and FIX (*Fokus beenden* or Esc goes back; reset
+winners and UNSEED are on the normal view). *Vollbild* shows only the
+console. Inside the console: *☰ PLAYERS* folds the player list away, *FIT*
+zooms the whole tree into view (and keeps it fitted as the bracket changes),
+− / + or Ctrl + mouse wheel zoom by hand, *1:1* resets, *?* shows the
+console's own help. Once the bracket is fixed, the locked size controls are
+hidden. Every browser remembers these choices. The console in its own window
+(*Konsole im eigenen Fenster*) keeps its FIX / RESET / UNSEED buttons.
+
 ## Hearts in the 1 vs 1 (*Turnier* → *Matches & Herzen*)
 
 Once the bracket is fixed (*Turnier* → FIX), every match between two players

@@ -24,10 +24,12 @@
 
   interface Props {
     compact?: boolean;
+    /** Compact only: link to the tournament page (off on that page itself). */
+    link?: boolean;
     /** Called after every load (pages react to a phase change). */
     onchange?: (phase: Phase) => void;
   }
-  let { compact = false, onchange }: Props = $props();
+  let { compact = false, link = true, onchange }: Props = $props();
 
   let phase = $state<Phase | null>(null);
   let busy = $state(false);
@@ -97,7 +99,7 @@
         {t("phase.unseed")}
       </button>
     {/if}
-    {#if compact}<a class="button" href="#/tournament">{t("nav.tournament")} →</a>{/if}
+    {#if compact && link}<a class="button" href="#/tournament">{t("nav.tournament")} →</a>{/if}
   </div>
 {/if}
 
@@ -115,6 +117,22 @@
   }
   .banner.compact {
     padding: 8px 12px;
+  }
+  /* Compact: one line, the explanation cut off at the edge. */
+  .compact .text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+  }
+  .compact .text strong {
+    white-space: nowrap;
+  }
+  .compact .text .muted {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .banner.quali {
     border-color: #3cbcfc;

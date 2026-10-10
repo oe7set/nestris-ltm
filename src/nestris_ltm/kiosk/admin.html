@@ -44,16 +44,17 @@
     <link rel="stylesheet" href="/kiosk/static/css/fonts.css">
     <link rel="stylesheet" href="/kiosk/static/css/app.css">
     <link rel="stylesheet" href="/kiosk/static/css/effects.css">
+    <link rel="stylesheet" href="/kiosk/static/css/admin-layout.css">
 </head>
 <body class="bg-ink text-gray-100 font-mono overflow-hidden">
     
 <div class="h-screen w-screen flex overflow-hidden">
 
     <!-- ============ LEFT: player management sidebar ============ -->
-    <aside class="w-80 flex-shrink-0 bg-panel border-r border-panel2 flex flex-col">
+    <aside id="players-aside" class="w-80 flex-shrink-0 bg-panel border-r border-panel2 flex flex-col">
         <div class="p-4 border-b border-panel2">
             <h2 class="text-accent text-lg tracking-widest mb-1">PLAYERS</h2>
-            <p class="text-[11px] text-muted">
+            <p class="help-text text-[11px] text-muted">
                 Disable a player to keep them out of the bracket. They still appear
                 on the public highscore list.
             </p>
@@ -62,12 +63,25 @@
     </aside>
 
     <!-- ============ RIGHT: controls + bracket ============ -->
-    <div class="flex-1 flex flex-col p-3 gap-3 min-w-0">
+    <div class="console-main flex-1 flex flex-col p-3 gap-3 min-w-0">
 
         <!-- Control bar: seeding and size. The highscore display's settings are
              in the admin UI (Einstellungen -> Highscore-Anzeige). -->
-        <header class="panel rounded-lg p-3 flex items-center gap-4 flex-wrap">
+        <header class="console-bar panel rounded-lg p-3 flex items-center gap-4 flex-wrap">
             <span id="conn-status" class="conn-dot conn-down text-xs flex-shrink-0">offline</span>
+
+            <div class="h-6 w-px bg-white/10 flex-shrink-0"></div>
+
+            <!-- NestrisLTM: player list, help and bracket zoom (js/admin-layout.js). -->
+            <div id="layout-tools" class="layout-tools">
+                <button id="btn-players" class="btn btn-step" title="Show/hide the player list">☰ PLAYERS</button>
+                <button id="btn-zoom-out" class="btn btn-step" title="Zoom out (Ctrl + wheel)" aria-label="Zoom out">−</button>
+                <span id="zoom-val" class="zoom-val">100 %</span>
+                <button id="btn-zoom-in" class="btn btn-step" title="Zoom in (Ctrl + wheel)" aria-label="Zoom in">+</button>
+                <button id="btn-zoom-fit" class="btn btn-step" title="Fit the whole bracket">FIT</button>
+                <button id="btn-zoom-reset" class="btn btn-step" title="Zoom 100 %">1:1</button>
+                <button id="btn-help" class="btn btn-step" title="Show/hide help" aria-label="Help">?</button>
+            </div>
 
             <div class="h-6 w-px bg-white/10 flex-shrink-0"></div>
 
@@ -81,7 +95,7 @@
                 <button id="btn-reset" class="btn flex-shrink-0">RESET WINNERS</button>
                 <button id="btn-unseed" class="btn btn-bad flex-shrink-0">UNSEED</button>
 
-                <div class="h-6 w-px bg-white/10 flex-shrink-0"></div>
+                <div class="seed-divider h-6 w-px bg-white/10 flex-shrink-0"></div>
 
                 <!-- Active count (N): slider + steppers + presets, all drive #active-count.
                      Disabled (locked) once the bracket is seeded. -->
@@ -107,8 +121,8 @@
         <div id="toast" class="hidden fixed top-4 right-4 z-50 px-4 py-2 rounded text-sm"></div>
 
         <!-- Bracket (editable once seeded). -->
-        <main class="panel rounded-lg p-3 flex-1 min-h-0 flex flex-col">
-            <p class="text-xs text-muted mb-2">
+        <main class="bracket-panel panel rounded-lg p-3 flex-1 min-h-0 flex flex-col">
+            <p class="help-text text-xs text-muted mb-2">
                 While in auto-fill the bracket follows the live highscore. Press FIX to lock
                 the line-up, then click a player in a contested match to mark them the winner.
                 Greyed players are auto-lost; byes/no-contest matches are hidden.
@@ -125,6 +139,7 @@
 <script src="/kiosk/static/js/flip.js"></script>
 <script src="/kiosk/static/js/bracket-view.js"></script>
 <script src="/kiosk/static/js/admin.js"></script>
+<script src="/kiosk/static/js/admin-layout.js"></script>
 
 <script>
     // Inside the NestrisLTM admin UI this page is embedded as an iframe; when

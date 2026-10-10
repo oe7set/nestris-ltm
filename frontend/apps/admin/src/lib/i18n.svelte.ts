@@ -912,6 +912,13 @@ const de = {
   "nav.menu": "Menü",
   "list.filters": "Filter",
   "list.filters_n": "Filter ({n})",
+
+  "tournament.help_toggle": "Hilfe",
+  "tournament.console_hint": "In der Konsole: „☰ PLAYERS“ blendet die Spielerliste ein und aus, „FIT“ zeigt den ganzen Baum, − / + oder Strg + Mausrad zoomen, „?“ zeigt die Hilfe der Konsole. Die Einstellungen merkt sich dieser Browser.",
+  "tournament.focus": "Fokus",
+  "tournament.focus_title": "Nur den Turnierbaum zeigen (Esc beendet)",
+  "tournament.focus_end": "Fokus beenden",
+  "tournament.fullscreen_now": "Vollbild",
 } as const;
 
 export type MessageKey = keyof typeof de;
@@ -1827,6 +1834,13 @@ const en: Record<MessageKey, string> = {
   "nav.menu": "Menu",
   "list.filters": "Filters",
   "list.filters_n": "Filters ({n})",
+
+  "tournament.help_toggle": "Help",
+  "tournament.console_hint": "In the console: \"☰ PLAYERS\" shows or hides the player list, \"FIT\" shows the whole bracket, − / + or Ctrl + mouse wheel zoom, \"?\" shows the console's help. This browser remembers the choices.",
+  "tournament.focus": "Focus",
+  "tournament.focus_title": "Show the bracket only (Esc ends it)",
+  "tournament.focus_end": "End focus",
+  "tournament.fullscreen_now": "Full screen",
 };
 
 export type Locale = "de" | "en";

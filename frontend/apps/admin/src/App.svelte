@@ -6,6 +6,7 @@
   import { i18n, t, tDynamic, type MessageKey } from "./lib/i18n.svelte";
   import { router } from "./lib/router.svelte";
   import { session } from "./lib/session.svelte";
+  import { uiPrefs } from "./lib/uiPrefs.svelte";
   import Audit from "./routes/Audit.svelte";
   import Dashboard from "./routes/Dashboard.svelte";
   import Events from "./routes/Events.svelte";
@@ -89,6 +90,11 @@
     return current.name === item.route || (item.also ?? []).includes(current.name);
   }
 
+  // Turnier in focus mode: the bracket gets the whole window.
+  const focus = $derived(
+    current.name === "tournament" && uiPrefs.tournamentFocus && current.query.get("tab") !== "matches",
+  );
+
   // Phones: the navigation folds into a menu button above the page.
   let menuOpen = $state(false);
   const currentLabel = $derived(
@@ -107,7 +113,7 @@
 {:else if !session.me.authenticated}
   <Login />
 {:else}
-  <div class="layout">
+  <div class="layout" class:focus>
     <aside class:open={menuOpen}>
       <div class="top">
         <a class="brand" href="#/">NestrisLTM</a>
@@ -304,6 +310,15 @@
   }
   .menu-btn {
     display: none;
+  }
+  .layout.focus {
+    grid-template-columns: 1fr;
+  }
+  .layout.focus > aside {
+    display: none;
+  }
+  .layout.focus main {
+    padding: 8px 12px 12px;
   }
   @media (max-width: 760px) {
     .layout {

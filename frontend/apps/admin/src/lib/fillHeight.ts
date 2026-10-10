@@ -18,6 +18,9 @@ export function fillHeight(node: HTMLElement, gap = 12): { destroy(): void } {
   addEventListener("scroll", update, true);
   const observer = new ResizeObserver(update);
   observer.observe(document.body);
+  // Content above the element may change without the body changing size
+  // (e.g. a header hidden in focus mode); the parent notices that.
+  if (node.parentElement) observer.observe(node.parentElement);
   return {
     destroy() {
       cancelAnimationFrame(frame);

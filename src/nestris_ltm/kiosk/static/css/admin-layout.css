@@ -1,0 +1,61 @@
+/* NestrisLTM additions to the ported tournament console (admin.html): more
+   room for the bracket. Kept apart from app.css so the ported styles stay
+   as they were. Driven by js/admin-layout.js through classes on <body>. */
+
+/* Toolbar: player list, help, zoom. */
+.layout-tools {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex-shrink: 0;
+}
+.layout-tools .btn.is-on {
+    border-color: #fbbf24;
+    color: #fbbf24;
+}
+.layout-tools .zoom-val {
+    min-width: 3.2rem;
+    text-align: center;
+    font-size: 0.7rem;
+    color: #6b7280;
+}
+
+/* Collapsible player list. */
+body.players-off #players-aside {
+    display: none;
+}
+
+/* Help texts: shown on demand only. */
+body:not(.help-on) .help-text {
+    display: none;
+}
+
+/* Bracket zoom (Chromium/Firefox "zoom": real layout, so scrolling and
+   clicks keep working). Applied to the rounds and the podium, not to the
+   scroll container itself. */
+#bracket > * {
+    zoom: var(--bracket-zoom, 1);
+}
+
+/* Inside the admin UI the phase banner above already has FIX / reset /
+   UNSEED and the phase, so the console drops its own copies; once the
+   bracket is fixed the (locked) size controls go too. */
+body.embedded #seed-status,
+body.embedded #btn-fix,
+body.embedded #btn-reset,
+body.embedded #btn-unseed,
+body.embedded .seed-divider,
+body.embedded #size-controls.is-locked {
+    display: none !important;
+}
+body.embedded .console-main {
+    padding: 0.5rem;
+    gap: 0.5rem;
+}
+body.embedded .console-bar {
+    padding: 0.4rem 0.6rem;
+    gap: 0.75rem;
+}
+body.embedded .bracket-panel {
+    padding: 0.4rem;
+}

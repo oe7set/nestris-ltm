@@ -79,6 +79,10 @@ Operations guide: `docs/OPERATIONS.md`.
   rewritten to `/kiosk/static/...`, `/ws/kiosk`, `/api/tournament/...`). Keep
   it close to the original; the server side (`services/tournament.py`) speaks
   the original WebSocket protocol (`init`, `*_update`, `view_settings`, ...).
+  NestrisLTM's own additions to the console (`admin.html`) live in separate
+  files, `static/js/admin-layout.js` and `static/css/admin-layout.css`
+  (player list/help toggles, bracket zoom, `?embedded=1` for the iframe of
+  the admin UI, which hides the console's FIX/reset/UNSEED).
 - `core/bracket.py` holds the verbatim `derive_bracket` port plus the pure
   `BracketState`; `tests/test_bracket.py` is the original test suite.
 - Overlays: `frontend/apps/overlay` (served at `/o/<slug>`, bundle under
