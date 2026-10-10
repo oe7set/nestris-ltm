@@ -88,6 +88,16 @@
   function isActive(item: NavItem): boolean {
     return current.name === item.route || (item.also ?? []).includes(current.name);
   }
+
+  // Phones: the navigation folds into a menu button above the page.
+  let menuOpen = $state(false);
+  const currentLabel = $derived(
+    navGroups.flatMap((g) => g.items).find((item) => isActive(item))?.label ?? null,
+  );
+  $effect(() => {
+    void current.name;
+    menuOpen = false;
+  });
 </script>
 
 {#if session.me === null && session.dbState}
@@ -98,13 +108,24 @@
   <Login />
 {:else}
   <div class="layout">
-    <aside>
-      <a class="brand" href="#/">NestrisLTM</a>
-      <nav>
+    <aside class:open={menuOpen}>
+      <div class="top">
+        <a class="brand" href="#/">NestrisLTM</a>
+        <button
+          class="menu-btn"
+          aria-expanded={menuOpen}
+          aria-controls="main-nav"
+          onclick={() => (menuOpen = !menuOpen)}
+        >
+          <span aria-hidden="true">{menuOpen ? "✕" : "☰"}</span>
+          {currentLabel ? t(currentLabel) : t("nav.menu")}
+        </button>
+      </div>
+      <nav id="main-nav">
         {#each navGroups as group (group.label)}
           <span class="group">{t(group.label)}</span>
           {#each group.items as item (item.route)}
-            <a href={`#${item.href}`} class:active={isActive(item)}>{t(item.label)}</a>
+            <a href={`#${item.href}`} class:active={isActive(item)} onclick={() => (menuOpen = false)}>{t(item.label)}</a>
           {/each}
         {/each}
       </nav>
@@ -176,6 +197,7 @@
     </main>
   </div>
 {/if}
+<svelte:window onkeydown={(e) => e.key === "Escape" && (menuOpen = false)} />
 <Toasts />
 
 <style>
@@ -280,22 +302,57 @@
   main:has(:global(.fill-page)) {
     padding-bottom: 12px;
   }
+  .menu-btn {
+    display: none;
+  }
   @media (max-width: 760px) {
     .layout {
       grid-template-columns: 1fr;
     }
     aside {
-      position: static;
       height: auto;
+      padding: 8px 12px;
+      gap: 8px;
+      z-index: 30;
+      border-right: none;
+      border-bottom: 1px solid var(--line);
+    }
+    .top {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .menu-btn {
+      display: inline-flex;
+      margin-left: auto;
+      min-height: 40px;
+      max-width: 60%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    aside:not(.open) nav,
+    aside:not(.open) .foot {
+      display: none;
+    }
+    aside.open {
+      max-height: 100vh;
+      overflow-y: auto;
     }
     nav {
-      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    }
+    nav a {
+      padding: 10px 12px;
     }
     nav .group {
       grid-column: 1 / -1;
     }
+    .foot {
+      padding-bottom: 8px;
+    }
     main {
-      padding: 16px;
+      padding: 12px 12px 96px;
     }
   }
 </style>

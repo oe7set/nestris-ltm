@@ -128,9 +128,11 @@
   .replay {
     display: grid;
     gap: 10px;
+    min-width: 0;
   }
   .screen {
     display: flex;
+    flex-wrap: wrap;
     gap: 14px;
     align-items: flex-start;
   }

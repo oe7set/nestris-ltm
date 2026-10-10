@@ -357,6 +357,9 @@
   .replay-panel h2 {
     margin: 0;
   }
+  .replay-panel > :global(*) {
+    min-width: 0;
+  }
   .to-scene {
     border-top: 1px solid var(--line);
     padding-top: 10px;

@@ -73,6 +73,17 @@ The admin UI is grouped by task: **Betrieb** (Dashboard, *Regie*, *Turnier*),
 Übersicht). Old addresses (`#/scenes`, `#/matches`, `#/devices`) lead to
 their new place.
 
+*Spiele* and *Spieler* work on a phone too: the menu folds into a button
+at the top, the lists turn into cards, and the game filters fold behind
+*Filter*. Both lists have a checkbox per row (the head box selects the whole
+page; the selection survives paging and is cleared when the filters change)
+and an action bar: games can be hidden or shown in the active event,
+assigned to a player, unassigned or deleted (with a confirmation; frames and
+recording go too, and a replay scene playing one of them stops), at most 500
+at once and all or nothing. Players can be deleted (soft, their games stay)
+or restored; a restore whose nickname is taken meanwhile is skipped and
+named. Every changed game or player gets its own audit entry.
+
 1. **Qualifying.** With an active event and the bracket not fixed, the
    bracket fills live from the highscore. Every scene with flow
    *Automatisch (Turnierphase)* shows the current game of each station (the

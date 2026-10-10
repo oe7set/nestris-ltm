@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
@@ -291,6 +291,61 @@ async def restore_player(
             entity_id=player_id, after={"nickname": player.nickname},
         )  # fmt: skip
     return {"ok": True}
+
+
+class PlayerBulkIn(BaseModel):
+    ids: list[int] = Field(min_length=1, max_length=500)
+    action: Literal["delete", "restore"]
+
+
+@router.post("/bulk")
+async def bulk_players(
+    body: PlayerBulkIn, principal: AdminDep, session: SessionDep
+) -> dict[str, Any]:
+    """Soft-delete or restore many players.
+
+    Players already in the wanted state, unknown ids and restores whose
+    nickname is taken meanwhile are skipped (and reported), the rest is done.
+    """
+    skipped: list[dict[str, Any]] = []
+    affected = 0
+    async with session.begin():
+        players = {
+            p.id: p
+            for p in (await session.scalars(select(Player).where(Player.id.in_(body.ids)))).all()
+        }
+        for player_id in dict.fromkeys(body.ids):
+            player = players.get(player_id)
+            if player is None:
+                skipped.append({"id": player_id, "reason": "not_found"})
+                continue
+            if body.action == "delete":
+                if player.deleted_at is not None:
+                    skipped.append({"id": player_id, "reason": "already_deleted"})
+                    continue
+                player.deleted_at = func.now()
+                await audit.record(
+                    session, actor=principal.actor, action="delete", entity="player",
+                    entity_id=player_id, before={"nickname": player.nickname},
+                )  # fmt: skip
+            else:
+                if player.deleted_at is None:
+                    skipped.append({"id": player_id, "reason": "not_deleted"})
+                    continue
+                other = await find_by_nickname(session, player.nickname)
+                if other is not None and other.id != player_id:
+                    skipped.append(
+                        {"id": player_id, "reason": "nickname_taken", "nickname": player.nickname}
+                    )
+                    continue
+                player.deleted_at = None
+                await session.flush()  # the next nickname check must see this one
+                await audit.record(
+                    session, actor=principal.actor, action="restore", entity="player",
+                    entity_id=player_id, after={"nickname": player.nickname},
+                )  # fmt: skip
+            affected += 1
+    return {"action": body.action, "affected": affected, "skipped": skipped}
 
 
 @router.post("/{player_id}/merge")

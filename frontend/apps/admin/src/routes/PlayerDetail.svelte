@@ -210,7 +210,7 @@
 
   <h2 class="games-head">{t("player.games")}</h2>
   <div class="table-wrap">
-    <table>
+    <table class="table-cards">
       <thead>
         <tr>
           <th>{t("games.started")}</th>
@@ -224,12 +224,12 @@
       <tbody>
         {#each games as g (g.id)}
           <tr class="clickable" onclick={() => router.go(`/games/${g.id}`)}>
-            <td>{dateTime(g.started_at, i18n.locale)}</td>
-            <td>{g.station_id ?? "–"}</td>
-            <td class="num">{num(g.score, i18n.locale)}</td>
-            <td class="num">{num(g.lines, i18n.locale)}</td>
-            <td class="num">{g.start_level ?? "–"} → {g.end_level ?? "–"}</td>
-            <td>{#if g.flagged}<span class="badge bad">!</span>{/if}</td>
+            <td class="card-title" data-label={t("games.started")}>{dateTime(g.started_at, i18n.locale)}</td>
+            <td data-label={t("games.station")}>{g.station_id ?? "–"}</td>
+            <td class="num card-score" data-label={t("games.score")}><strong>{num(g.score, i18n.locale)}</strong></td>
+            <td class="num" data-label={t("games.lines")}>{num(g.lines, i18n.locale)}</td>
+            <td class="num" data-label={t("games.levels")}>{g.start_level ?? "–"} → {g.end_level ?? "–"}</td>
+            <td class="card-badges">{#if g.flagged}<span class="badge bad">!</span>{/if}</td>
           </tr>
         {:else}
           <tr><td colspan="6" class="empty">{t("games.none")}</td></tr>

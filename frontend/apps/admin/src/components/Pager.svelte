@@ -29,4 +29,14 @@
   .pager {
     margin-top: 10px;
   }
+  @media (max-width: 640px) {
+    .pager button {
+      min-height: 40px;
+      flex: 1;
+      justify-content: center;
+    }
+    .pager .muted {
+      flex-basis: 100%;
+    }
+  }
 </style>

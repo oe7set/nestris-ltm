@@ -7,8 +7,7 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import AwareDatetime, BaseModel, Field, model_validator
-from sqlalchemy import and_, delete, exists, func, or_, select
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from nestris_ltm.api.auth import AdminDep
@@ -22,7 +21,7 @@ from nestris_ltm.db.models import (
     GameRecording,
     Player,
 )
-from nestris_ltm.services import audit, events
+from nestris_ltm.services import audit, events, game_admin
 
 router = APIRouter(prefix="/api/games", tags=["games"])
 
@@ -302,27 +301,20 @@ async def update_game(
 async def unassign_game(game_id: int, principal: AdminDep, session: SessionDep) -> dict[str, Any]:
     async with session.begin():
         game = await _game(session, game_id)
-        before = game.player_id
-        game.player_id = None
-        game.is_edited = True
-        await audit.record(
-            session, actor=principal.actor, action="update", entity="game", entity_id=game_id,
-            before={"player_id": before}, after={"player_id": None},
-        )  # fmt: skip
+        await game_admin.assign_games(session, [game], None, principal.actor)
     return {"ok": True}
 
 
 @router.delete("/{game_id}")
-async def delete_game(game_id: int, principal: AdminDep, session: SessionDep) -> dict[str, Any]:
+async def delete_game(
+    game_id: int, request: Request, principal: AdminDep, session: SessionDep
+) -> dict[str, Any]:
     """Permanently delete a game with its frames and recording. Prefer hiding."""
     async with session.begin():
         game = await _game(session, game_id)
-        before = audit.snapshot(game)
-        await session.delete(game)
-        await audit.record(
-            session, actor=principal.actor, action="delete", entity="game", entity_id=game_id,
-            before=before,
-        )  # fmt: skip
+        scenes_changed = await game_admin.delete_games(session, [game], principal.actor)
+    if scenes_changed:
+        await get_runtime(request).scenes.load()
     return {"ok": True}
 
 
@@ -333,18 +325,7 @@ async def hide_game(
     async with session.begin():
         await _game(session, game_id)
         await _event(session, event_id)
-        await session.execute(
-            insert(EventHiddenGame)
-            .values(event_id=event_id, game_id=game_id, reason=body.reason)
-            .on_conflict_do_update(
-                index_elements=[EventHiddenGame.event_id, EventHiddenGame.game_id],
-                set_={"reason": body.reason},
-            )
-        )
-        await audit.record(
-            session, actor=principal.actor, action="hide", entity="game", entity_id=game_id,
-            after={"event_id": event_id, "reason": body.reason},
-        )  # fmt: skip
+        await game_admin.hide_games(session, [game_id], event_id, body.reason, principal.actor)
     return {"ok": True}
 
 
@@ -353,13 +334,67 @@ async def unhide_game(
     game_id: int, event_id: int, principal: AdminDep, session: SessionDep
 ) -> dict[str, Any]:
     async with session.begin():
-        await session.execute(
-            delete(EventHiddenGame).where(
-                and_(EventHiddenGame.event_id == event_id, EventHiddenGame.game_id == game_id)
-            )
-        )
-        await audit.record(
-            session, actor=principal.actor, action="unhide", entity="game", entity_id=game_id,
-            after={"event_id": event_id},
-        )  # fmt: skip
+        await game_admin.unhide_games(session, [game_id], event_id, principal.actor)
     return {"ok": True}
+
+
+# ---------------------------------------------------------------- bulk
+
+BULK_MAX = 500
+
+
+class BulkIn(BaseModel):
+    ids: list[int] = Field(min_length=1, max_length=BULK_MAX)
+    action: Literal["delete", "hide", "unhide", "assign", "unassign"]
+    # For "assign".
+    player_id: int | None = None
+    # For "hide"/"unhide"; default: the active event.
+    event_id: int | None = None
+    reason: str | None = Field(default=None, max_length=255)
+
+    @model_validator(mode="after")
+    def _check(self) -> BulkIn:
+        if len(set(self.ids)) != len(self.ids):
+            raise ValueError("ids must not repeat")
+        if self.action == "assign" and self.player_id is None:
+            raise ValueError("assign needs player_id")
+        return self
+
+
+@router.post("/bulk")
+async def bulk_games(
+    body: BulkIn, request: Request, principal: AdminDep, session: SessionDep
+) -> dict[str, Any]:
+    """One action on many games, all or nothing (one audit entry per game)."""
+    scenes_changed = False
+    async with session.begin():
+        games = list((await session.scalars(select(Game).where(Game.id.in_(body.ids)))).all())
+        missing = sorted(set(body.ids) - {g.id for g in games})
+        if missing:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                {"code": "games_not_found", "message": f"games not found: {missing}"},
+            )
+        actor = principal.actor
+        if body.action == "delete":
+            scenes_changed = await game_admin.delete_games(session, games, actor)
+        elif body.action in ("hide", "unhide"):
+            event = await _event(session, body.event_id)
+            if event is None:
+                raise HTTPException(
+                    status.HTTP_409_CONFLICT,
+                    {"code": "no_active_event", "message": "no active event to hide games in"},
+                )
+            if body.action == "hide":
+                await game_admin.hide_games(session, body.ids, event.id, body.reason, actor)
+            else:
+                await game_admin.unhide_games(session, body.ids, event.id, actor)
+        elif body.action == "assign":
+            assert body.player_id is not None  # checked by the model
+            await _player_exists(session, body.player_id)
+            await game_admin.assign_games(session, games, body.player_id, actor)
+        else:
+            await game_admin.assign_games(session, games, None, actor)
+    if scenes_changed:
+        await get_runtime(request).scenes.load()
+    return {"action": body.action, "affected": len(games)}

@@ -271,3 +271,153 @@ label.check {
   font-size: 13px;
   margin: 0 0 12px;
 }
+
+/* ---------------------------------------------------------------- lists */
+
+/* Checkbox column of multi-select lists. */
+th.sel,
+td.sel {
+  width: 34px;
+  padding-right: 0;
+}
+td.sel input,
+th.sel input {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+tr.selected td {
+  background: rgba(245, 184, 0, 0.07);
+}
+
+/*
+ * Tables marked .table-cards turn into one card per row on phones: the cells
+ * show their column name (data-label) in front of the value. Optional cell
+ * roles: .card-title (big, top left), .card-score (top right), .card-sub
+ * (small line under the title), .card-badges (full width); .hide-sm cells
+ * are left out.
+ */
+@media (max-width: 640px) {
+  input,
+  select,
+  button,
+  .button {
+    min-height: 36px;
+  }
+  table.table-cards,
+  table.table-cards tbody {
+    display: block;
+  }
+  table.table-cards thead tr {
+    display: flex;
+    align-items: center;
+  }
+  table.table-cards thead th {
+    display: none;
+  }
+  table.table-cards thead th.sel {
+    display: block;
+    width: auto;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--line);
+    flex: 1;
+  }
+  table.table-cards tbody tr {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 4px 12px;
+    position: relative;
+    padding: 12px 12px 12px 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  table.table-cards tbody tr:last-child {
+    border-bottom: none;
+  }
+  table.table-cards tbody tr:has(td.sel) {
+    padding-left: 48px;
+  }
+  table.table-cards td {
+    border: none;
+    padding: 0;
+    grid-column: 1 / -1;
+    background: none;
+  }
+  table.table-cards td[data-label] {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    text-align: right;
+  }
+  table.table-cards td[data-label]::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 12px;
+    text-align: left;
+  }
+  table.table-cards td.card-title,
+  table.table-cards td.card-score,
+  table.table-cards td.card-sub {
+    display: block;
+    text-align: left;
+    order: -2;
+  }
+  table.table-cards td.card-title::before,
+  table.table-cards td.card-score::before,
+  table.table-cards td.card-sub::before {
+    content: none;
+  }
+  table.table-cards td.card-title {
+    font-size: 16px;
+    font-weight: 600;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  table.table-cards tr:has(td.card-score) td.card-title {
+    grid-column: 1;
+  }
+  table.table-cards td.card-score {
+    grid-column: 2;
+    text-align: right;
+    font-size: 16px;
+    white-space: nowrap;
+  }
+  table.table-cards td.card-sub {
+    order: -1;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  table.table-cards td.sel {
+    /* Auto placement: an absolutely placed grid item with a grid area would
+       be positioned inside that area instead of the row's box. */
+    grid-column: auto;
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 44px;
+    display: flex;
+    justify-content: center;
+    padding-top: 14px;
+  }
+  table.table-cards td.sel input,
+  table.table-cards th.sel input {
+    width: 22px;
+    height: 22px;
+  }
+  table.table-cards td.hide-sm {
+    display: none;
+  }
+  table.table-cards td.empty {
+    display: block;
+  }
+  tr.clickable:hover td,
+  tr.selected td {
+    background: none;
+  }
+  table.table-cards tbody tr.selected {
+    background: rgba(245, 184, 0, 0.07);
+  }
+  tr.clickable:active {
+    background: var(--panel-2);
+  }
+}

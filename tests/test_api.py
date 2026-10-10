@@ -377,3 +377,124 @@ async def test_station_config_template_overrides_and_push(
     assert (await admin.put("/api/stations/nope/config", json={"values": {}})).status_code == 404
     audit = (await admin.get("/api/audit", params={"entity": "station_config"})).json()
     assert len(audit["items"]) == 3
+
+
+# ---------------------------------------------------------------- bulk actions
+
+
+async def _manual_games(admin: httpx.AsyncClient, player_id: int, scores: list[int]) -> list[int]:
+    ids = []
+    for score in scores:
+        r = await admin.post("/api/games", json={"player_id": player_id, "score": score})
+        assert r.status_code == 201, r.text
+        ids.append(r.json()["id"])
+    return ids
+
+
+async def test_bulk_games(runtime: Runtime, admin: httpx.AsyncClient) -> None:
+    from sqlalchemy import func, select, text
+
+    from nestris_ltm.db.models import AuditLog, GameFrame, GameRecording, Scene
+
+    now = datetime.now(UTC)
+    r = await admin.post(
+        "/api/events", json={"name": "Bulk", "starts_at": (now - timedelta(days=1)).isoformat()}
+    )
+    event_id = r.json()["id"]
+    a = (await admin.post("/api/players", json={"nickname": "Alpha"})).json()["id"]
+    b = (await admin.post("/api/players", json={"nickname": "Beta"})).json()["id"]
+    ids = await _manual_games(admin, a, [100, 200, 300, 400])
+
+    # Hide / unhide in the active event.
+    r = await admin.post("/api/games/bulk", json={"ids": ids[:3], "action": "hide"})
+    assert r.status_code == 200 and r.json()["affected"] == 3
+    listed = (await admin.get("/api/games", params={"hidden": True})).json()
+    assert {g["id"] for g in listed["items"]} == set(ids[:3])
+    r = await admin.post(
+        "/api/games/bulk", json={"ids": ids[:1], "action": "unhide", "event_id": event_id}
+    )
+    assert r.status_code == 200
+
+    # Assign / unassign.
+    r = await admin.post(
+        "/api/games/bulk", json={"ids": ids[:2], "action": "assign", "player_id": b}
+    )
+    assert r.status_code == 200
+    assert {(await admin.get(f"/api/games/{i}")).json()["player_id"] for i in ids[:2]} == {b}
+    r = await admin.post("/api/games/bulk", json={"ids": ids[2:], "action": "unassign"})
+    assert {(await admin.get(f"/api/games/{i}")).json()["player_id"] for i in ids[2:]} == {None}
+    bad = await admin.post("/api/games/bulk", json={"ids": ids, "action": "assign"})
+    assert bad.status_code == 422  # no player_id
+    bad = await admin.post("/api/games/bulk", json={"ids": [1, 1], "action": "delete"})
+    assert bad.status_code == 422  # repeated id
+    bad = await admin.post(
+        "/api/games/bulk", json={"ids": ids[:1], "action": "assign", "player_id": 999_999}
+    )
+    assert bad.status_code == 422  # unknown player
+
+    # Unknown id: nothing happens at all.
+    r = await admin.post("/api/games/bulk", json={"ids": [*ids, 999_999], "action": "delete"})
+    assert r.status_code == 404
+    assert (await admin.get("/api/games", params={"all_time": True})).json()["total"] == 4
+
+    # Delete: frames, recording and hidden rows go; a replay scene playing one stops.
+    async with runtime.db.session() as session, session.begin():
+        session.add(GameFrame(game_id=ids[0], seq=1, t_ms=0, game_state="in_game"))
+        session.add(GameRecording(game_id=ids[0], ngf_gz=b"x", sha256="0" * 64, size_bytes=1))
+        session.add(
+            Scene(
+                slug="rp", name="Replay", layout="replay", settings={"replay": {"game_id": ids[0]}}
+            )
+        )
+    r = await admin.post("/api/games/bulk", json={"ids": ids[:3], "action": "delete"})
+    assert r.status_code == 200 and r.json()["affected"] == 3
+    async with runtime.db.session() as session:
+        assert await session.scalar(select(func.count()).select_from(GameFrame)) == 0
+        assert await session.scalar(select(func.count()).select_from(GameRecording)) == 0
+        hidden = await session.scalar(text("SELECT count(*) FROM event_hidden_games"))
+        assert hidden == 0
+        scene = await session.scalar(select(Scene).where(Scene.slug == "rp"))
+        assert scene is not None and "replay" not in scene.settings
+        deletes = await session.scalar(
+            select(func.count())
+            .select_from(AuditLog)
+            .where(AuditLog.entity == "game", AuditLog.action == "delete")
+        )
+        assert deletes == 3
+    remaining = (await admin.get("/api/games", params={"all_time": True})).json()
+    assert [g["id"] for g in remaining["items"]] == [ids[3]]
+
+    # The single delete route goes through the same code.
+    assert (await admin.delete(f"/api/games/{ids[3]}")).status_code == 200
+    assert (await admin.get(f"/api/games/{ids[3]}")).status_code == 404
+
+
+async def test_bulk_hide_needs_an_event(runtime: Runtime, admin: httpx.AsyncClient) -> None:
+    a = (await admin.post("/api/players", json={"nickname": "Solo"})).json()["id"]
+    ids = await _manual_games(admin, a, [1])
+    r = await admin.post("/api/games/bulk", json={"ids": ids, "action": "hide"})
+    assert r.status_code == 409
+    assert r.json()["detail"]["code"] == "no_active_event"
+
+
+async def test_bulk_players(runtime: Runtime, admin: httpx.AsyncClient) -> None:
+    ids = [
+        (await admin.post("/api/players", json={"nickname": n})).json()["id"]
+        for n in ("One", "Two", "Three")
+    ]
+    r = await admin.post("/api/players/bulk", json={"ids": [*ids, 999_999], "action": "delete"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["affected"] == 3
+    assert body["skipped"] == [{"id": 999_999, "reason": "not_found"}]
+    listed = (await admin.get("/api/players")).json()
+    assert {p["id"] for p in listed["items"]} & set(ids) == set()
+
+    # "Two" is taken again meanwhile: its restore is skipped, the rest goes through.
+    await admin.post("/api/players", json={"nickname": "two"})
+    r = await admin.post("/api/players/bulk", json={"ids": ids, "action": "restore"})
+    body = r.json()
+    assert body["affected"] == 2
+    assert body["skipped"] == [{"id": ids[1], "reason": "nickname_taken", "nickname": "Two"}]
+    r = await admin.post("/api/players/bulk", json={"ids": ids[:1], "action": "restore"})
+    assert r.json()["skipped"] == [{"id": ids[0], "reason": "not_deleted"}]

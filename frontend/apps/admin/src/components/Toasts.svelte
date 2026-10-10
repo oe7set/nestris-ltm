@@ -18,6 +18,14 @@
     z-index: 100;
     max-width: min(420px, calc(100vw - 32px));
   }
+  /* Phones: the bottom edge belongs to the bulk action bar. */
+  @media (max-width: 640px) {
+    .toasts {
+      top: 64px;
+      bottom: auto;
+      left: 16px;
+    }
+  }
   .toast {
     text-align: left;
     padding: 10px 14px;
