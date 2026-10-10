@@ -3,7 +3,7 @@
 The section of a version is the text of its GitHub release and what the
 built-in updater shows before installing (`.github/scripts/release_notes.py`).
 
-## Unreleased
+## 0.4.1
 
 - **Games: score filter**: *Score ab* / *Score bis* (inclusive) in the
   filters; accepts `250000`, `250.000`, `250k` or `1,5m`. The CSV export and
