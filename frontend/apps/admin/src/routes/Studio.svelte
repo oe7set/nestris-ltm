@@ -4,6 +4,7 @@
   import { onMount } from "svelte";
   import Modal from "../components/Modal.svelte";
   import Thumb from "../components/Thumb.svelte";
+  import { confirmAsync } from "../lib/confirm.svelte";
   import { api, ApiError } from "../lib/api";
   import { i18n, t, tDynamic } from "../lib/i18n.svelte";
   import { router } from "../lib/router.svelte";
@@ -111,7 +112,7 @@
   }
 
   async function remove(scene: SceneRow): Promise<void> {
-    if (!confirm(t("studio.confirm_delete_scene", { name: scene.name }))) return;
+    if (!(await confirmAsync({ title: t("studio.confirm_delete_scene", { name: scene.name }), danger: true, confirmLabel: t("common.delete") }))) return;
     try {
       await api(`/api/scenes/${scene.id}`, { method: "DELETE" });
       selected.delete(scene.id);
@@ -148,7 +149,7 @@
   }
 
   async function removeLayout(l: CustomLayout): Promise<void> {
-    if (!confirm(t("studio.confirm_delete_layout", { name: l.name }))) return;
+    if (!(await confirmAsync({ title: t("studio.confirm_delete_layout", { name: l.name }), danger: true, confirmLabel: t("common.delete") }))) return;
     try {
       await api(`/api/overlay-layouts/${l.id}`, { method: "DELETE" });
       await load();

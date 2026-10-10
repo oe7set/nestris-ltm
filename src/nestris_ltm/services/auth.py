@@ -59,6 +59,8 @@ class SessionData:
     username: str
     expires: int
     remember: bool = False
+    # AdminUser.session_version when the cookie was issued.
+    version: int = 0
 
 
 async def session_secret(session: AsyncSession) -> bytes:
@@ -93,9 +95,12 @@ def make_session_cookie(
     now: float | None = None,
     *,
     remember: bool = True,
+    version: int = 0,
 ) -> str:
     expires = int((now or time.time()) + session_ttl(remember))
-    payload = {"u": user_id, "n": username, "e": expires, "r": 1 if remember else 0}
+    payload = {
+        "u": user_id, "n": username, "e": expires, "r": 1 if remember else 0, "v": version,
+    }  # fmt: skip
     body = _b64(json.dumps(payload, separators=(",", ":")).encode())
     sig = _b64(hmac.new(secret, body.encode(), hashlib.sha256).digest())
     return f"{body}.{sig}"
@@ -118,6 +123,7 @@ def parse_session_cookie(
             int(payload["e"]),
             # Cookies from before "stay signed in" existed were persistent.
             bool(payload.get("r", 1)),
+            int(payload.get("v", 0)),
         )
     except (ValueError, KeyError, TypeError):
         return None

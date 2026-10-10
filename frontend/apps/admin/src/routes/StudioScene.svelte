@@ -6,6 +6,7 @@
   import GuideTools from "../components/GuideTools.svelte";
   import Modal from "../components/Modal.svelte";
   import Thumb from "../components/Thumb.svelte";
+  import { confirmAsync } from "../lib/confirm.svelte";
   import { api, ApiError } from "../lib/api";
   import { fillHeight } from "../lib/fillHeight";
   import { i18n, t, tDynamic } from "../lib/i18n.svelte";
@@ -150,7 +151,8 @@
   }
 
   async function remove(): Promise<void> {
-    if (!scene || !confirm(t("studio.confirm_delete_scene", { name: scene.name }))) return;
+    if (!scene) return;
+    if (!(await confirmAsync({ title: t("studio.confirm_delete_scene", { name: scene.name }), danger: true, confirmLabel: t("common.delete") }))) return;
     try {
       await api(`/api/scenes/${scene.id}`, { method: "DELETE" });
       saved = snapshot(); // nothing left to lose

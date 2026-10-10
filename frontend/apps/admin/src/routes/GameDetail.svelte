@@ -3,6 +3,7 @@
   import Modal from "../components/Modal.svelte";
   import PlayerPicker from "../components/PlayerPicker.svelte";
   import Replay from "../components/Replay.svelte";
+  import { confirmAsync } from "../lib/confirm.svelte";
   import { api } from "../lib/api";
   import { dateTime, duration, fromLocalInput, num, pct, toLocalInput } from "../lib/format";
   import { i18n, t, tDynamic } from "../lib/i18n.svelte";
@@ -54,11 +55,26 @@
       notes: game.notes ?? "",
       status: game.status,
     };
+    unassignOnSave = false;
+    editBase = JSON.stringify(edit);
     editing = true;
+  }
+
+  // Unsaved edits are not dropped by Esc or ✕ without asking.
+  let editBase = "";
+  let unassignOnSave = $state(false);
+
+  async function closeEdit(): Promise<void> {
+    const dirty = unassignOnSave || JSON.stringify(edit) !== editBase;
+    if (dirty && !(await confirmAsync({ title: t("common.unsaved_confirm"), danger: true, confirmLabel: t("common.discard") }))) {
+      return;
+    }
+    editing = false;
   }
 
   async function save(): Promise<void> {
     try {
+      if (unassignOnSave) await api(`/api/games/${id}/unassign`, { method: "POST" });
       await api(`/api/games/${id}`, {
         method: "PATCH",
         body: {
@@ -90,7 +106,7 @@
   }
 
   async function remove(): Promise<void> {
-    if (!confirm(t("game.delete_confirm", { id }))) return;
+    if (!(await confirmAsync({ title: t("game.delete_confirm", { id }), danger: true, confirmLabel: t("common.delete") }))) return;
     try {
       await api(`/api/games/${id}`, { method: "DELETE" });
       toasts.ok(t("common.deleted"));
@@ -260,15 +276,28 @@
 {/if}
 
 {#if editing && game}
-  <Modal title={`${t("common.edit")}: ${t("game.title", { id: game.id })}`} onclose={() => (editing = false)}>
+  <Modal title={`${t("common.edit")}: ${t("game.title", { id: game.id })}`} onclose={closeEdit}>
     <p class="hint">{t("game.edit_hint")}</p>
     <div class="field-like">
       <span class="muted small">{t("games.player")}</span>
-      <PlayerPicker value={edit.player_id} initialLabel={game.player_nickname} onselect={(p) => (edit.player_id = p.id)} />
-      {#if game.player_id}
-        <button class="link small" onclick={() => run(() => api(`/api/games/${id}/unassign`, { method: "POST" })).then(() => (editing = false))}>
-          {t("game.unassign")}
-        </button>
+      {#if unassignOnSave}
+        <div class="row">
+          <span class="badge warn">{t("game.unassign_pending")}</span>
+          <button class="link small" onclick={() => (unassignOnSave = false)}>{t("common.undo")}</button>
+        </div>
+      {:else}
+        <PlayerPicker value={edit.player_id} initialLabel={game.player_nickname} onselect={(p) => (edit.player_id = p.id)} />
+        {#if game.player_id}
+          <button
+            class="link small"
+            onclick={() => {
+              unassignOnSave = true;
+              edit.player_id = null;
+            }}
+          >
+            {t("game.unassign")}
+          </button>
+        {/if}
       {/if}
     </div>
     <div class="form-grid">
@@ -285,7 +314,7 @@
     </div>
     <label class="field">{t("common.notes")}<textarea bind:value={edit.notes}></textarea></label>
     {#snippet footer()}
-      <button onclick={() => (editing = false)}>{t("common.cancel")}</button>
+      <button onclick={closeEdit}>{t("common.cancel")}</button>
       <button class="primary" onclick={save}>{t("common.save")}</button>
     {/snippet}
   </Modal>

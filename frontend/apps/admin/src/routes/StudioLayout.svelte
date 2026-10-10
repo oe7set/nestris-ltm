@@ -1,4 +1,5 @@
 <script lang="ts" module>
+  import { confirmAsync } from "../lib/confirm.svelte";
   import type { LayoutElement as ClipElement } from "../lib/studio";
   // Copy/paste works across layouts while the admin page stays open.
   let clipboard: ClipElement[] = [];
@@ -304,9 +305,9 @@
     apply({ ...def, elements: def.elements.map((e) => (byId.has(e.id) ? { ...e, ...byId.get(e.id)! } : e)) });
   }
 
-  function changeSlots(raw: string): void {
+  async function changeSlots(raw: string): Promise<void> {
     const result = setSlots(def, Number(raw));
-    if (result.removed > 0 && !confirm(t("builder.remove_confirm", { n: result.removed }))) {
+    if (result.removed > 0 && !(await confirmAsync({ title: t("builder.remove_confirm", { n: result.removed }), danger: true }))) {
       def = { ...def }; // re-render the select with the old value
       return;
     }
@@ -315,9 +316,9 @@
     addSlot = Math.min(addSlot, result.def.slots - 1);
   }
 
-  function changePairs(pairs: [number, number][]): void {
+  async function changePairs(pairs: [number, number][]): Promise<void> {
     const result = setPairs(def, pairs);
-    if (result.removed > 0 && !confirm(t("builder.remove_confirm", { n: result.removed }))) {
+    if (result.removed > 0 && !(await confirmAsync({ title: t("builder.remove_confirm", { n: result.removed }), danger: true }))) {
       def = { ...def };
       return;
     }
@@ -345,9 +346,9 @@
     changePairs(pairs);
   }
 
-  function runMirror(): void {
+  async function runMirror(): Promise<void> {
     const target = def.elements.filter((e) => e.slot === mirrorTo).length;
-    if (target > 0 && !confirm(t("builder.mirror_confirm", { n: target, to: mirrorTo + 1 }))) return;
+    if (target > 0 && !(await confirmAsync({ title: t("builder.mirror_confirm", { n: target, to: mirrorTo + 1 }), danger: true }))) return;
     apply(mirrorSlot(def, mirrorFrom, mirrorTo).def);
     prune();
   }
@@ -674,7 +675,8 @@
   }
 
   async function remove(): Promise<void> {
-    if (!layoutId || !confirm(t("studio.confirm_delete_layout", { name }))) return;
+    if (!layoutId) return;
+    if (!(await confirmAsync({ title: t("studio.confirm_delete_layout", { name }), danger: true, confirmLabel: t("common.delete") }))) return;
     try {
       await api(`/api/overlay-layouts/${layoutId}`, { method: "DELETE" });
       dropDraft();

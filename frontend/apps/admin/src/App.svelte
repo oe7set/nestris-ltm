@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import ConfirmHost from "./components/ConfirmHost.svelte";
   import DatabaseProblem from "./components/DatabaseProblem.svelte";
   import Toasts from "./components/Toasts.svelte";
   import { api } from "./lib/api";
@@ -205,6 +206,7 @@
 {/if}
 <svelte:window onkeydown={(e) => e.key === "Escape" && (menuOpen = false)} />
 <Toasts />
+<ConfirmHost />
 
 <style>
   .gate {

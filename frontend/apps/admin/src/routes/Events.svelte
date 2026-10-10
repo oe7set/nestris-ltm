@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import Modal from "../components/Modal.svelte";
+  import { confirmAsync } from "../lib/confirm.svelte";
   import { api } from "../lib/api";
   import { dateTime, fromLocalInput, num, toLocalInput } from "../lib/format";
   import { i18n, t } from "../lib/i18n.svelte";
@@ -106,7 +107,7 @@
             {#if !e.is_active}
               <button
                 class="danger"
-                onclick={() => confirm(t("events.delete_confirm", { name: e.name })) && run(() => api(`/api/events/${e.id}`, { method: "DELETE" }))}
+                onclick={async () => (await confirmAsync({ title: t("events.delete_confirm", { name: e.name }), danger: true, confirmLabel: t("common.delete") })) && run(() => api(`/api/events/${e.id}`, { method: "DELETE" }))}
               >
                 {t("common.delete")}
               </button>

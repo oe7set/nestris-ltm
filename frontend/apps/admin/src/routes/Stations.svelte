@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { confirmAsync } from "../lib/confirm.svelte";
   import { api } from "../lib/api";
   import { dateTime, num } from "../lib/format";
   import { i18n, t } from "../lib/i18n.svelte";
@@ -12,8 +13,16 @@
 
   async function load(): Promise<void> {
     try {
+      const previous = new Map((stations ?? []).map((s) => [s.id, s.name ?? ""]));
       stations = await api<StationRow[]>("/api/stations");
-      names = Object.fromEntries(stations.map((s) => [s.id, s.name ?? ""]));
+      // Keep names typed but not saved yet (another action reloads the list).
+      names = Object.fromEntries(
+        stations.map((s) => {
+          const typed = names[s.id];
+          const edited = typed !== undefined && typed !== previous.get(s.id);
+          return [s.id, edited ? typed : (s.name ?? "")];
+        }),
+      );
       const events = await api<EventInfo[]>("/api/events");
       active = events.find((e) => e.is_active) ?? null;
     } catch (e) {
@@ -63,7 +72,7 @@
           <td class="mono">{s.id}</td>
           <td>
             <form class="row" onsubmit={(e) => { e.preventDefault(); void run(() => api(`/api/stations/${encodeURIComponent(s.id)}`, { method: "PATCH", body: { name: names[s.id]?.trim() || null } }), t("common.saved")); }}>
-              <input bind:value={names[s.id]} maxlength="128" />
+              <input bind:value={names[s.id]} maxlength="128" aria-label={t("stations.name")} />
               <button type="submit">{t("common.save")}</button>
             </form>
           </td>
@@ -90,7 +99,7 @@
             <button
               class="danger"
               disabled={s.live?.online}
-              onclick={() => confirm(t("stations.delete_confirm", { id: s.id })) && run(() => api(`/api/stations/${encodeURIComponent(s.id)}`, { method: "DELETE" }), t("common.deleted"))}
+              onclick={async () => (await confirmAsync({ title: t("stations.delete_confirm", { id: s.id }), danger: true, confirmLabel: t("common.delete") })) && run(() => api(`/api/stations/${encodeURIComponent(s.id)}`, { method: "DELETE" }), t("common.deleted"))}
             >
               {t("common.delete")}
             </button>

@@ -919,6 +919,22 @@ const de = {
   "tournament.focus_title": "Nur den Turnierbaum zeigen (Esc beendet)",
   "tournament.focus_end": "Fokus beenden",
   "tournament.fullscreen_now": "Vollbild",
+
+  "confirm.type": "Zur Bestätigung „{text}“ eintippen",
+  "common.unsaved_confirm": "Es gibt ungespeicherte Änderungen. Verwerfen?",
+  "common.discard": "Verwerfen",
+  "common.undo": "Rückgängig",
+  "player.card_remove": "Karte {uid} entfernen?",
+  "player.card_remove_text": "Die Karte meldet danach keinen Spieler mehr an, bis sie wieder zugeordnet ist.",
+  "game.unassign_pending": "Zuordnung wird beim Speichern aufgehoben",
+  "picker.none": "Kein Spieler gefunden",
+  "picker.failed": "Suche fehlgeschlagen",
+  "stations.name": "Name der Station",
+  "settings.revoke_confirm": "Token „{name}“ widerrufen?",
+  "settings.revoke_text": "Geräte und Programme mit diesem Token (Terminal, Station, Stream Deck …) werden sofort abgewiesen. Das lässt sich nicht rückgängig machen; danach braucht es ein neues Token.",
+  "settings.logout_all": "Überall abmelden",
+  "settings.logout_all_hint": "Meldet dein Konto in allen anderen Browsern ab (z.B. verlorenes Handy). Dieser Browser bleibt angemeldet. Ein neues Passwort tut das automatisch.",
+  "settings.logout_all_done": "Alle anderen Anmeldungen beendet",
 } as const;
 
 export type MessageKey = keyof typeof de;
@@ -1841,6 +1857,22 @@ const en: Record<MessageKey, string> = {
   "tournament.focus_title": "Show the bracket only (Esc ends it)",
   "tournament.focus_end": "End focus",
   "tournament.fullscreen_now": "Full screen",
+
+  "confirm.type": "Type \"{text}\" to confirm",
+  "common.unsaved_confirm": "There are unsaved changes. Discard them?",
+  "common.discard": "Discard",
+  "common.undo": "Undo",
+  "player.card_remove": "Remove card {uid}?",
+  "player.card_remove_text": "The card no longer signs in a player until it is assigned again.",
+  "game.unassign_pending": "Unassigned when you save",
+  "picker.none": "No player found",
+  "picker.failed": "Search failed",
+  "stations.name": "Station name",
+  "settings.revoke_confirm": "Revoke token \"{name}\"?",
+  "settings.revoke_text": "Devices and programs using this token (terminal, station, Stream Deck …) are rejected at once. This cannot be undone; a new token is needed afterwards.",
+  "settings.logout_all": "Sign out everywhere",
+  "settings.logout_all_hint": "Signs your account out of every other browser (e.g. a lost phone). This browser stays signed in. A new password does this automatically.",
+  "settings.logout_all_done": "All other sign-ins ended",
 };
 
 export type Locale = "de" | "en";

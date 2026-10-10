@@ -3,6 +3,7 @@
   // per-station overrides. Saving sends the merged set; the station stores
   // it and restarts its recognition after the running game.
   import { onMount } from "svelte";
+  import { confirmAsync } from "../lib/confirm.svelte";
   import { api } from "../lib/api";
   import { dateTime } from "../lib/format";
   import { i18n, t, tDynamic } from "../lib/i18n.svelte";
@@ -31,6 +32,8 @@
   let raw = $state("");
   let rawError = $state<string | null>(null);
   let showRaw = $state(false);
+  // The JSON text was edited but not applied to the form yet.
+  let rawPending = $state(false);
   let copyTargets = $state<string[]>([]);
   let busy = $state(false);
 
@@ -55,6 +58,7 @@
     draft = structuredClone($state.snapshot(base ?? {})) as Values;
     raw = JSON.stringify(draft, null, 2);
     rawError = null;
+    rawPending = false;
     dirty = false;
   }
 
@@ -68,12 +72,14 @@
   function setValue(field: Field, input: string): void {
     draft = setPath(draft, field.key, parseInput(field, input));
     raw = JSON.stringify(draft, null, 2);
+    rawPending = false;
     dirty = true;
   }
 
   function clearValue(key: string): void {
     draft = setPath(draft, key, undefined);
     raw = JSON.stringify(draft, null, 2);
+    rawPending = false;
     dirty = true;
   }
 
@@ -83,6 +89,7 @@
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("{ … }");
       draft = parsed as Values;
       rawError = null;
+      rawPending = false;
       dirty = true;
     } catch (e) {
       rawError = e instanceof Error ? e.message : String(e);
@@ -104,6 +111,14 @@
   }
 
   function save(): void {
+    // Edits in the JSON box count too: apply them first (an invalid text stops here).
+    if (rawPending) {
+      applyRaw();
+      if (rawError) {
+        showRaw = true;
+        return;
+      }
+    }
     const body = { values: $state.snapshot(draft) };
     if (selected === TEMPLATE) {
       void run(() => api("/api/station-config/template", { method: "PUT", body }), t("sconf.saved"));
@@ -115,8 +130,8 @@
     }
   }
 
-  function dropOverrides(): void {
-    if (!confirm(t("sconf.drop_confirm"))) return;
+  async function dropOverrides(): Promise<void> {
+    if (!(await confirmAsync({ title: t("sconf.drop_confirm"), danger: true }))) return;
     void run(() => api(`/api/stations/${encodeURIComponent(selected)}/config`, { method: "DELETE" }), t("sconf.saved"));
   }
 
@@ -304,7 +319,7 @@
 
     <details class="panel" bind:open={showRaw}>
       <summary>{t("sconf.raw")}</summary>
-      <textarea rows="10" class="mono" bind:value={raw} oninput={() => (dirty = true)}></textarea>
+      <textarea rows="10" class="mono" bind:value={raw} oninput={() => { dirty = true; rawPending = true; }}></textarea>
       {#if rawError}<p class="error-box small">{rawError}</p>{/if}
       <button onclick={applyRaw}>{t("sconf.raw_apply")}</button>
     </details>

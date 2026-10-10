@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import Modal from "../components/Modal.svelte";
   import PlayerPicker from "../components/PlayerPicker.svelte";
+  import { confirmAsync } from "../lib/confirm.svelte";
   import { api } from "../lib/api";
   import { dateTime, num } from "../lib/format";
   import { i18n, t, type MessageKey } from "../lib/i18n.svelte";
@@ -26,18 +27,24 @@
 
   let player = $state<PlayerDetail | null>(null);
   let form = $state<Record<string, string>>({});
+  // The form as last loaded or saved: edits are kept when a side action
+  // (cards, visibility, ...) reloads the player.
+  let formBase = $state("{}");
+  const formDirty = $derived(JSON.stringify(form) !== formBase);
   let games = $state<Game[]>([]);
   let newCard = $state("");
   let merging = $state(false);
   let mergeTarget = $state<number | null>(null);
   let error = $state<string | null>(null);
 
-  async function load(): Promise<void> {
+  async function load(resetForm = true): Promise<void> {
     try {
       player = await api<PlayerDetail>(`/api/players/${id}`);
-      form = Object.fromEntries(
+      const fresh = Object.fromEntries(
         [...FIELDS.map((f) => f.key), "notes"].map((k) => [k, String(player![k as keyof PlayerDetail] ?? "")]),
       );
+      if (resetForm || !formDirty) form = fresh;
+      formBase = JSON.stringify(fresh);
       const page = await api<Page<Game>>("/api/games", {
         query: { player_id: id, all_time: true, limit: 20 },
       });
@@ -65,7 +72,7 @@
     try {
       await fn();
       if (message) toasts.ok(message);
-      await load();
+      await load(false);
     } catch (e) {
       toasts.error(e);
     }
@@ -88,7 +95,8 @@
   }
 
   async function remove(): Promise<void> {
-    if (!player || !confirm(t("player.delete_confirm", { name: player.nickname }))) return;
+    if (!player) return;
+    if (!(await confirmAsync({ title: t("player.delete_confirm", { name: player.nickname }), danger: true, confirmLabel: t("common.delete") }))) return;
     await action(() => api(`/api/players/${id}`, { method: "DELETE" }), t("common.deleted"));
   }
 
@@ -109,6 +117,15 @@
   // onMount, not $effect: load() reads state that must not re-trigger it.
   onMount(() => {
     void load();
+    const unguard = router.setGuard(() => !formDirty || confirm(t("common.unsaved_confirm")));
+    const beforeUnload = (e: BeforeUnloadEvent) => {
+      if (formDirty) e.preventDefault();
+    };
+    addEventListener("beforeunload", beforeUnload);
+    return () => {
+      unguard();
+      removeEventListener("beforeunload", beforeUnload);
+    };
   });
 </script>
 
@@ -167,7 +184,14 @@
             <span class="mono">{card.uid}</span>
             {#if card.card_name}<span class="muted small">„{card.card_name}“</span>{/if}
             <span class="spacer"></span>
-            <button class="link small" onclick={() => action(() => api(`/api/players/${id}/cards/${card.uid}`, { method: "DELETE" }))}>✕</button>
+            <button
+              class="link small"
+              aria-label={t("player.card_remove", { uid: card.uid })}
+              title={t("player.card_remove", { uid: card.uid })}
+              onclick={async () =>
+                (await confirmAsync({ title: t("player.card_remove", { uid: card.uid }), text: t("player.card_remove_text"), danger: true })) &&
+                action(() => api(`/api/players/${id}/cards/${card.uid}`, { method: "DELETE" }))}>✕</button
+            >
           </div>
           <div class="muted small">
             {t("player.last_seen")}: {dateTime(card.last_seen_at, i18n.locale)}
@@ -176,7 +200,7 @@
           <p class="muted small">{t("player.no_cards")}</p>
         {/each}
         <form class="row add" onsubmit={addCard}>
-          <input placeholder={t("player.card_uid")} bind:value={newCard} pattern="[0-9A-Fa-f]+" maxlength="32" required />
+          <input placeholder={t("player.card_uid")} aria-label={t("player.card_uid")} bind:value={newCard} pattern="[0-9A-Fa-f]+" maxlength="32" required />
           <button type="submit">{t("player.add_card")}</button>
         </form>
       </section>

@@ -112,7 +112,7 @@ async def login(
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "wrong username or password")
         secret = await auth_service.session_secret(session)
         cookie = auth_service.make_session_cookie(
-            secret, user.id, user.username, remember=body.remember
+            secret, user.id, user.username, remember=body.remember, version=user.session_version
         )
         username = user.username
     _throttle.success(key)
@@ -132,13 +132,39 @@ async def _renew(request: Request, response: Response, session: AsyncSession) ->
         return
     if data.expires - time.time() > auth_service.SESSION_TTL_S / 2:
         return
-    fresh = auth_service.make_session_cookie(secret, data.user_id, data.username, remember=True)
+    fresh = auth_service.make_session_cookie(
+        secret, data.user_id, data.username, remember=True, version=data.version
+    )
     _set_cookie(request, response, fresh, remember=True)
 
 
 @router.post("/auth/logout")
 async def logout(response: Response) -> dict[str, bool]:
     response.delete_cookie(SESSION_COOKIE, path="/")
+    return {"ok": True}
+
+
+@router.post("/auth/logout-all")
+async def logout_everywhere(
+    principal: AdminDep, request: Request, response: Response, session: SessionDep
+) -> dict[str, bool]:
+    """End every session of the signed-in admin (other browsers, a lost phone);
+    this browser gets a fresh cookie and stays signed in."""
+    if principal.user_id is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "only for admin logins")
+    async with session.begin():
+        user = await session.get(AdminUser, principal.user_id)
+        if user is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "admin not found")
+        user.session_version += 1
+        await audit.record(
+            session, actor=principal.actor, action="logout_all", entity="admin", entity_id=user.id
+        )
+        secret = await auth_service.session_secret(session)
+        cookie = auth_service.make_session_cookie(
+            secret, user.id, user.username, version=user.session_version
+        )
+    _set_cookie(request, response, cookie)
     return {"ok": True}
 
 
@@ -201,19 +227,32 @@ async def create_admin(body: NewAdmin, principal: AdminDep, session: SessionDep)
 
 @router.put("/admins/{admin_id}/password")
 async def set_admin_password(
-    admin_id: int, body: PasswordChange, principal: AdminDep, session: SessionDep
+    admin_id: int,
+    body: PasswordChange,
+    principal: AdminDep,
+    request: Request,
+    response: Response,
+    session: SessionDep,
 ) -> dict[str, bool]:
+    """New password; every existing session of that admin ends."""
+    cookie: str | None = None
     async with session.begin():
-        result = await session.execute(
-            update(AdminUser)
-            .where(AdminUser.id == admin_id)
-            .values(password_hash=auth_service.hash_password(body.password))
-        )
-        if not result.rowcount:  # type: ignore[attr-defined]
+        user = await session.get(AdminUser, admin_id)
+        if user is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "admin not found")
+        user.password_hash = auth_service.hash_password(body.password)
+        user.session_version += 1
         await audit.record(
             session, actor=principal.actor, action="password", entity="admin", entity_id=admin_id
         )
+        if principal.user_id == admin_id:
+            # Changing one's own password keeps this browser signed in.
+            secret = await auth_service.session_secret(session)
+            cookie = auth_service.make_session_cookie(
+                secret, user.id, user.username, version=user.session_version
+            )
+    if cookie is not None:
+        _set_cookie(request, response, cookie)
     return {"ok": True}
 
 

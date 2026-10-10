@@ -19,6 +19,7 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
 
+from nestris_ltm.db.models import AdminUser
 from nestris_ltm.services import auth as auth_service
 
 SESSION_COOKIE = "nltm_session"
@@ -30,6 +31,8 @@ class Principal:
     kind: str  # "shell" | "session" | "token"
     name: str
     scopes: frozenset[str] = field(default_factory=frozenset)
+    # The admin account of a session.
+    user_id: int | None = None
 
     @property
     def actor(self) -> str:
@@ -64,7 +67,12 @@ async def get_principal(request: Request) -> Principal | None:
             secret = await auth_service.session_secret(session)
             data = auth_service.parse_session_cookie(secret, cookie)
             if data is not None:
-                return Principal("session", data.username)
+                # A signed cookie alone is not enough: the account must still
+                # exist and the cookie must not predate "sign out everywhere"
+                # or a password change.
+                user = await session.get(AdminUser, data.user_id)
+                if user is not None and user.session_version == data.version:
+                    return Principal("session", user.username, user_id=user.id)
         if bearer.lower().startswith("bearer "):
             token = await auth_service.check_api_token(session, bearer[7:].strip())
             if token is not None:

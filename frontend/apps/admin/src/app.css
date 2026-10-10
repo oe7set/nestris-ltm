@@ -146,13 +146,15 @@ button:disabled {
   opacity: 0.5;
   cursor: default;
 }
-button.primary {
+button.primary,
+.button.primary {
   background: var(--accent);
   color: var(--accent-ink);
   border-color: var(--accent);
   font-weight: 600;
 }
-button.danger {
+button.danger,
+.button.danger {
   color: #fecaca;
   border-color: #7f1d1d;
   background: #2a1215;
@@ -265,6 +267,22 @@ label.check {
   color: #fecaca;
   border-radius: 8px;
   padding: 8px 12px;
+}
+/* Shared message styles (were scoped to single pages before). */
+.info-box {
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+}
+.warn-text {
+  color: var(--warn);
+}
+a:focus-visible,
+summary:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 .hint {
   color: var(--muted);

@@ -498,3 +498,45 @@ async def test_bulk_players(runtime: Runtime, admin: httpx.AsyncClient) -> None:
     assert body["skipped"] == [{"id": ids[1], "reason": "nickname_taken", "nickname": "Two"}]
     r = await admin.post("/api/players/bulk", json={"ids": ids[:1], "action": "restore"})
     assert r.json()["skipped"] == [{"id": ids[0], "reason": "not_deleted"}]
+
+
+# ---------------------------------------------------------------- sessions
+
+
+async def test_sessions_end_with_account_password_and_logout_all(
+    runtime: Runtime, admin: httpx.AsyncClient
+) -> None:
+    r = await admin.post("/api/admins", json={"username": "helper", "password": "helper-pw-1"})
+    helper_id = r.json()["id"]
+
+    async def login(name: str, password: str) -> httpx.AsyncClient:
+        # Own address: the login throttle is per address and process-wide.
+        transport = httpx.ASGITransport(app=create_app(runtime), client=("192.168.1.77", 5000))
+        client = httpx.AsyncClient(transport=transport, base_url="http://test")
+        r = await client.post("/api/auth/login", json={"username": name, "password": password})
+        assert r.status_code == 200, r.text
+        return client
+
+    # A deleted admin's cookie stops working at once.
+    helper = await login("helper", "helper-pw-1")
+    assert (await helper.get("/api/players")).status_code == 200
+    assert (await admin.delete(f"/api/admins/{helper_id}")).status_code == 200
+    assert (await helper.get("/api/players")).status_code == 401
+    await helper.aclose()
+
+    # A password change ends the other sessions; the changing browser stays in.
+    other = await login("crew", "secret-pw")
+    me = (await admin.get("/api/admins")).json()
+    crew_id = next(a["id"] for a in me if a["username"] == "crew")
+    r = await admin.put(f"/api/admins/{crew_id}/password", json={"password": "new-secret-pw"})
+    assert r.status_code == 200
+    assert (await admin.get("/api/players")).status_code == 200
+    assert (await other.get("/api/players")).status_code == 401
+    await other.aclose()
+
+    # Sign out everywhere: same.
+    other = await login("crew", "new-secret-pw")
+    assert (await admin.post("/api/auth/logout-all")).status_code == 200
+    assert (await admin.get("/api/players")).status_code == 200
+    assert (await other.get("/api/players")).status_code == 401
+    await other.aclose()

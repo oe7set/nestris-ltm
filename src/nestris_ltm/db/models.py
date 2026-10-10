@@ -524,6 +524,9 @@ class AdminUser(Base):
     password_hash: Mapped[str] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     last_login_at: Mapped[datetime | None]
+    # Part of every session cookie; raising it ends all of this admin's
+    # sessions (password change, "sign out everywhere").
+    session_version: Mapped[int] = mapped_column(Integer, server_default=text("0"))
 
 
 class ApiToken(Base):

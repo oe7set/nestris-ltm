@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { confirmAsync } from "../lib/confirm.svelte";
+  import { session } from "../lib/session.svelte";
   import { copyText } from "../lib/clipboard";
   import { onMount } from "svelte";
   import Modal from "../components/Modal.svelte";
@@ -144,7 +146,7 @@
             <button
               class="danger"
               disabled={admins.length <= 1}
-              onclick={() => confirm(t("settings.delete_admin", { name: a.username })) && run(() => api(`/api/admins/${a.id}`, { method: "DELETE" }))}
+              onclick={async () => (await confirmAsync({ title: t("settings.delete_admin", { name: a.username }), danger: true, confirmLabel: t("common.delete") })) && run(() => api(`/api/admins/${a.id}`, { method: "DELETE" }))}
             >
               {t("common.delete")}
             </button>
@@ -154,10 +156,21 @@
     </tbody>
   </table>
   <form class="row add" onsubmit={addAdmin}>
-    <input placeholder={t("settings.username")} bind:value={newAdmin.username} required minlength="2" pattern="[A-Za-z0-9._\-]+" autocomplete="off" />
-    <input type="password" placeholder={t("settings.password")} bind:value={newAdmin.password} required minlength="8" autocomplete="new-password" />
+    <input placeholder={t("settings.username")} aria-label={t("settings.username")} bind:value={newAdmin.username} required minlength="2" pattern="[A-Za-z0-9._\-]+" autocomplete="off" />
+    <input type="password" placeholder={t("settings.password")} aria-label={t("settings.password")} bind:value={newAdmin.password} required minlength="8" autocomplete="new-password" />
     <button type="submit">{t("settings.add_admin")}</button>
   </form>
+  {#if session.me?.kind === "session"}
+    <div class="row add">
+      <span class="hint">{t("settings.logout_all_hint")}</span>
+      <span class="spacer"></span>
+      <button
+        onclick={async () =>
+          (await confirmAsync({ title: t("settings.logout_all"), text: t("settings.logout_all_hint") })) &&
+          run(() => api("/api/auth/logout-all", { method: "POST" }), t("settings.logout_all_done"))}>{t("settings.logout_all")}</button
+      >
+    </div>
+  {/if}
 </section>
 
 <section class="panel block">
@@ -176,7 +189,12 @@
             {#if tok.revoked_at}
               <span class="badge">{t("settings.revoked")}</span>
             {:else}
-              <button class="danger" onclick={() => run(() => api(`/api/tokens/${tok.id}`, { method: "DELETE" }))}>{t("settings.revoke")}</button>
+              <button
+                class="danger"
+                onclick={async () =>
+                  (await confirmAsync({ title: t("settings.revoke_confirm", { name: tok.name }), text: t("settings.revoke_text"), danger: true, confirmLabel: t("settings.revoke") })) &&
+                  run(() => api(`/api/tokens/${tok.id}`, { method: "DELETE" }))}>{t("settings.revoke")}</button
+              >
             {/if}
           </td>
         </tr>

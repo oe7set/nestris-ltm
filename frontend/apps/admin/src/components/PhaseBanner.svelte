@@ -16,6 +16,7 @@
   // has to look for them inside the tournament console. Shared by Regie,
   // Turnier and the dashboard (compact).
   import { onMount } from "svelte";
+  import { confirmAsync } from "../lib/confirm.svelte";
   import { api } from "../lib/api";
   import { dateTime } from "../lib/format";
   import { i18n, t } from "../lib/i18n.svelte";
@@ -44,7 +45,8 @@
   }
 
   async function act(path: string, question: string): Promise<void> {
-    if (busy || !confirm(question)) return;
+    if (busy) return;
+    if (!(await confirmAsync({ title: question, danger: path !== "/api/tournament/fix" }))) return;
     busy = true;
     try {
       await api(path, { method: "POST" });
