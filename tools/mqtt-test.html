@@ -1,0 +1,644 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nestris MQTT-Test</title>
+<!--
+  Read-only MQTT monitor for the nestris-station topics: shows the score exactly
+  as it arrives from the broker, before NestrisLTM touches it.
+  No dependencies, works offline: open the file directly in a browser.
+  Needs a WebSocket listener on the broker (default port 9001).
+  Never publishes anything. Always uses its own random client id, because a
+  second client with the id "nestris-ltm-host" would disconnect NestrisLTM.
+-->
+<style>
+  :root {
+    --bg: #101216; --panel: #1a1d23; --panel2: #23272f; --line: #333944;
+    --text: #e6e9ef; --dim: #98a1b0; --ok: #4ade80; --warn: #fbbf24; --bad: #f87171; --accent: #60a5fa;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, "Segoe UI", sans-serif; }
+  main { max-width: 1500px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
+  h1 { font-size: 18px; margin: 0; }
+  h2 { font-size: 14px; margin: 0; }
+  section, header { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+  .spread { justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  label { display: grid; gap: 2px; font-size: 12px; color: var(--dim); }
+  label.check { display: flex; gap: 6px; align-items: center; font-size: 13px; }
+  input[type=text], input[type=password], input[type=number], select {
+    background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 6px 8px; font: inherit;
+  }
+  input.small { width: 90px; } input.wide { width: 210px; }
+  button { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 6px 12px; font: inherit; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: #2563eb; border-color: #2563eb; }
+  .state { font-weight: 600; }
+  .state.on { color: var(--ok); } .state.off { color: var(--bad); } .state.wait { color: var(--warn); }
+  .hint { color: var(--dim); font-size: 12px; }
+  .cards { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; min-width: 0; }
+  .card.alert { border-color: var(--bad); }
+  .card-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .card-head b { font-size: 15px; overflow-wrap: anywhere; }
+  .chip { font-size: 12px; color: var(--dim); white-space: nowrap; }
+  .score { font: 700 44px/1.15 Consolas, "Courier New", monospace; letter-spacing: 2px; margin: 4px 0; }
+  .fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px 10px; font-size: 13px; }
+  .fields span { display: flex; justify-content: space-between; gap: 6px; color: var(--dim); }
+  .fields b { color: var(--text); font-family: Consolas, monospace; font-weight: 600; }
+  .fields b.warn { color: var(--warn); } .fields b.bad { color: var(--bad); }
+  .game { margin-top: 6px; font: 12px Consolas, monospace; color: var(--dim); overflow-wrap: anywhere; }
+  .scroll { max-height: 420px; overflow: auto; border: 1px solid var(--line); border-radius: 5px; }
+  table { border-collapse: collapse; width: 100%; font: 13px Consolas, monospace; }
+  th { position: sticky; top: 0; background: var(--panel2); text-align: right; padding: 5px 8px; color: var(--dim); font-weight: 600; white-space: nowrap; }
+  td { text-align: right; padding: 3px 8px; border-top: 1px solid #272b33; white-space: nowrap; }
+  th.l, td.l { text-align: left; }
+  td.msg { white-space: normal; min-width: 240px; }
+  tr.warn td { background: rgba(251, 191, 36, .1); }
+  tr.bad td { background: rgba(248, 113, 113, .14); }
+  tr.game td { background: rgba(96, 165, 250, .14); color: var(--accent); }
+  pre { margin: 0; padding: 8px; max-height: 340px; overflow: auto; font: 12px/1.4 Consolas, monospace; background: var(--panel2); border-radius: 5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .two { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+  .two > section { min-width: 0; }
+  .empty { color: var(--dim); padding: 14px; text-align: center; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="row spread">
+      <h1>Nestris MQTT-Test</h1>
+      <span>Broker: <span id="connState" class="state off">getrennt</span></span>
+    </div>
+    <div class="row">
+      <label>Broker-Host <input id="host" type="text" class="wide"></label>
+      <label>WS-Port <input id="port" type="number" class="small" value="9001"></label>
+      <label>Topic-Prefix <input id="prefix" type="text" class="wide" value="retroverse/nestris"></label>
+      <label>Benutzer (optional) <input id="user" type="text" autocomplete="off"></label>
+      <label>Passwort (optional) <input id="pass" type="password" autocomplete="off"></label>
+      <button id="connect" class="primary">Verbinden</button>
+      <button id="reset" title="Leert Liste, Zähler und Aufzeichnung">Zurücksetzen</button>
+    </div>
+    <p class="hint" id="connDetail">Nur lesend. Die Seite sendet nichts an die Stationen.</p>
+  </header>
+
+  <div id="cards" class="cards"><div class="empty">Noch keine Station empfangen.</div></div>
+
+  <section>
+    <div class="row spread">
+      <h2>Score-Schritte <span id="stepCount" class="hint"></span></h2>
+      <div class="row">
+        <label>Station <select id="filterStation"><option value="">alle</option></select></label>
+        <label class="check"><input id="onlyBad" type="checkbox"> nur Auffällige</label>
+        <button id="exportSteps">Schritte als CSV</button>
+        <button id="exportFrames">Live-Rohdaten als CSV</button>
+      </div>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead><tr>
+          <th class="l">Zeit</th><th class="l">Station</th><th>Score vorher</th><th>Score nachher</th><th>ΔScore</th>
+          <th>ΔLines</th><th>Level</th><th>erwartet</th><th>Rest</th><th class="l">Bewertung</th>
+        </tr></thead>
+        <tbody id="steps"></tbody>
+      </table>
+    </div>
+    <p class="hint">
+      Erwartet = 40/100/300/1200 × (Level + 1) für die Zeilen aus ΔLines. Rest = ΔScore − erwartet, also die Soft-Drop-Punkte.
+      Score und Lines wechseln nicht im selben Frame, deshalb fasst die Seite Änderungen innerhalb von 300 ms zu einem Schritt zusammen.
+    </p>
+  </section>
+
+  <div class="two">
+    <section>
+      <div class="row spread"><h2>Ereignisse (Status, Spiele, Cheats)</h2></div>
+      <div class="scroll">
+        <table>
+          <thead><tr><th class="l">Zeit</th><th class="l">Topic</th><th class="l">Inhalt</th></tr></thead>
+          <tbody id="events"></tbody>
+        </table>
+      </div>
+    </section>
+    <section>
+      <div class="row spread">
+        <h2>Letzte Rohnachricht</h2>
+        <div class="row">
+          <select id="rawTopic" aria-label="Topic"><option value="">Topic wählen</option></select>
+          <label class="check"><input id="rawPause" type="checkbox"> anhalten</label>
+        </div>
+      </div>
+      <pre id="raw">–</pre>
+    </section>
+  </div>
+</main>
+
+<script>
+"use strict";
+
+// ---- Minimal MQTT 3.1.1 client over WebSocket (subscribe only) --------------
+class MqttWs {
+  constructor({ url, username, password, onState, onMessage }) {
+    Object.assign(this, { url, username, password, onState, onMessage });
+    this.clientId = "nestris-mqtt-test-" + Math.random().toString(36).slice(2, 10);
+    this.buffer = new Uint8Array(0);
+    this.ws = null;
+    this.ping = null;
+    this.topic = null;
+  }
+  static encodeLength(n) {
+    const out = [];
+    do {
+      let byte = n % 128;
+      n = Math.floor(n / 128);
+      if (n > 0) byte |= 0x80;
+      out.push(byte);
+    } while (n > 0);
+    return out;
+  }
+  static str(text) {
+    const bytes = new TextEncoder().encode(text);
+    return [bytes.length >> 8, bytes.length & 255, ...bytes];
+  }
+  send(firstByte, body) {
+    this.ws.send(new Uint8Array([firstByte, ...MqttWs.encodeLength(body.length), ...body]));
+  }
+  open(topic) {
+    this.topic = topic;
+    this.buffer = new Uint8Array(0);
+    const ws = new WebSocket(this.url, ["mqtt"]);
+    this.ws = ws;
+    ws.binaryType = "arraybuffer";
+    ws.onopen = () => {
+      let flags = 0x02; // clean session: nothing stays behind on the broker
+      if (this.username) flags |= 0x80;
+      if (this.password) flags |= 0x40;
+      const body = [...MqttWs.str("MQTT"), 4, flags, 0, 30, ...MqttWs.str(this.clientId)];
+      if (this.username) body.push(...MqttWs.str(this.username));
+      if (this.password) body.push(...MqttWs.str(this.password));
+      this.send(0x10, body);
+    };
+    ws.onmessage = (e) => this.feed(new Uint8Array(e.data));
+    ws.onerror = () => this.onState("error", "WebSocket-Fehler");
+    ws.onclose = (e) => {
+      clearInterval(this.ping);
+      if (this.ws === ws) this.onState("closed", "Verbindung beendet (Code " + e.code + ")");
+    };
+  }
+  close() {
+    const ws = this.ws;
+    this.ws = null;
+    clearInterval(this.ping);
+    if (ws) ws.close();
+  }
+  // A WebSocket message may hold several MQTT packets, or only part of one.
+  feed(chunk) {
+    const merged = new Uint8Array(this.buffer.length + chunk.length);
+    merged.set(this.buffer);
+    merged.set(chunk, this.buffer.length);
+    let pos = 0;
+    while (pos < merged.length) {
+      let i = pos + 1, mult = 1, length = 0, done = false;
+      while (i < merged.length && i < pos + 5) {
+        const byte = merged[i++];
+        length += (byte & 127) * mult;
+        mult *= 128;
+        if (!(byte & 128)) { done = true; break; }
+      }
+      if (!done || i + length > merged.length) break;
+      this.packet(merged[pos], merged.subarray(i, i + length));
+      pos = i + length;
+    }
+    this.buffer = merged.slice(pos);
+  }
+  packet(first, body) {
+    const type = first >> 4;
+    if (type === 2) { // CONNACK
+      const code = body[1];
+      if (code !== 0) {
+        const reasons = { 1: "Protokoll abgelehnt", 2: "Client-ID abgelehnt", 3: "Broker nicht verfügbar", 4: "Benutzer/Passwort falsch", 5: "nicht autorisiert" };
+        this.onState("error", "Broker lehnt ab: " + (reasons[code] || "Code " + code));
+        return;
+      }
+      this.send(0x82, [0, 1, ...MqttWs.str(this.topic), 0]); // QoS 0
+      this.ping = setInterval(() => this.ws.send(new Uint8Array([0xc0, 0])), 20000);
+    } else if (type === 9) { // SUBACK
+      if (body[2] === 0x80) this.onState("error", "Abo abgelehnt (ACL?): " + this.topic);
+      else this.onState("connected", "Abonniert: " + this.topic + " als " + this.clientId);
+    } else if (type === 3) { // PUBLISH
+      const qos = (first >> 1) & 3;
+      const len = (body[0] << 8) | body[1];
+      const topic = new TextDecoder().decode(body.subarray(2, 2 + len));
+      let pos = 2 + len;
+      if (qos > 0) {
+        if (qos === 1) this.send(0x40, [body[pos], body[pos + 1]]);
+        pos += 2;
+      }
+      this.onMessage(topic, new TextDecoder().decode(body.subarray(pos)), Boolean(first & 1));
+    }
+  }
+}
+
+// ---- State ------------------------------------------------------------------
+const $ = (id) => document.getElementById(id);
+const MERGE_MS = 300;           // score and lines settle on different frames
+const SOFTDROP_MAX = 60;        // push-down points allowed in one merged step
+const LOW_CONFIDENCE = 0.8;
+const MAX_STEPS = 20000, MAX_STEPS_SHOWN = 300, MAX_FRAMES = 100000, MAX_EVENTS = 200;
+const CLEAR_POINTS = [0, 40, 100, 300, 1200];
+
+const stations = new Map();
+let steps = [], frames = [], events = [];
+const rawByTopic = new Map();
+let client = null, reconnect = null, wanted = false;
+let dirty = { cards: false, steps: false, events: false, raw: false };
+
+function newStation(id) {
+  return {
+    id, live: null, status: null, player: null, nameFromStatus: null,
+    online: null, seq: null, lost: 0, seqResets: 0, msgs: 0, rate: 0, rateCount: 0,
+    nullScore: 0, lowConfidence: 0, drops: 0, stepCount: 0, badCount: 0,
+    prev: null, open: null, gameId: null, lastAt: 0,
+  };
+}
+function stationFor(id) {
+  if (!stations.has(id)) {
+    stations.set(id, newStation(id));
+    const opt = document.createElement("option");
+    opt.value = opt.textContent = id;
+    $("filterStation").append(opt);
+  }
+  return stations.get(id);
+}
+
+// ---- Analysis ---------------------------------------------------------------
+// Base points of every way to clear this many lines, because two quick clears
+// can fall into one step (a triple + a single is not a tetris).
+function clearSums(lines) {
+  if (lines === 0) return [0];
+  const sums = new Set();
+  for (let first = 1; first <= Math.min(lines, 4); first++) {
+    for (const rest of clearSums(lines - first)) sums.add(CLEAR_POINTS[first] + rest);
+  }
+  return [...sums];
+}
+
+function assess(step) {
+  const dScore = step.after - step.before;
+  const dLines = step.linesAfter != null && step.linesBefore != null ? step.linesAfter - step.linesBefore : null;
+  step.dScore = dScore;
+  step.dLines = dLines;
+  const notes = [];
+  let level = "ok";
+  const flag = (severity, text) => {
+    notes.push(text);
+    if (severity === "bad" || level === "ok") level = severity;
+  };
+  if (step.drops.length) {
+    flag("bad", "Score fiel zwischendurch: " + step.drops.map((d) => d.from + " → " + d.to).join(", "));
+  }
+  if (dLines === null) {
+    flag("warn", "Lines unbekannt");
+  } else if (dLines < 0 || dLines > 8) {
+    flag("bad", "ΔLines " + dLines + " ist unmöglich");
+  } else {
+    const levels = [...new Set([step.levelBefore, step.levelAfter].filter((v) => v != null))];
+    if (!levels.length) {
+      flag("warn", "Level unbekannt");
+    } else {
+      let best = null;
+      for (const lv of levels) {
+        for (const points of clearSums(dLines)) {
+          const expected = points * (lv + 1);
+          const rest = dScore - expected;
+          if (best === null || Math.abs(rest) < Math.abs(best.rest)) best = { expected, rest };
+        }
+      }
+      step.expected = best.expected;
+      step.rest = best.rest;
+      const cheats = Math.round(best.rest / 10000);
+      const afterCheats = best.rest - cheats * 10000;
+      if (dLines > 0 && dScore === 0) {
+        flag("bad", "Lines stiegen, Score blieb gleich");
+      } else if (best.rest >= 0 && best.rest <= SOFTDROP_MAX) {
+        if (!notes.length) notes.push(dLines ? dLines + " Zeile(n)" : "Soft-Drop");
+      } else if (cheats >= 1 && afterCheats >= 0 && afterCheats <= SOFTDROP_MAX) {
+        flag("bad", "Cheat oder Lesefehler der Zehntausender (+" + cheats * 10000 + ")");
+      } else {
+        flag("bad", "Punkte passen nicht zu den Zeilen");
+      }
+    }
+  }
+  if (step.minConfidence < LOW_CONFIDENCE) flag("warn", "Erkennung unsicher (" + step.minConfidence.toFixed(2) + ")");
+  step.level = level;
+  step.note = notes.join("; ");
+}
+
+function closeStep(st) {
+  const step = st.open;
+  if (!step) return;
+  st.open = null;
+  assess(step);
+  st.stepCount++;
+  if (step.level !== "ok") st.badCount++;
+  pushStep(step);
+}
+function pushStep(step) {
+  steps.push(step);
+  if (steps.length > MAX_STEPS) steps = steps.slice(-MAX_STEPS);
+  dirty.steps = dirty.cards = true;
+}
+function closeExpired(now) {
+  for (const st of stations.values()) {
+    if (st.open && now - st.open.at >= MERGE_MS) closeStep(st);
+  }
+}
+
+function onLive(st, data, now) {
+  st.msgs++;
+  st.rateCount++;
+  st.lastAt = now;
+  st.live = data;
+  if (data.seq != null) {
+    if (st.seq !== null) {
+      if (data.seq < st.seq) st.seqResets++;
+      else if (data.seq > st.seq + 1) st.lost += data.seq - st.seq - 1;
+    }
+    st.seq = data.seq;
+  }
+  const playing = data.game_state === "in_game";
+  if (playing && data.score == null) st.nullScore++;
+  if (playing && data.confidence < LOW_CONFIDENCE) st.lowConfidence++;
+
+  frames.push({
+    time: new Date(now).toISOString(), station: st.id, seq: data.seq, game_id: data.game_id,
+    game_state: data.game_state, score: data.score, lines: data.lines, level: data.level,
+    confidence: data.confidence, cheated: data.cheated, frame_age_ms: data.frame_age_ms,
+  });
+  if (frames.length > MAX_FRAMES * 1.2) frames = frames.slice(-MAX_FRAMES);
+
+  if (data.game_id !== st.gameId) {
+    closeStep(st);
+    st.gameId = data.game_id;
+    st.prev = null;
+    if (data.game_id) {
+      pushStep({ at: now, station: st.id, kind: "game", note: "Neues Spiel " + data.game_id, level: "game" });
+    }
+  }
+  if (playing && data.score != null) {
+    const prev = st.prev;
+    if (prev && (data.score !== prev.score || data.lines !== prev.lines)) {
+      if (!st.open) {
+        st.open = {
+          at: now, station: st.id, gameId: data.game_id, before: prev.score, after: prev.score,
+          linesBefore: prev.lines, linesAfter: prev.lines, levelBefore: prev.level, levelAfter: prev.level,
+          drops: [], minConfidence: 1,
+        };
+      }
+      const step = st.open;
+      if (data.score < step.after) {
+        st.drops++;
+        step.drops.push({ from: step.after, to: data.score });
+      }
+      step.after = data.score;
+      step.linesAfter = data.lines;
+      step.levelAfter = data.level;
+      step.minConfidence = Math.min(step.minConfidence, data.confidence ?? 1);
+    }
+    st.prev = { score: data.score, lines: data.lines, level: data.level };
+  }
+  dirty.cards = true;
+}
+
+function onEnd(st, data, now) {
+  closeStep(st);
+  const issues = (data.validation?.issues || []).map((i) => i.code || i.kind || JSON.stringify(i));
+  const lastLive = st.prev?.score;
+  const same = lastLive == null || lastLive === data.score;
+  const metrics = data.validation?.metrics || {};
+  const note = "Spielende: Score " + data.score + ", letzter Live-Score " + (lastLive ?? "–")
+    + ", Lines " + data.lines + ", gültig: " + (data.valid ? "ja" : "nein")
+    + (metrics.unexplained_points ? ", unerklärte Punkte " + metrics.unexplained_points : "")
+    + (issues.length ? ", Meldungen: " + issues.join(", ") : "");
+  pushStep({ at: now, station: st.id, kind: "game", note, level: same && data.valid ? "game" : "bad" });
+}
+
+function onMessage(topic, text, retained) {
+  const now = Date.now();
+  const prefix = currentPrefix + "/";
+  if (!topic.startsWith(prefix)) return;
+  const parts = topic.slice(prefix.length).split("/");
+  const station = parts[0];
+  const kind = parts.slice(1).join("/");
+  let data = null;
+  try { data = JSON.parse(text); } catch { /* shown raw below */ }
+
+  if (!rawByTopic.has(topic)) {
+    const opt = document.createElement("option");
+    opt.value = opt.textContent = topic;
+    $("rawTopic").append(opt);
+    if (!$("rawTopic").value && kind === "live") $("rawTopic").value = topic;
+  }
+  rawByTopic.set(topic, data ? JSON.stringify(data, null, 1) : text);
+  dirty.raw = true;
+  if (!kind) return;
+  const st = stationFor(station);
+
+  if (kind === "live" && data) {
+    onLive(st, data, now);
+    return;
+  }
+  if (kind === "status" && data) {
+    st.status = data;
+    st.online = data.state === "online";
+    if (data.name) st.nameFromStatus = data.name;
+  } else if (kind === "player" && data) {
+    st.player = data.player || null;
+  } else if (kind === "event/game_end" && data) {
+    onEnd(st, data, now);
+  }
+  dirty.cards = true;
+  // The status repeats every few seconds and would bury the game events.
+  if (kind === "status" && events.some((e) => e.topic === topic && e.text === summarize(kind, data, text))) return;
+  addEvent(now, station + "/" + kind + (retained ? " (retained)" : ""), topic, summarize(kind, data, text));
+}
+function summarize(kind, data, text) {
+  if (!data) return text.slice(0, 300);
+  if (kind === "status") {
+    const opt = (label, v) => (v == null ? null : label + v);
+    return [data.state, data.game_state, opt("capture ", data.capture), opt("lock ", data.lock), opt("rfid ", data.rfid), opt("v", data.version)].filter(Boolean).join(" · ");
+  }
+  if (kind === "event/cheat") return "Cheat " + data.score_before + " → " + data.score_after + ", +" + data.points + ", Zähler " + data.cheated;
+  if (kind === "event/game_start") return "Start " + data.game_id + ", Startlevel " + data.start_level;
+  if (kind === "event/game_end") return "Ende " + data.game_id + ", Score " + data.score + ", Grund " + data.end_reason + ", gültig " + data.valid;
+  return JSON.stringify(data).slice(0, 300);
+}
+function addEvent(at, label, topic, text) {
+  events.push({ at, label, topic, text });
+  if (events.length > MAX_EVENTS) events.shift();
+  dirty.events = true;
+}
+
+// ---- Rendering --------------------------------------------------------------
+const esc = (v) => String(v ?? "–").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const pad = (v, n) => (v == null ? "–".repeat(n) : String(v).padStart(n, "0"));
+const clock = (t) => new Date(t).toLocaleTimeString("de-AT") + "." + String(t % 1000).padStart(3, "0");
+const signed = (v) => (v == null ? "–" : v > 0 ? "+" + v : String(v));
+
+function field(label, value, cls = "") {
+  return `<span>${esc(label)} <b class="${cls}">${esc(value)}</b></span>`;
+}
+function renderCards() {
+  const list = [...stations.values()].sort((a, b) => a.id.localeCompare(b.id));
+  if (!list.length) return;
+  $("cards").innerHTML = list.map((st) => {
+    const l = st.live || {};
+    const stale = st.lastAt && Date.now() - st.lastAt > 5000;
+    const name = l.player?.name || st.player?.name || "kein Spieler";
+    const status = st.online === false ? "offline" : stale ? "keine Live-Daten" : (l.game_state || "–");
+    const age = l.frame_age_ms == null ? "–" : l.frame_age_ms.toFixed(0) + " ms";
+    return `<article class="card ${st.drops ? "alert" : ""}">
+      <div class="card-head"><b>${esc(st.nameFromStatus || st.id)} · ${esc(name)}</b><span class="chip">${esc(status)}</span></div>
+      <div class="score">${esc(pad(l.score, 6))}</div>
+      <div class="fields">
+        ${field("Lines", pad(l.lines, 3))}${field("Level", pad(l.level, 2))}${field("Next", l.next_piece)}
+        ${field("Sicher", l.confidence?.toFixed(2), l.confidence < LOW_CONFIDENCE ? "warn" : "")}${field("Cheats", l.cheated, l.cheated ? "bad" : "")}${field("Teile", l.pieces)}
+        ${field("Rate", st.rate + "/s")}${field("Alter", age)}${field("Seq", l.seq)}
+        ${field("Verloren", st.lost, st.lost ? "warn" : "")}${field("Rückspr.", st.drops, st.drops ? "bad" : "")}${field("Score leer", st.nullScore, st.nullScore ? "warn" : "")}
+        ${field("Schritte", st.stepCount)}${field("Auffällig", st.badCount, st.badCount ? "bad" : "")}${field("Unsicher", st.lowConfidence, st.lowConfidence ? "warn" : "")}
+      </div>
+      <div class="game">${esc(l.game_id || "kein Spiel")}</div>
+    </article>`;
+  }).join("");
+}
+function renderSteps() {
+  const station = $("filterStation").value;
+  const onlyBad = $("onlyBad").checked;
+  const list = steps.filter((s) => (!station || s.station === station) && (!onlyBad || (s.level !== "ok" && s.level !== "game")));
+  $("stepCount").textContent = list.length + " Einträge";
+  const shown = list.slice(-MAX_STEPS_SHOWN).reverse();
+  $("steps").innerHTML = shown.map((s) => {
+    if (s.kind === "game") {
+      return `<tr class="${s.level}"><td class="l">${clock(s.at)}</td><td class="l">${esc(s.station)}</td><td class="l msg" colspan="8">${esc(s.note)}</td></tr>`;
+    }
+    return `<tr class="${s.level === "ok" ? "" : s.level}">
+      <td class="l">${clock(s.at)}</td><td class="l">${esc(s.station)}</td><td>${s.before}</td><td>${s.after}</td><td>${signed(s.dScore)}</td>
+      <td>${signed(s.dLines)}</td><td>${esc(s.levelAfter)}</td><td>${esc(s.expected)}</td><td>${signed(s.rest)}</td><td class="l msg">${esc(s.note)}</td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="10" class="l">Noch keine Einträge.</td></tr>`;
+}
+function renderEvents() {
+  $("events").innerHTML = events.slice().reverse().map((e) =>
+    `<tr><td class="l">${clock(e.at)}</td><td class="l">${esc(e.label)}</td><td class="l msg">${esc(e.text)}</td></tr>`
+  ).join("");
+}
+function renderRaw() {
+  if ($("rawPause").checked) return;
+  $("raw").textContent = rawByTopic.get($("rawTopic").value) ?? "–";
+}
+setInterval(() => {
+  closeExpired(Date.now());
+  if (dirty.cards) { dirty.cards = false; renderCards(); }
+  if (dirty.steps) { dirty.steps = false; renderSteps(); }
+  if (dirty.events) { dirty.events = false; renderEvents(); }
+  if (dirty.raw) { dirty.raw = false; renderRaw(); }
+}, 100);
+setInterval(() => {
+  for (const st of stations.values()) {
+    st.rate = st.rateCount;
+    st.rateCount = 0;
+  }
+  dirty.cards = true;
+}, 1000);
+
+// ---- Export -----------------------------------------------------------------
+function download(name, rows) {
+  if (!rows.length) return;
+  const keys = Object.keys(rows[0]);
+  const cell = (v) => (v == null ? "" : /[;"\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v));
+  const csv = [keys.join(";"), ...rows.map((r) => keys.map((k) => cell(r[k])).join(";"))].join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv" }));
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+const stamp = () => new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+$("exportSteps").onclick = () => download("nestris-score-schritte-" + stamp() + ".csv", steps.map((s) => ({
+  zeit: new Date(s.at).toISOString(), station: s.station, score_vorher: s.before, score_nachher: s.after,
+  delta_score: s.dScore, delta_lines: s.dLines, level: s.levelAfter, erwartet: s.expected, rest: s.rest,
+  bewertung: s.level, hinweis: s.note,
+})));
+$("exportFrames").onclick = () => download("nestris-live-" + stamp() + ".csv", frames);
+
+// ---- Connection -------------------------------------------------------------
+let currentPrefix = "";
+function setState(cls, text, detail) {
+  $("connState").className = "state " + cls;
+  $("connState").textContent = text;
+  if (detail) $("connDetail").textContent = detail;
+}
+function save() {
+  try {
+    const { host, port, prefix, user } = { host: $("host").value, port: $("port").value, prefix: $("prefix").value, user: $("user").value };
+    localStorage.setItem("nestris-mqtt-test", JSON.stringify({ host, port, prefix, user }));
+  } catch { /* storage is optional */ }
+}
+function load() {
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem("nestris-mqtt-test")) || {}; } catch { /* first run */ }
+  const q = new URLSearchParams(location.search);
+  $("host").value = q.get("host") || saved.host || location.hostname || "127.0.0.1";
+  $("port").value = q.get("port") || saved.port || 9001;
+  $("prefix").value = q.get("prefix") || saved.prefix || "retroverse/nestris";
+  $("user").value = saved.user || "";
+}
+function disconnect() {
+  wanted = false;
+  clearTimeout(reconnect);
+  if (client) client.close();
+  client = null;
+  $("connect").textContent = "Verbinden";
+  setState("off", "getrennt");
+}
+function connect() {
+  if (client) client.close();
+  clearTimeout(reconnect);
+  wanted = true;
+  currentPrefix = $("prefix").value.trim().replace(/\/+$/, "");
+  const url = "ws://" + $("host").value.trim() + ":" + $("port").value + "/mqtt";
+  save();
+  $("connect").textContent = "Trennen";
+  setState("wait", "verbinde …", url);
+  client = new MqttWs({
+    url, username: $("user").value, password: $("pass").value,
+    onMessage,
+    onState(state, detail) {
+      if (state === "connected") { setState("on", "verbunden", detail); return; }
+      setState("off", "getrennt", detail + ". Läuft ein WebSocket-Listener auf Port " + $("port").value + "?");
+      if (wanted) {
+        clearTimeout(reconnect);
+        reconnect = setTimeout(connect, 3000);
+      }
+    },
+  });
+  client.open(currentPrefix + "/#");
+}
+$("connect").onclick = () => (wanted ? disconnect() : connect());
+$("reset").onclick = () => {
+  steps = []; frames = []; events = [];
+  stations.clear();
+  rawByTopic.clear();
+  $("filterStation").length = 1;
+  $("rawTopic").length = 1;
+  $("cards").innerHTML = `<div class="empty">Noch keine Station empfangen.</div>`;
+  dirty = { cards: true, steps: true, events: true, raw: true };
+};
+$("filterStation").onchange = $("onlyBad").onchange = renderSteps;
+$("rawTopic").onchange = $("rawPause").onchange = renderRaw;
+load();
+renderSteps();
+connect();
+</script>
+</body>
+</html>
