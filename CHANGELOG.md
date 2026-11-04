@@ -3,8 +3,10 @@
 The section of a version is the text of its GitHub release and what the
 built-in updater shows before installing (`.github/scripts/release_notes.py`).
 
-## 0.4.2
+## 0.4.3
 
+- **Build**: Python is pinned to 3.13 (`.python-version`). GitHub's runners moved
+  to 3.15, where the built app no longer started. 0.4.2 never left the build.
 - **Flagged results wait for review**: a game the station reports with a
   failed validation or a cheat is hidden in the active event as it arrives,
   with the reason in *Spiele*. Unhiding it releases it. Hidden games no longer
