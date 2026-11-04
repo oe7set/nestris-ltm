@@ -70,7 +70,12 @@ async def standing_in(
 
 async def profile(session: AsyncSession, player: Player, live: dict[str, Any]) -> dict[str, Any]:
     pid = player.id
-    counted = Game.player_id == pid, Game.status.in_(COUNTED_STATUSES), Game.score.is_not(None)
+    counted = (
+        Game.player_id == pid,
+        Game.status.in_(COUNTED_STATUSES),
+        Game.score.is_not(None),
+        highscore.not_hidden(),
+    )
 
     all_time = (await session.execute(select(*_aggregates()).where(*counted))).one()
 

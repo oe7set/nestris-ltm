@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from nestris_ltm.api.auth import AdminDep, CrewDep
 from nestris_ltm.api.deps import SessionDep
 from nestris_ltm.db.models import EventPlayerFlags, Game, Player, PlayerCard
-from nestris_ltm.services import audit, events
+from nestris_ltm.services import audit, events, highscore
 from nestris_ltm.services.players import find_by_nickname, normalize_nickname
 
 router = APIRouter(prefix="/api/players", tags=["players"])
@@ -121,8 +121,11 @@ async def list_players(
 ) -> dict[str, Any]:
     event = await events.active_event(session)
     games_total = func.count(Game.id).label("games_total")
-    best = func.max(Game.score).label("best_score")
-    best_event = func.max(Game.score).filter(events.in_window(event)).label("best_score_event")
+    shown = highscore.not_hidden()
+    best = func.max(Game.score).filter(shown).label("best_score")
+    best_event = (
+        func.max(Game.score).filter(shown, events.in_window(event)).label("best_score_event")
+    )
     last_played = func.max(Game.started_at).label("last_played_at")
     stmt = (
         select(Player, games_total, best, best_event, last_played)
@@ -227,8 +230,8 @@ async def get_player(player_id: int, _: CrewDep, session: SessionDep) -> dict[st
         await session.execute(
             select(
                 func.count(Game.id),
-                func.max(Game.score),
-                func.max(Game.score).filter(events.in_window(event)),
+                func.max(Game.score).filter(highscore.not_hidden()),
+                func.max(Game.score).filter(highscore.not_hidden(), events.in_window(event)),
                 func.count(Game.id).filter(events.in_window(event)),
             ).where(Game.player_id == player_id)
         )

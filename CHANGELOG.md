@@ -3,6 +3,13 @@
 The section of a version is the text of its GitHub release and what the
 built-in updater shows before installing (`.github/scripts/release_notes.py`).
 
+## 0.4.2
+
+- **Flagged results wait for review**: a game the station reports with a
+  failed validation or a cheat is hidden in the active event as it arrives,
+  with the reason in *Spiele*. Unhiding it releases it. Hidden games no longer
+  count towards a player's best score or the profile statistics.
+
 ## 0.4.1
 
 - **Games: score filter**: *Score ab* / *Score bis* (inclusive) in the

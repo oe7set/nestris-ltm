@@ -124,6 +124,8 @@ class LivePayload(_Payload):
     pps: float | None = None
     pieces: int = 0
     cheated: int = 0
+    # The score is above what the lines allow (station 0.3.1+).
+    score_suspect: bool = False
     confidence: float = 0.0
     playfield: list[str] | None = None
     # Running message number (station 0.3.0+): gaps = lost messages.

@@ -7,10 +7,19 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-from sqlalchemy import func, select, text, update
+from sqlalchemy import delete, func, select, text, update
 
 from nestris_ltm.db.manager import DatabaseManager
-from nestris_ltm.db.models import Game, GameCheat, GameFrame, Player, PlayerCard, Station
+from nestris_ltm.db.models import (
+    Event,
+    EventHiddenGame,
+    Game,
+    GameCheat,
+    GameFrame,
+    Player,
+    PlayerCard,
+    Station,
+)
 from nestris_ltm.ingest import service as ingest_service
 from nestris_ltm.ingest.frame_buffer import FrameBuffer
 from nestris_ltm.ingest.service import IngestService
@@ -233,3 +242,57 @@ async def test_station_sync(
 async def test_schema_has_player_cards(db: DatabaseManager) -> None:
     async with db.session() as s:
         assert (await s.execute(text("SELECT count(*) FROM player_cards"))).scalar_one() == 0
+
+
+# ------------------------------------------------------------------ review
+
+
+async def _active_event(db: DatabaseManager) -> int:
+    async with db.session() as session, session.begin():
+        event = Event(
+            name="Test", slug="test", starts_at=datetime(2026, 1, 1, tzinfo=UTC), is_active=True
+        )
+        session.add(event)
+        await session.flush()
+        return event.id
+
+
+async def _hidden(db: DatabaseManager) -> list[str | None]:
+    async with db.session() as session:
+        return list((await session.scalars(select(EventHiddenGame.reason))).all())
+
+
+async def test_flagged_result_is_held_for_review(db: DatabaseManager, tmp_path: Path) -> None:
+    await _active_event(db)
+    service = _service(db, tmp_path)
+    await _send(service, "event/game_end", dumps(GAME_END, valid=False))
+    await service.drain()
+    assert await _hidden(db) == ["Prüfung nötig: Validierung fehlgeschlagen"]
+
+
+async def test_cheat_is_held_for_review(db: DatabaseManager, tmp_path: Path) -> None:
+    await _active_event(db)
+    service = _service(db, tmp_path)
+    await _send(service, "event/game_end", dumps(GAME_END, cheated=2))
+    await service.drain()
+    assert await _hidden(db) == ["Prüfung nötig: 2x Cheat erkannt"]
+
+
+async def test_clean_result_is_not_held(db: DatabaseManager, tmp_path: Path) -> None:
+    await _active_event(db)
+    service = _service(db, tmp_path)
+    await _send(service, "event/game_end", dumps(GAME_END))
+    await service.drain()
+    assert await _hidden(db) == []
+
+
+async def test_redelivery_does_not_undo_a_release(db: DatabaseManager, tmp_path: Path) -> None:
+    await _active_event(db)
+    service = _service(db, tmp_path)
+    await _send(service, "event/game_end", dumps(GAME_END, valid=False))
+    await service.drain()
+    async with db.session() as session, session.begin():
+        await session.execute(delete(EventHiddenGame))
+    await _send(service, "event/game_end", dumps(GAME_END, valid=False))
+    await service.drain()
+    assert await _hidden(db) == []

@@ -5,6 +5,10 @@ arrive out of order (a spooled ``game_end`` may come before ``game_start``),
 so all writes are upserts keyed on the station's ``game_id``
 (``games.external_id``). Games edited by the crew (``is_edited``) are never
 overwritten by a re-delivered event.
+
+A result the station flagged (failed validation or a cheat) is hidden in the
+active event as soon as it arrives, so it never reaches the highscore on its
+own: unhiding the game in the admin is the release.
 """
 
 from __future__ import annotations
@@ -16,8 +20,9 @@ from sqlalchemy import and_, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from nestris_ltm.db.models import Game, GameCheat, Station
+from nestris_ltm.db.models import EventHiddenGame, Game, GameCheat, Station
 from nestris_ltm.ingest.payloads import CheatPayload, GameEndPayload, GameStartPayload
+from nestris_ltm.services import audit, events
 from nestris_ltm.services.players import resolve_card
 
 
@@ -75,6 +80,9 @@ async def record_game_end(session: AsyncSession, payload: GameEndPayload) -> int
     """Finalize the game (creating it if ``game_start`` never arrived)."""
     await ensure_station(session, payload.station)
     player_id, card_name, card_uid = await _card_player(session, payload)
+    earlier_status = await session.scalar(
+        select(Game.status).where(Game.external_id == payload.game_id)
+    )
     values = {
         "station_id": payload.station,
         "player_id": player_id,
@@ -120,7 +128,32 @@ async def record_game_end(session: AsyncSession, payload: GameEndPayload) -> int
             where=Game.is_edited.is_(False),
         )
     )
-    return await _game_id(session, payload.game_id)
+    game_id = await _game_id(session, payload.game_id)
+    # A re-delivered result must not hide a game the crew already released.
+    if earlier_status != "finished":
+        await _hold_for_review(session, game_id, payload)
+    return game_id
+
+
+async def _hold_for_review(session: AsyncSession, game_id: int, payload: GameEndPayload) -> None:
+    reasons = []
+    if not payload.valid:
+        reasons.append("Validierung fehlgeschlagen")
+    if payload.cheated:
+        reasons.append(f"{payload.cheated}x Cheat erkannt")
+    event = await events.active_event(session)
+    if not reasons or event is None:
+        return
+    reason = "Prüfung nötig: " + ", ".join(reasons)
+    await session.execute(
+        insert(EventHiddenGame)
+        .values(event_id=event.id, game_id=game_id, reason=reason)
+        .on_conflict_do_nothing(index_elements=[EventHiddenGame.event_id, EventHiddenGame.game_id])
+    )
+    await audit.record(
+        session, actor="station", action="hide", entity="game", entity_id=game_id,
+        after={"event_id": event.id, "reason": reason},
+    )  # fmt: skip
 
 
 async def record_cheat(session: AsyncSession, payload: CheatPayload) -> int:

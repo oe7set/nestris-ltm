@@ -82,6 +82,11 @@ def visible_games(event: Event | None) -> ColumnElement[bool]:
     )
 
 
+def not_hidden() -> ColumnElement[bool]:
+    """Games hidden in no event: the ones player bests may come from."""
+    return not_(exists().where(EventHiddenGame.game_id == Game.id))
+
+
 def visible_players(event: Event | None) -> ColumnElement[bool]:
     condition: ColumnElement[bool] = PlayerRow.deleted_at.is_(None)
     if event is not None:
