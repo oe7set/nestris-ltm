@@ -441,6 +441,8 @@ class OverlayLayout(TimestampMixin, Base):
     schema_version: Mapped[int] = mapped_column(SmallInteger, server_default=text("1"))
     # Optimistic locking: every save must name the version it started from.
     version: Mapped[int] = mapped_column(Integer, server_default=text("1"))
+    # The template (core/layout_templates.py) it was made from: "reset" goes back to it.
+    template_id: Mapped[str | None] = mapped_column(String(32))
 
 
 class SceneSlot(Base):

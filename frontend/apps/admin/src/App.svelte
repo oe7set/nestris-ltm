@@ -115,8 +115,10 @@
   }
 
   // Turnier in focus mode: the bracket gets the whole window.
+  // Scene studio in focus mode: the editor gets the whole window (like OBS).
   const focus = $derived(
-    current.name === "tournament" && uiPrefs.tournamentFocus && current.query.get("tab") !== "matches",
+    (current.name === "tournament" && uiPrefs.tournamentFocus && current.query.get("tab") !== "matches") ||
+      ((current.name === "studio-scene" || current.name === "studio-layout") && uiPrefs.studioFocus),
   );
 
   // Phones: the navigation folds into a menu button above the page.

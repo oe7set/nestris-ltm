@@ -28,14 +28,23 @@
   const pair = $derived(
     el.pair !== null && el.pair !== undefined ? state.scene.pairs[el.pair] : undefined,
   );
-  const align = $derived((p.align as string | undefined) ?? "left");
+  // Same defaults as core/overlay_layout.py (stored definitions carry them).
+  const align = $derived(
+    (p.align as string | undefined) ??
+      (["nametag", "title", "round", "ranking"].includes(el.type) ? "center" : "left"),
+  );
   const nes = $derived(look.nes);
 
   // ---- stat
   const field = $derived((p.field as StatField | undefined) ?? "score");
   const statLabel = $derived(
-    (p.label as string | undefined) ?? hud(lang, (field === "drought" ? "drought" : field) as TextKey),
+    (p.label as string | undefined) ??
+      (field === "to_advance"
+        ? (view?.to_advance ? text(lang, "to_advance") : text(lang, "behind")).toUpperCase()
+        : hud(lang, field as TextKey)),
   );
+  // Without a panel of its own (inside a frame element, like the built-in stats panels).
+  const bare = $derived(p.boxed === false);
   const gap = $derived(view?.vs_partner);
   const statValue = $derived.by((): string => {
     const v = view;
@@ -51,6 +60,11 @@
       case "pace": return fmt(v.pace);
       case "pieces": return fmt(v.pieces);
       case "gap": return gap && gap.points !== 0 ? (gap.points < 0 ? "+" : "−") + fmt(Math.abs(gap.points)) : "±0";
+      case "to_advance":
+        // Round modes: tetrises needed to advance; else the gap to the leader.
+        if (v.to_advance && v.to_advance.points >= 0) return `${v.to_advance.tetrises_needed} ${text(lang, "tetris")}`;
+        if (v.to_leader && v.to_leader.points > 0 && v.status === "playing") return "−" + fmt(v.to_leader.points);
+        return "–";
     }
   });
   const showLabel = $derived(p.show_label !== false);
@@ -73,12 +87,26 @@
 
   // ---- next piece: label on top, the piece in the rest of the box
   const nextLabelPx = $derived(p.show_label !== false ? fitFont(4, el.w - 24, el.h, 0.22, nes) : 0);
+  // ---- ranking: everyone who plays or finished, best score first
+  const ranked = $derived(
+    views
+      .filter((v) => v.status === "playing" || v.status === "finished")
+      .sort((x, y) => (y.score ?? 0) - (x.score ?? 0)),
+  );
+  const showPoints = $derived(p.show_points !== false);
+  const rankChars = $derived(showPoints ? 15 : 8);
+  const rankPx = $derived(
+    p.direction === "column"
+      ? fitFont(rankChars, el.w - 48, el.h / Math.max(1, views.length), 0.5, nes)
+      : fitFont(rankChars, el.w / Math.max(1, views.length) - 48, el.h, 0.42, nes),
+  );
+
   const nextCell = $derived(
     Math.max(4, Math.floor(Math.min((el.w - 28) / 4, (el.h - 24 - nextLabelPx - (nextLabelPx ? 6 : 0)) / 2))),
   );
 </script>
 
-<div class="w {el.type} a-{align}" class:nes data-type={el.type}>
+<div class="w {el.type} a-{align}" class:nes class:bare data-type={el.type}>
   {#if el.type === "board" && view}
     <div class="center">
       <Board {view} cell={boardCell(el.w, el.h)} {lang} showNext={false} />
@@ -99,7 +127,7 @@
     </div>
   {:else if el.type === "name"}
     <div class="wbox row name">
-      {#if p.show_rank && view?.rank}<span class="rank">{view.rank}</span>{/if}
+      {#if p.show_rank && view?.rank}<span class="rank" class:leader={view.rank === 1}>{view.rank}</span>{/if}
       <span class="nick" style:font-size="{fitFont(name.length + (p.show_rank ? 2 : 0), el.w - 24, el.h, 0.55, nes)}px">{name}</span>
     </div>
   {:else if el.type === "hearts"}
@@ -137,6 +165,12 @@
     </div>
   {:else if el.type === "frame"}
     <div class="wbox" class:panel={p.style === "panel"}></div>
+  {:else if el.type === "ranking"}
+    <div class="ranking" class:column={p.direction === "column"} style:font-size="{rankPx}px">
+      {#each ranked as v, i (v.slot)}
+        <span class="entry {v.outcome ?? ''}"><b>{i + 1}.</b> {v.name ?? `Slot ${v.slot + 1}`} {#if showPoints}<span class="pts">{fmt(v.score)}</span>{/if}</span>
+      {/each}
+    </div>
   {/if}
 </div>
 
@@ -239,7 +273,11 @@
     min-width: 1.6em;
     padding: 2px 6px;
     background: var(--frame);
+    color: #000;
     border-radius: 4px;
+  }
+  .rank.leader {
+    background: var(--accent);
   }
   .result {
     font-size: 14px;
@@ -297,6 +335,53 @@
   }
   .hearts-row {
     justify-content: flex-start;
+  }
+  .bare .wbox {
+    background: none;
+    border: 0;
+    box-shadow: none;
+    padding: 0 2px;
+  }
+  .ranking {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+    padding: 4px 10px;
+  }
+  .a-left .ranking {
+    justify-content: flex-start;
+  }
+  .a-right .ranking {
+    justify-content: flex-end;
+  }
+  .ranking.column {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .entry {
+    padding: 6px 16px;
+    background: var(--panel);
+    border: 2px solid var(--frame);
+    border-radius: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .entry.advanced,
+  .entry.winner {
+    border-color: var(--good);
+  }
+  .entry.eliminated {
+    border-color: var(--bad);
+    opacity: 0.7;
+  }
+  .pts {
+    color: var(--muted);
+    margin-left: 6px;
   }
   .a-center .hearts-row {
     justify-content: center;

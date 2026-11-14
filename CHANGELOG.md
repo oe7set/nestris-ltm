@@ -3,6 +3,28 @@
 The section of a version is the text of its GitHub release and what the
 built-in updater shows before installing (`.github/scripts/release_notes.py`).
 
+## Unreleased
+
+- **Scene studio rebuilt, like OBS**: one editor per scene with the
+  1920 × 1080 stage in the middle, zoomed to fit; the status bar shows the
+  stage size, zoom, mouse position and selection in real pixels. Ctrl +
+  mouse wheel zooms, Space or the middle mouse button pans. Layers and the
+  element palette on the left, properties (in px), the scene's look and its
+  stations on the right, one *Speichern* for everything. ⛶ hides the admin
+  menu.
+- **Every standard layout can be adapted**: *Layout anpassen* gives a scene
+  its own copy of the matching template (single, single compact, 1 vs 1,
+  1 vs 1 with cameras, 2 × 1 vs 1, 2 × 1 vs 1 in quadrants, 4 players);
+  *Auf Vorlage zurücksetzen* goes back. The templates were measured from the
+  built-in layouts, so an adapted scene looks the same.
+- **New scenes start from a template**, grouped by player count. New:
+  *4 Spieler: alle gegen alle (Viertel)*, a quadrant per player with a
+  ranking in the middle and the round modes.
+- **New elements**: ranking, the stat *zum Weiterkommen*, stats and names
+  without their own frame (inside a frame element, like the built-in stats
+  panels).
+- Duplicating a scene also copies its own layout. Database migration 0014.
+
 ## 0.4.3
 
 - **Build**: Python is pinned to 3.13 (`.python-version`). GitHub's runners moved

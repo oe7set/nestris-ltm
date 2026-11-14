@@ -6,6 +6,7 @@ const KEY = "nltm.ui";
 interface Stored {
   tournamentHelp: boolean;
   tournamentFocus: boolean;
+  studioFocus: boolean;
   alertSound: boolean;
 }
 
@@ -14,6 +15,8 @@ export class UiPrefs {
   tournamentHelp = $state(false);
   /** Turnier: focus mode (bracket only, admin sidebar hidden). */
   tournamentFocus = $state(false);
+  /** Scene studio: the editor gets the whole window (admin sidebar hidden). */
+  studioFocus = $state(false);
   /** A short beep when a new problem appears (bell). */
   alertSound = $state(false);
 
@@ -24,6 +27,7 @@ export class UiPrefs {
       const s = JSON.parse(raw) as Partial<Stored>;
       this.tournamentHelp = s.tournamentHelp === true;
       this.tournamentFocus = s.tournamentFocus === true;
+      this.studioFocus = s.studioFocus === true;
       this.alertSound = s.alertSound === true;
     } catch {
       // nothing stored or unreadable: defaults
@@ -35,6 +39,7 @@ export class UiPrefs {
       const data: Stored = {
         tournamentHelp: this.tournamentHelp,
         tournamentFocus: this.tournamentFocus,
+        studioFocus: this.studioFocus,
         alertSound: this.alertSound,
       };
       globalThis.localStorage?.setItem(KEY, JSON.stringify(data));

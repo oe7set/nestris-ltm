@@ -14,7 +14,7 @@ export const PAIR_TYPES: ReadonlySet<ElementType> = new Set(["versus", "diff_gra
 /** May name a pair (its round), else the scene's round. */
 export const OPTIONAL_PAIR_TYPES: ReadonlySet<ElementType> = new Set(["round"]);
 
-export const STAT_FIELDS = ["score", "lines", "level", "start_level", "trt", "drought", "burn", "pace", "gap", "pieces"] as const;
+export const STAT_FIELDS = ["score", "lines", "level", "start_level", "trt", "drought", "burn", "pace", "gap", "pieces", "to_advance"] as const;
 
 /** Palette order and the size a new element gets. */
 export const CATALOGUE: { type: ElementType; w: number; h: number; props?: Record<string, unknown> }[] = [
@@ -31,6 +31,7 @@ export const CATALOGUE: { type: ElementType; w: number; h: number; props?: Recor
   { type: "round", w: 256, h: 56 },
   { type: "text", w: 400, h: 56, props: { text: "Text", size: 32 } },
   { type: "frame", w: 400, h: 304 },
+  { type: "ranking", w: 1200, h: 56 },
 ];
 
 export function emptyDefinition(slots = 2): LayoutDefinition {

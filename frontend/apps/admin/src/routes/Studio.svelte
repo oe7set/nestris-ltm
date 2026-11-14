@@ -1,42 +1,45 @@
 <script lang="ts">
-  // Scene studio: gallery of scenes and own layouts with live thumbnails,
-  // new scene from a layout gallery, duplicate, export and import.
-  import Tabs from "../components/Tabs.svelte";
+  // Scene studio, overview: every scene with a live thumbnail and its OBS
+  // address. "New scene" starts from a template (1, 2 or 4 players) and the
+  // scene gets its own, adaptable layout. Own layouts without a scene, import
+  // and export are one level down.
   import { onMount } from "svelte";
   import Modal from "../components/Modal.svelte";
+  import TemplatePicker from "../components/studio/TemplatePicker.svelte";
   import Thumb from "../components/Thumb.svelte";
-  import { confirmAsync } from "../lib/confirm.svelte";
   import { api, ApiError } from "../lib/api";
+  import { copyText } from "../lib/clipboard";
+  import { confirmAsync } from "../lib/confirm.svelte";
   import { i18n, t, tDynamic } from "../lib/i18n.svelte";
   import { router } from "../lib/router.svelte";
   import {
-    defaultSettings,
     downloadExport,
-    previewOf,
     readImportFile,
     slugify,
     type CustomLayout,
+    type LayoutChoice,
     type LayoutInfo,
     type SceneRow,
+    type Template,
   } from "../lib/studio";
-  import { tabFromQuery, tabToQuery } from "../lib/tabs";
   import { toasts } from "../lib/toast.svelte";
 
-  const TABS = ["scenes", "layouts"] as const;
-  type Tab = (typeof TABS)[number];
-  let tab = $state<Tab>(tabFromQuery(TABS));
   let scenes = $state<SceneRow[]>([]);
   let layouts = $state<LayoutInfo[]>([]);
   let customs = $state<CustomLayout[]>([]);
+  let templates = $state.raw<Template[]>([]);
   let selected = $state<Set<number>>(new Set());
   let loading = $state(true);
+  let headMenu = $state(false);
+  let cardMenu = $state<number | null>(null);
+  let showLayouts = $state(false);
 
   // New scene dialog
   let creating = $state(false);
   let newName = $state("");
   let newSlug = $state("");
   let slugTouched = $state(false);
-  let newLayout = $state("1v1_cam");
+  let choice = $state<LayoutChoice | null>(null);
 
   // Import dialog
   interface ImportItem {
@@ -58,10 +61,11 @@
 
   async function load(): Promise<void> {
     try {
-      [scenes, layouts, customs] = await Promise.all([
+      [scenes, layouts, customs, templates] = await Promise.all([
         api<SceneRow[]>("/api/scenes"),
         api<LayoutInfo[]>("/api/scenes/layouts"),
         api<CustomLayout[]>("/api/overlay-layouts"),
+        api<Template[]>("/api/studio/templates"),
       ]);
     } catch (e) {
       toasts.error(e);
@@ -70,33 +74,48 @@
     }
   }
 
-  function layoutTitle(id: string): string {
-    const l = layouts.find((x) => x.id === id);
-    if (!l) return id;
+  function layoutTitle(key: string): string {
+    const own = customs.find((c) => c.key === key);
+    if (own) {
+      // An adapted scene: name the template it came from.
+      const tpl = templates.find((x) => x.id === own.template_id);
+      if (!tpl) return own.name;
+      return t("studio.adapted_from", { name: i18n.locale === "en" ? tpl.name_en : tpl.name_de });
+    }
+    const l = layouts.find((x) => x.id === key);
+    if (!l) return key;
     return i18n.locale === "en" ? l.title_en : l.title_de;
   }
 
-  function setTab(next: Tab): void {
-    tab = next;
-    tabToQuery(TABS, next);
-  }
+  const isCustom = (key: string): boolean => key.startsWith("custom:");
 
   // ---- scenes
 
-  function openCreate(layoutId = "1v1_cam"): void {
+  function openCreate(): void {
     newName = "";
     newSlug = "";
     slugTouched = false;
-    newLayout = layoutId;
+    choice = templates.find((tpl) => tpl.featured) ? { kind: "template", template: templates.find((tpl) => tpl.featured)! } : null;
     creating = true;
   }
 
+  function pick(next: LayoutChoice): void {
+    choice = next;
+    // A name to start with: the template's name, until the user types one.
+    if (!newName.trim() && next.kind === "template") {
+      newName = i18n.locale === "en" ? next.template.name_en : next.template.name_de;
+      if (!slugTouched) newSlug = slugify(newName);
+    }
+  }
+
   async function create(): Promise<void> {
+    if (!choice) return;
     try {
-      const scene = await api<SceneRow>("/api/scenes", {
-        method: "POST",
-        body: { name: newName.trim(), slug: newSlug.trim(), layout: newLayout, settings: { style: "nes" } },
-      });
+      const body =
+        choice.kind === "template"
+          ? { name: newName.trim(), slug: newSlug.trim(), template: choice.template.id, settings: { style: "nes" } }
+          : { name: newName.trim(), slug: newSlug.trim(), layout: choice.key, settings: { style: "nes" } };
+      const scene = await api<SceneRow>("/api/scenes", { method: "POST", body });
       creating = false;
       router.go(`/studio/scene/${scene.id}`);
     } catch (e) {
@@ -105,6 +124,7 @@
   }
 
   async function duplicate(scene: SceneRow): Promise<void> {
+    cardMenu = null;
     try {
       const copy = await api<SceneRow>(`/api/scenes/${scene.id}/duplicate`, { method: "POST", body: {} });
       toasts.ok(t("studio.duplicated", { name: copy.name }));
@@ -115,10 +135,18 @@
   }
 
   async function remove(scene: SceneRow): Promise<void> {
+    cardMenu = null;
     if (!(await confirmAsync({ title: t("studio.confirm_delete_scene", { name: scene.name }), danger: true, confirmLabel: t("common.delete") }))) return;
     try {
       await api(`/api/scenes/${scene.id}`, { method: "DELETE" });
-      selected.delete(scene.id);
+      // Its own layout goes too when no other scene uses it.
+      const own = customs.find((c) => c.key === scene.layout);
+      if (own && (own.used_by ?? []).every((slug) => slug === scene.slug)) {
+        await api(`/api/overlay-layouts/${own.id}`, { method: "DELETE" }).catch(() => {});
+      }
+      const next = new Set(selected);
+      next.delete(scene.id);
+      selected = next;
       await load();
     } catch (e) {
       toasts.error(e);
@@ -133,6 +161,8 @@
   }
 
   async function exportScenes(ids: number[] | null): Promise<void> {
+    headMenu = false;
+    cardMenu = null;
     try {
       await downloadExport(ids ? { scenes: ids.join(",") } : {});
     } catch (e) {
@@ -140,7 +170,16 @@
     }
   }
 
-  // ---- layouts
+  async function copyUrl(scene: SceneRow): Promise<void> {
+    try {
+      await copyText(`${location.origin}/o/${scene.slug}`);
+      toasts.ok(t("studio.url_copied"));
+    } catch (e) {
+      toasts.error(e);
+    }
+  }
+
+  // ---- own layouts
 
   async function duplicateLayout(l: CustomLayout): Promise<void> {
     try {
@@ -191,9 +230,7 @@
         method: "POST",
         body: { file: importFile, dry_run: false, scenes: sceneDecisions, layouts: layoutDecisions },
       });
-      toasts.ok(
-        t("studio.imported", { scenes: result.imported.scenes.length, layouts: result.imported.layouts.length }),
-      );
+      toasts.ok(t("studio.imported", { scenes: result.imported.scenes.length, layouts: result.imported.layouts.length }));
       importReport = null;
       importFile = null;
       await load();
@@ -211,45 +248,52 @@
     conflict: ["keep", "replace", "copy", "skip"],
   };
 
-  const builtins = $derived(layouts.filter((l) => !l.custom && l.id !== "replay"));
-  const creatable = $derived(layouts.filter((l) => l.id !== "replay"));
-  const newLayoutInfo = $derived(layouts.find((l) => l.id === newLayout));
+  // Own layouts that no scene uses (the rest live in their scene).
+  const loose = $derived(customs.filter((c) => !(c.used_by ?? []).length));
+  const fixed = $derived(layouts.filter((l) => !l.custom && l.id !== "replay"));
+  const validSlug = $derived(/^[a-z0-9][a-z0-9-]*$/.test(newSlug));
 
   onMount(() => {
     void load();
+    const close = (e: MouseEvent): void => {
+      if (!(e.target as Element | null)?.closest(".menu")) {
+        headMenu = false;
+        cardMenu = null;
+      }
+    };
+    addEventListener("click", close);
+    return () => removeEventListener("click", close);
   });
 </script>
 
 <div class="head row">
   <h1>{t("studio.title")}</h1>
   <span class="spacer"></span>
-  <button onclick={() => fileInput.click()}>{t("studio.import")}</button>
+  <div class="menu">
+    <button aria-haspopup="menu" aria-expanded={headMenu} onclick={() => (headMenu = !headMenu)}>{t("studio.more")} ▾</button>
+    {#if headMenu}
+      <div class="menu-list" role="menu">
+        <button role="menuitem" onclick={() => { headMenu = false; fileInput.click(); }}>{t("studio.import")}</button>
+        <button role="menuitem" disabled={!scenes.length} onclick={() => exportScenes(selected.size ? [...selected] : null)}>
+          {selected.size ? t("studio.export_selected", { n: selected.size }) : t("studio.export_all")}
+        </button>
+        <button role="menuitem" onclick={() => { headMenu = false; router.go("/studio/layout/new"); }}>{t("studio.new_layout")}</button>
+      </div>
+    {/if}
+  </div>
   <input bind:this={fileInput} type="file" accept=".json,application/json" hidden onchange={pickFile} />
-  {#if tab === "scenes"}
-    <button disabled={!scenes.length} onclick={() => exportScenes(selected.size ? [...selected] : null)}>
-      {selected.size ? t("studio.export_selected", { n: selected.size }) : t("studio.export_all")}
-    </button>
-    <button class="primary" onclick={() => openCreate()}>+ {t("studio.new_scene")}</button>
-  {:else}
-    <button class="primary" onclick={() => router.go("/studio/layout/new")}>+ {t("studio.new_layout")}</button>
-  {/if}
+  <button class="primary" onclick={openCreate}>+ {t("studio.new_scene")}</button>
 </div>
 <p class="hint">{t("studio.hint")}</p>
 
-<Tabs
-  tabs={[
-    { id: "scenes", label: `${t("studio.tab_scenes")} (${scenes.length})` },
-    { id: "layouts", label: `${t("studio.tab_layouts")} (${customs.length})` },
-  ]}
-  active={tab}
-  onchange={setTab}
-/>
-
 {#if loading}
   <p class="muted">{t("common.loading")}</p>
-{:else if tab === "scenes"}
+{:else}
   {#if scenes.length === 0}
-    <p class="muted">{t("studio.no_scenes")}</p>
+    <div class="panel empty">
+      <p>{t("studio.no_scenes")}</p>
+      <button class="primary" onclick={openCreate}>+ {t("studio.new_scene")}</button>
+    </div>
   {/if}
   <div class="gallery">
     {#each scenes as s (s.id)}
@@ -258,74 +302,68 @@
           <Thumb slug={s.slug} title={s.name} />
         </a>
         <div class="row meta">
-          <label class="check"><input type="checkbox" checked={selected.has(s.id)} onchange={() => toggle(s.id)} /></label>
+          <label class="check" title={t("studio.select_export")}><input type="checkbox" checked={selected.has(s.id)} onchange={() => toggle(s.id)} /></label>
           <div class="grow">
             <strong>{s.name}</strong>
-            <div class="muted small">/o/{s.slug} · {layoutTitle(s.layout)}</div>
+            <div class="muted small ellipsis">{layoutTitle(s.layout)}</div>
           </div>
-          <span class="badge {s.settings.style === 'nes' ? 'accent' : ''}">{s.settings.style === "nes" ? "NES" : "Modern"}</span>
+          <span class="badge {isCustom(s.layout) ? 'accent' : ''}" title={isCustom(s.layout) ? t("studio.badge_custom_hint") : t("studio.badge_fixed_hint")}>
+            {isCustom(s.layout) ? t("studio.badge_custom") : t("studio.badge_fixed")}
+          </span>
           {#if s.flow === "quali"}<span class="badge ok">{t("studio.quali_badge")}</span>{/if}
         </div>
-        <div class="row actions">
-          <a class="button primary" href="#/studio/scene/{s.id}">{t("common.edit")}</a>
-          <button onclick={() => duplicate(s)}>{t("studio.duplicate")}</button>
-          <button onclick={() => exportScenes([s.id])}>{t("studio.export")}</button>
-          <span class="spacer"></span>
-          <button class="danger" onclick={() => remove(s)}>{t("common.delete")}</button>
+        <div class="row url">
+          <code class="mono">/o/{s.slug}</code>
+          <button class="small" title={t("studio.obs_hint")} onclick={() => copyUrl(s)}>{t("studio.copy_url")}</button>
         </div>
-      </article>
-    {/each}
-  </div>
-{:else}
-  {#if customs.length === 0}
-    <p class="muted">{t("studio.no_layouts")}</p>
-  {/if}
-  <div class="gallery">
-    {#each customs as l (l.id)}
-      <article class="card panel">
-        <a class="thumb-link" href="#/studio/layout/{l.id}" aria-label={l.name}>
-          <Thumb
-            config={previewOf(
-              { slug: "preview", name: l.name, layout: l.key, mode: "none", settings: defaultSettings() },
-              { slots: l.slots ?? 1, pairs: l.pairs },
-            )}
-            title={l.name}
-          />
-        </a>
-        <div class="row meta">
-          <div class="grow">
-            <strong>{l.name}</strong>
-            <div class="muted small">
-              {t("studio.slots", { n: l.slots ?? "?" })}{l.pairs.length ? ` · ${t("studio.pairs", { n: l.pairs.length })}` : ""}
-              {#if l.used_by?.length} · {t("studio.used_by", { scenes: l.used_by.join(", ") })}{/if}
-            </div>
+        <div class="row actions">
+          <a class="button primary" href="#/studio/scene/{s.id}">{t("studio.open_editor")}</a>
+          <span class="spacer"></span>
+          <div class="menu">
+            <button aria-haspopup="menu" aria-expanded={cardMenu === s.id} aria-label={t("studio.more")} onclick={() => (cardMenu = cardMenu === s.id ? null : s.id)}>⋯</button>
+            {#if cardMenu === s.id}
+              <div class="menu-list" role="menu">
+                <button role="menuitem" onclick={() => duplicate(s)}>{t("studio.duplicate")}</button>
+                <button role="menuitem" onclick={() => exportScenes([s.id])}>{t("studio.export")}</button>
+                <a role="menuitem" href="/o/{s.slug}" target="_blank" rel="noopener">{t("studio.open_overlay")} ↗</a>
+                <button role="menuitem" class="danger-text" onclick={() => remove(s)}>{t("common.delete")}</button>
+              </div>
+            {/if}
           </div>
-          {#if !l.valid}<span class="badge bad">{t("studio.invalid")}</span>{/if}
-        </div>
-        <div class="row actions">
-          <a class="button primary" href="#/studio/layout/{l.id}">{t("common.edit")}</a>
-          <button onclick={() => duplicateLayout(l)}>{t("studio.duplicate")}</button>
-          <button onclick={() => downloadExport({ layouts: l.id }).catch((e) => toasts.error(e))}>{t("studio.export")}</button>
-          <span class="spacer"></span>
-          <button class="danger" disabled={!!l.used_by?.length} title={l.used_by?.length ? t("studio.in_use") : ""} onclick={() => removeLayout(l)}>
-            {t("common.delete")}
-          </button>
         </div>
       </article>
     {/each}
   </div>
-  {#if builtins.length}
-    <h2 class="sub">{t("studio.builtin_layouts")}</h2>
-    <div class="gallery small-cards">
-      {#each builtins as l (l.id)}
-        <article class="card panel">
-          <Thumb config={previewOf({ slug: "preview", name: l.title_de, layout: l.id, mode: "none", settings: defaultSettings() }, l)} />
-          <div class="meta"><strong>{i18n.locale === "en" ? l.title_en : l.title_de}</strong></div>
-          <button onclick={() => openCreate(l.id)}>{t("studio.use_layout")}</button>
-        </article>
-      {/each}
-    </div>
-  {/if}
+
+  <section class="own">
+    <button class="link toggle" aria-expanded={showLayouts} onclick={() => (showLayouts = !showLayouts)}>
+      {showLayouts ? "▾" : "▸"} {t("studio.loose_layouts")} ({loose.length})
+    </button>
+    {#if showLayouts}
+      <p class="muted small">{t("studio.loose_hint")}</p>
+      <div class="gallery small-cards">
+        {#each loose as l (l.id)}
+          <article class="card panel">
+            <div class="row meta">
+              <div class="grow">
+                <strong>{l.name}</strong>
+                <div class="muted small">{t("studio.slots", { n: l.slots ?? "?" })}{l.pairs.length ? ` · ${t("studio.pairs", { n: l.pairs.length })}` : ""}</div>
+              </div>
+              {#if !l.valid}<span class="badge bad">{t("studio.invalid")}</span>{/if}
+            </div>
+            <div class="row actions">
+              <a class="button primary" href="#/studio/layout/{l.id}">{t("common.edit")}</a>
+              <button onclick={() => duplicateLayout(l)}>{t("studio.duplicate")}</button>
+              <span class="spacer"></span>
+              <button class="danger" onclick={() => removeLayout(l)}>{t("common.delete")}</button>
+            </div>
+          </article>
+        {:else}
+          <p class="muted small">{t("studio.no_layouts")}</p>
+        {/each}
+      </div>
+    {/if}
+  </section>
 {/if}
 
 {#if creating}
@@ -336,23 +374,16 @@
         <input bind:value={newName} maxlength="128" oninput={() => { if (!slugTouched) newSlug = slugify(newName); }} />
       </label>
       <label class="field">
-        {t("scenes.slug")}
+        {t("studio.url_name")}
         <input bind:value={newSlug} maxlength="64" pattern="[a-z0-9][a-z0-9\-]*" oninput={() => (slugTouched = true)} />
+        <span class="muted small">/o/{newSlug || "…"}</span>
       </label>
     </div>
-    <p class="muted small">{t("studio.pick_layout")}</p>
-    <div class="layout-pick">
-      {#each creatable as l (l.id)}
-        <button aria-pressed={newLayout === l.id} class="pick" class:on={newLayout === l.id} onclick={() => (newLayout = l.id)}>
-          <Thumb config={previewOf({ slug: "preview", name: newName || l.title_de, layout: l.id, mode: "none", settings: defaultSettings() }, l)} />
-          <span>{i18n.locale === "en" ? l.title_en : l.title_de}{l.custom ? " ★" : ""}</span>
-        </button>
-      {/each}
-    </div>
-    {#if newLayoutInfo}<p class="hint">{i18n.locale === "en" ? newLayoutInfo.description_en : newLayoutInfo.description_de}</p>{/if}
+    <p class="muted small">{t("studio.pick_template")}</p>
+    <TemplatePicker {templates} builtins={fixed} selected={choice} onpick={pick} />
     {#snippet footer()}
       <button onclick={() => (creating = false)}>{t("common.cancel")}</button>
-      <button class="primary" disabled={!newName.trim() || !/^[a-z0-9][a-z0-9-]*$/.test(newSlug)} onclick={create}>{t("studio.create")}</button>
+      <button class="primary" disabled={!newName.trim() || !validSlug || !choice} onclick={create}>{t("studio.create")}</button>
     {/snippet}
   </Modal>
 {/if}
@@ -421,17 +452,23 @@
   .head h1 {
     margin: 0;
   }
+  .empty {
+    display: grid;
+    gap: 10px;
+    justify-items: start;
+    margin-bottom: 14px;
+  }
   .gallery {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
     gap: 14px;
   }
   .small-cards {
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   }
   .card {
     display: grid;
-    gap: 10px;
+    gap: 8px;
     align-content: start;
   }
   .card.sel {
@@ -448,31 +485,69 @@
     flex: 1;
     min-width: 0;
   }
+  .ellipsis {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .url {
+    gap: 8px;
+    align-items: center;
+  }
+  .url code {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .small {
+    padding: 2px 8px;
+    font-size: 13px;
+  }
   .actions {
     gap: 6px;
     flex-wrap: wrap;
   }
-  .sub {
-    margin-top: 28px;
+  .menu {
+    position: relative;
   }
-  .layout-pick {
+  .menu-list {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 4px);
+    z-index: 20;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 10px;
-    max-height: 56vh;
-    overflow: auto;
-    padding: 2px;
+    min-width: 220px;
+    padding: 4px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.4);
   }
-  .pick {
-    display: grid;
-    gap: 6px;
-    padding: 6px;
+  .menu-list button,
+  .menu-list a {
     text-align: left;
+    border: 0;
+    background: none;
+    padding: 8px 10px;
+    color: inherit;
+    border-radius: 6px;
+  }
+  .menu-list button:hover,
+  .menu-list a:hover {
     background: var(--panel-2);
   }
-  .pick.on {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 2px var(--accent);
+  .danger-text {
+    color: var(--bad, #f83800) !important;
+  }
+  .own {
+    margin-top: 28px;
+    display: grid;
+    gap: 8px;
+  }
+  .toggle {
+    justify-self: start;
+    font-size: 15px;
   }
   table {
     width: 100%;

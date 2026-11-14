@@ -217,20 +217,53 @@ green lead / red deficit. Best with `1v1_cam` and `2x1v1_cam`. The font is
 instead; it is not shipped with NestrisLTM because its licence allows
 non-commercial use only.
 
-### Scene studio and layout builder
+### Scene studio
 
 *Szenen-Studio* (`/#/studio`) is where scenes are designed; *Regie* is where
-they run (flow, rounds, hearts, slots).
+they run (flow, rounds, hearts, slots). Every scene is a browser source for
+OBS on a **fixed 1920 × 1080 stage** (set the browser source to 1920 × 1080;
+it scales to any size).
 
-- **Gallery**: every scene and own layout with a live preview image (demo
-  data, so it is never empty). *+ Neue Szene* picks the layout from preview
-  images. New scenes use the NES style.
-- **Scene editor**: name, layout, style (NES/Modern), language, background,
-  colours (accent, frame, inner line, boxes, text, lead, behind), which
-  blocks show (title bar, difference, diff graph, pace, burn, hearts, next
-  piece) and the stations per slot. The large preview follows every change
-  before saving; *Live* shows the real data of the saved scene. Saving checks
-  that nobody else saved the scene in the meantime (else: reload).
+- **Overview**: every scene with a live preview image (demo data, so it is
+  never empty), its OBS address (*URL kopieren*) and whether it uses a fixed
+  standard layout (*Standard*) or its own one (*Angepasst*).
+  *+ Neue Szene* starts from a **template**, grouped by player count; the
+  four most used come first: *4 Spieler: 2 × 1 gegen 1 (Viertel)*,
+  *4 Spieler: alle gegen alle (Viertel)*, *2 Spieler: 1 gegen 1*,
+  *Einzelspieler*. The scene gets its own copy of the template, so every
+  element can be moved at once. The fixed built-in layouts are still there
+  (*Feste Standard-Layouts*). *Mehr* holds import, export and *Neues
+  Layout* (a layout without a scene).
+- **Editor** (one page per scene, laid out like OBS): the stage in the
+  middle starts zoomed to fit (*Einpassen*); the status bar shows the stage
+  size, the zoom in %, the mouse position and the selection in real stage
+  pixels. Ctrl + mouse wheel zooms around the pointer, Space or the middle
+  mouse button + drag moves the view, `0` = whole stage, `1` = 100 %.
+  Left: *Ebenen* (layer list with hide/lock, *+ Element* palette grouped by
+  player / pair / general) and *Slots & Paare* (slot count, pairs, mirror a
+  player onto another slot). Right: *Eigenschaften* (position and size in
+  px, centre on the stage, slot/pair, the element's options, order),
+  *Szene* (name, OBS address, layout, NES/Modern, title, language,
+  background, colours) and *Stationen* (station and name per slot). ⛶ hides
+  the admin menu for a full-window editor. One *Speichern* (Ctrl+S) stores
+  the layout and the scene; unsaved work is kept as a draft in the browser.
+- **Standard layouts**: a scene with a fixed built-in layout shows it as it
+  is (blocks on/off under *Szene*). *Layout anpassen* gives the scene its own
+  copy made from the matching template; blocks switched off become hidden
+  elements, so the scene looks the same. *⋯* → *Auf Vorlage zurücksetzen*
+  goes back to the template later; *Layout wechseln* picks another template
+  or layout. A layout shared by several scenes says so and offers *Nur für
+  diese Szene kopieren*; duplicating a scene copies its own layout.
+- **Elements**: board, next piece, stat (score, lines, level, start level,
+  Tetris rate, drought, burn, pace, gap to the opponent, pieces, *zum
+  Weiterkommen*), name, name tag, hearts, camera (transparent: put the OBS
+  camera source behind it), difference, diff graph, title, round, text,
+  frame, ranking (standings with the round mode's advance/out marks). Stat
+  and name can sit without a frame of their own inside a frame element.
+  Elements snap to the 8 px grid (*Raster*), to other elements, the stage
+  edges and guide lines (Alt: free); Shift-click or drag a frame to select
+  several, then align/distribute. Ctrl+C/V/D, Del, arrows (Shift = 8 px),
+  Ctrl+Z/Y (200 steps).
 - **Flow and round mode** are set on *Regie* (see "The event day" above),
   not in the studio.
 - **Export / import** (`*.nltm-scenes.json`, format `nestrisltm/scenes` v1)
@@ -242,22 +275,10 @@ they run (flow, rounds, hearts, slots).
   transaction (limits: 1 MB, 100 scenes, 50 layouts).
   In the desktop app *Exportieren* asks where to save the file (default:
   the Downloads folder).
-- **Guide lines** (*Hilfslinien* above the preview, scene editor and layout
-  builder): centre cross, thirds, safe areas (action safe 5 %, title safe
-  10 %) and own lines dragged out of the rulers at the top/left edge (drag
-  back onto the ruler or double-click to remove). They exist only in the
-  editor, never in the overlay or OBS; in the builder elements snap to them.
-- **Layout builder** (*Eigene Layouts* → *+ Neues Layout*): start blank or
-  from a template (the NES camera layouts), drag elements from the palette
-  (board, next piece, stats, name tag, hearts, camera, difference, diff
-  graph, title, round, text, frame). Elements snap to the 8 px grid, to
-  other elements and to the stage centre (Alt: free). Shift-click or drag a
-  frame to select several; align/distribute; layers with hide/lock;
-  Ctrl+C/V/D, Del, arrows (Shift = 8 px), Ctrl+Z/Y (200 steps), Ctrl+S.
-  *Slots* and *Paare* decide which slots play their rounds together (as in
-  the built-in layouts); *Spiegeln* builds the right player from the left.
-  Unsaved work is kept as a draft in the browser. A layout used by scenes
-  cannot be deleted, and saving it changes those scenes live.
+- **Guide lines** (*Hilfslinien*): centre cross, thirds, safe areas (action
+  safe 5 %, title safe 10 %) and own lines dragged out of the rulers at the
+  top/left edge (drag back onto the ruler or double-click to remove). They
+  exist only in the editor, never in the overlay or OBS.
 
 ## Command line (`nestris-ltm.exe` in the install folder)
 

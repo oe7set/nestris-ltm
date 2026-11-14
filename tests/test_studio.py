@@ -18,6 +18,7 @@ from nestris_ltm.config import DatabaseSettings, load_settings
 from nestris_ltm.core import layout_templates
 from nestris_ltm.core import overlay_layout as ol
 from nestris_ltm.core import scene_settings as ss
+from nestris_ltm.core.layouts import LAYOUTS
 from nestris_ltm.db.bootstrap import alembic_config, ensure_database, migrate
 from nestris_ltm.db.models import Station
 from nestris_ltm.runtime import Runtime
@@ -133,11 +134,11 @@ def test_templates_are_valid_and_on_stage(template: layout_templates.Template) -
     for e in definition.elements:
         assert e.x >= 0 and e.x + e.w <= ol.CANVAS_W, e.id
         assert e.y >= 0 and e.y + e.h <= ol.CANVAS_H, e.id
-    # Every slot shows a board; every pair its difference.
+    # Every slot shows a board; pair elements name existing pairs.
     boards = {e.slot for e in definition.elements if e.type == "board"}
     assert boards == set(range(definition.slots))
     versus = {e.pair for e in definition.elements if e.type == "versus"}
-    assert versus == set(range(len(definition.pairs)))
+    assert versus <= set(range(len(definition.pairs)))
 
 
 # ---------------------------------------------------------------- migration 0007
@@ -517,3 +518,92 @@ async def test_import_conflicts_and_errors(runtime: Runtime, client: httpx.Async
     missing["layouts"] = []
     missing["scenes"][0]["layout"] = "custom:00000000-0000-4000-8000-000000000000"
     assert "neither built in" in (await _import(client, missing)).json()["scenes"][0]["errors"][0]
+
+
+# ---------------------------------------------------------------- templates, adapt, reset
+
+
+def test_every_main_builtin_layout_has_a_template() -> None:
+    for builtin in ("single", "single_compact", "1v1", "1v1_cam", "2x1v1", "2x1v1_cam", "4p"):
+        template = layout_templates.BY_BUILTIN[builtin]
+        assert ol.parse(template.definition()).slots == LAYOUTS[builtin].slots
+        pairs = [tuple(p) for p in template.definition()["pairs"]]
+        assert pairs == [tuple(p) for p in LAYOUTS[builtin].pairs]
+    featured = {t.id for t in layout_templates.TEMPLATES if t.featured}
+    assert featured == {"2x1v1_cam", "4p_quad", "1v1", "single"}
+    # Everyone against everyone: no pairs, so the round modes apply.
+    quad = ol.parse(layout_templates.BY_ID["4p_quad"].definition())
+    assert quad.slots == 4 and not quad.pairs
+    assert ol.to_layout("x", "x", "", quad).supports_modes
+
+
+def test_apply_show_hides_switched_off_blocks() -> None:
+    definition = layout_templates.apply_show(
+        layout_templates.one_vs_one(), {"pace": False, "header": False, "next": True}
+    )
+    hidden = {e["id"] for e in definition["elements"] if e.get("hidden")}
+    assert hidden == {"pace-s0", "pace-s1", "title", "round"}
+    ol.parse(definition)  # still valid
+
+
+@pytest.mark.db
+async def test_adapt_reset_and_scene_from_template(
+    runtime: Runtime, client: httpx.AsyncClient
+) -> None:
+    # A scene with a built-in layout becomes editable: its own layout from the template.
+    r = await client.post("/api/scenes", json={"slug": "duell", "name": "Duell", "layout": "1v1",
+                                               "settings": {"show": {"pace": False}}})  # fmt: skip
+    assert r.status_code == 201, r.text
+    scene_id = r.json()["id"]
+    r = await client.post(f"/api/scenes/{scene_id}/edit-layout", json={})
+    assert r.status_code == 200, r.text
+    own = r.json()["layout"]
+    assert own["template_id"] == "1v1" and own["name"] == "Duell" and own["slots"] == 2
+    assert r.json()["scene"]["layout"] == own["key"]
+    hidden = {e["id"] for e in own["definition"]["elements"] if e.get("hidden")}
+    assert hidden == {"pace-s0", "pace-s1"}
+    # Asking again changes nothing; "copy" gives the scene a copy of its own.
+    again = await client.post(f"/api/scenes/{scene_id}/edit-layout", json={})
+    assert again.json()["layout"]["id"] == own["id"]
+    copied = await client.post(f"/api/scenes/{scene_id}/edit-layout", json={"copy": True})
+    assert copied.json()["layout"]["id"] != own["id"]
+    assert copied.json()["layout"]["template_id"] == "1v1"
+    own = copied.json()["layout"]
+
+    # Reset: back to the template (pace shows again), a normal versioned save.
+    moved = copy.deepcopy(own["definition"])
+    moved["elements"][0]["x"] += 40
+    r = await client.put(f"/api/overlay-layouts/{own['id']}",
+                         json={"expected_version": 1, "definition": moved})  # fmt: skip
+    assert r.status_code == 200
+    stale = await client.post(
+        f"/api/overlay-layouts/{own['id']}/reset", json={"expected_version": 1}
+    )
+    assert stale.status_code == 409
+    r = await client.post(f"/api/overlay-layouts/{own['id']}/reset", json={"expected_version": 2})
+    assert r.status_code == 200 and r.json()["version"] == 3
+    assert r.json()["definition"] == ol.parse(layout_templates.BY_ID["1v1"].definition()).dump()
+
+    # A layout without a template cannot be reset; replay cannot be adapted.
+    plain = await client.post("/api/overlay-layouts", json={"name": "P", "definition": VALID})
+    r = await client.post(f"/api/overlay-layouts/{plain.json()['id']}/reset",
+                          json={"expected_version": 1})  # fmt: skip
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "no_template"
+    r = await client.post("/api/scenes", json={"slug": "rp", "name": "RP", "layout": "replay"})
+    r = await client.post(f"/api/scenes/{r.json()['id']}/edit-layout", json={})
+    assert r.status_code == 409
+
+    # New scene straight from a template; its duplicate gets its own layout copy.
+    r = await client.post(
+        "/api/scenes", json={"slug": "vier", "name": "Vier", "template": "4p_quad"}
+    )
+    assert r.status_code == 201, r.text
+    vier = r.json()
+    assert vier["layout"].startswith("custom:")
+    dup = (await client.post(f"/api/scenes/{vier['id']}/duplicate", json={})).json()
+    assert dup["layout"].startswith("custom:") and dup["layout"] != vier["layout"]
+    bad = await client.post("/api/scenes", json={"slug": "z", "name": "Z", "template": "nope"})
+    assert bad.status_code == 422
+    both = await client.post("/api/scenes", json={"slug": "z", "name": "Z", "layout": "1v1",
+                                                  "template": "1v1"})  # fmt: skip
+    assert both.status_code == 422

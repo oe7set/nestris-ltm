@@ -112,5 +112,9 @@
     border: 0;
     pointer-events: none;
     background: transparent;
+    /* The overlay page uses the light default; with the admin's dark scheme
+       (app.css) inherited here, Chrome paints the iframe opaque white instead
+       of see-through ("normal" is not enough, it must match: light). */
+    color-scheme: light;
   }
 </style>

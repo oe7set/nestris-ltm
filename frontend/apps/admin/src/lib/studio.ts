@@ -79,13 +79,34 @@ export interface CustomLayout {
   pairs: [number, number][];
   valid: boolean;
   updated_at: string | null;
+  /** The template it was made from ("reset" goes back to it). */
+  template_id?: string | null;
   used_by?: string[];
   definition?: LayoutDefinition;
 }
 
+/** A template of GET /api/studio/templates (core/layout_templates.py). */
+export interface Template {
+  id: string;
+  name_de: string;
+  name_en: string;
+  description_de: string;
+  description_en: string;
+  /** The fixed layout it reproduces. */
+  builtin: string | null;
+  players: number;
+  featured: boolean;
+  definition: LayoutDefinition;
+}
+
+/** What a scene's layout becomes: a template (own copy), an own or a fixed layout. */
+export type LayoutChoice =
+  | { kind: "template"; template: Template }
+  | { kind: "layout"; key: string };
+
 export type ElementType =
   | "board" | "next" | "stat" | "name" | "hearts" | "nametag" | "camera"
-  | "versus" | "diff_graph" | "title" | "round" | "text" | "frame";
+  | "versus" | "diff_graph" | "title" | "round" | "text" | "frame" | "ranking";
 
 export interface LayoutElement {
   id: string;
@@ -170,6 +191,23 @@ export function previewOf(
     },
     slots: layout?.slots ?? 2,
     ...extra,
+  };
+}
+
+/** Preview of a bare definition (template, own layout) with default settings. */
+export function definitionPreview(definition: LayoutDefinition, name: string, style: Style = "nes"): PreviewConfig {
+  return {
+    scene: {
+      slug: "preview",
+      name,
+      layout: "custom:preview",
+      mode: definition.pairs.length || definition.slots < 3 ? "none" : "top2_advance",
+      auto_round: false,
+      settings: { ...defaultSettings(), style },
+      pairs: definition.pairs,
+    },
+    slots: definition.slots,
+    definition,
   };
 }
 

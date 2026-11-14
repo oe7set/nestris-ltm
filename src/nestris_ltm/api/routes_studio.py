@@ -21,11 +21,12 @@ from sqlalchemy import select
 from nestris_ltm.api.auth import AdminDep
 from nestris_ltm.api.deps import SessionDep, get_runtime
 from nestris_ltm.core import layout_templates
-from nestris_ltm.db.models import OverlayLayout
+from nestris_ltm.db.models import OverlayLayout, Scene
 from nestris_ltm.services import audit, overlay_layouts, studio
 from nestris_ltm.services.overlay_layouts import (
     InvalidLayoutError,
     LayoutInUseError,
+    NoTemplateError,
     StaleVersionError,
 )
 
@@ -36,6 +37,8 @@ class LayoutIn(BaseModel):
     name: str = Field(min_length=1, max_length=64)
     description: str = Field(default="", max_length=500)
     definition: dict[str, Any]
+    # Started from this template (core/layout_templates.py): "reset" goes back to it.
+    template_id: str | None = Field(default=None, max_length=32)
 
 
 class LayoutUpdate(BaseModel):
@@ -47,6 +50,21 @@ class LayoutUpdate(BaseModel):
 
 class LayoutCopy(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=64)
+
+
+class EditLayoutIn(BaseModel):
+    # True: a copy of a shared own layout just for this scene.
+    copy_: bool = Field(default=False, alias="copy")
+
+
+class ResetIn(BaseModel):
+    expected_version: int = Field(ge=1)
+
+
+def _stale(exc: StaleVersionError) -> HTTPException:
+    return HTTPException(
+        status.HTTP_409_CONFLICT, {"code": "stale", "message": str(exc), "version": exc.current}
+    )
 
 
 def _invalid(exc: InvalidLayoutError) -> HTTPException:
@@ -91,8 +109,9 @@ async def create_layout(
     async with session.begin():
         try:
             row = await overlay_layouts.create(
-                session, body.name, body.description, body.definition
-            )
+                session, body.name, body.description, body.definition,
+                template_id=body.template_id,
+            )  # fmt: skip
         except InvalidLayoutError as exc:
             raise _invalid(exc) from exc
         await audit.record(
@@ -117,10 +136,7 @@ async def update_layout(
                 description=body.description, definition=body.definition,
             )  # fmt: skip
         except StaleVersionError as exc:
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                {"code": "stale", "message": str(exc), "version": exc.current},
-            ) from exc
+            raise _stale(exc) from exc
         except InvalidLayoutError as exc:
             raise _invalid(exc) from exc
         except ValueError as exc:
@@ -178,6 +194,64 @@ async def delete_layout(
     return {"ok": True}
 
 
+@router.post("/api/overlay-layouts/{layout_id}/reset")
+async def reset_layout(
+    layout_id: str, body: ResetIn, request: Request, p: AdminDep, session: SessionDep
+) -> dict[str, Any]:
+    """Back to the template the layout was made from."""
+    async with session.begin():
+        row = await _row(session, layout_id)
+        try:
+            row = await overlay_layouts.reset_to_template(
+                session, row, expected_version=body.expected_version
+            )
+        except StaleVersionError as exc:
+            raise _stale(exc) from exc
+        except NoTemplateError as exc:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT, {"code": "no_template", "message": str(exc)}
+            ) from exc
+        await audit.record(
+            session, actor=p.actor, action="update", entity="layout", entity_id=row.id,
+            after={"reset_to": row.template_id, "version": row.version},
+        )  # fmt: skip
+        out = overlay_layouts.full(row)
+    await _reload(request)
+    return out
+
+
+@router.post("/api/scenes/{scene_id}/edit-layout")
+async def edit_scene_layout(
+    scene_id: int, body: EditLayoutIn, request: Request, p: AdminDep, session: SessionDep
+) -> dict[str, Any]:
+    """Make a scene's layout editable: a built-in one becomes an own layout from
+    its template; ``copy`` gives the scene its own copy of a shared layout."""
+    async with session.begin():
+        scene = await session.get(Scene, scene_id)
+        if scene is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "scene not found")
+        before = scene.layout
+        try:
+            row = await overlay_layouts.own_layout_for(session, scene, copy=body.copy_)
+        except NoTemplateError as exc:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT, {"code": "no_template", "message": str(exc)}
+            ) from exc
+        if scene.layout != before:
+            await audit.record(
+                session, actor=p.actor, action="update", entity="scene", entity_id=scene.id,
+                before={"layout": before}, after={"layout": scene.layout},
+            )  # fmt: skip
+        await session.refresh(scene)
+        out = {
+            "scene": {"id": scene.id, "layout": scene.layout,
+                      "updated_at": scene.updated_at.isoformat() if scene.updated_at else None},
+            "layout": overlay_layouts.full(row),
+        }  # fmt: skip
+    await _reload(request)
+    return out
+
+
 # ---------------------------------------------------------------- export / import
 
 
@@ -189,15 +263,8 @@ def _ids(raw: str | None) -> list[str] | None:
 
 @router.get("/api/studio/templates")
 async def templates(_: AdminDep) -> list[dict[str, Any]]:
-    """Starting points of the layout builder (valid definitions)."""
-    return [
-        {
-            "id": t.id, "name_de": t.name_de, "name_en": t.name_en,
-            "description_de": t.description_de, "description_en": t.description_en,
-            "definition": t.definition(),
-        }
-        for t in layout_templates.TEMPLATES
-    ]  # fmt: skip
+    """Starting points of new scenes and layouts (valid definitions)."""
+    return [t.as_dict() for t in layout_templates.TEMPLATES]
 
 
 @router.get("/api/studio/export")

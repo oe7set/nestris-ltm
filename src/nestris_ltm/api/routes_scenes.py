@@ -16,16 +16,25 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import FileResponse, HTMLResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from nestris_ltm.api.auth import AdminDep, CrewDep, Principal, require_scope
 from nestris_ltm.api.deps import SessionDep, get_runtime
-from nestris_ltm.core import scene_flow
+from nestris_ltm.core import layout_templates, scene_flow
 from nestris_ltm.core.layouts import LAYOUTS, Layout
+from nestris_ltm.core.overlay_layout import layout_key
 from nestris_ltm.core.scene_settings import from_client, normalize
-from nestris_ltm.db.models import SCENE_MODES, Game, Player, Scene, SceneSlot, Station
+from nestris_ltm.db.models import (
+    SCENE_MODES,
+    Game,
+    OverlayLayout,
+    Player,
+    Scene,
+    SceneSlot,
+    Station,
+)
 from nestris_ltm.services import audit, overlay_layouts, recordings
 from nestris_ltm.services.scenes import SceneEngine
 
@@ -65,7 +74,10 @@ class SlotIn(BaseModel):
 class SceneIn(BaseModel):
     slug: str = Field(min_length=1, max_length=64)
     name: str = Field(min_length=1, max_length=128)
-    layout: str
+    # A built-in layout or custom:<id> ... or a template (core/layout_templates.py):
+    # then the scene gets its own editable layout made from that template.
+    layout: str | None = None
+    template: str | None = Field(default=None, max_length=32)
     mode: str = "none"
     flow: scene_flow.Flow = scene_flow.DEFAULT_FLOW
     settings: dict[str, Any] = Field(default_factory=dict)
@@ -81,8 +93,21 @@ class SceneIn(BaseModel):
 
     @field_validator("layout")
     @classmethod
-    def _layout(cls, value: str) -> str:
-        return _check_layout(value)
+    def _layout(cls, value: str | None) -> str | None:
+        return None if value is None else _check_layout(value)
+
+    @field_validator("template")
+    @classmethod
+    def _template(cls, value: str | None) -> str | None:
+        if value is not None and value not in layout_templates.BY_ID:
+            raise ValueError(f"unknown template, choose one of {sorted(layout_templates.BY_ID)}")
+        return value
+
+    @model_validator(mode="after")
+    def _layout_or_template(self) -> SceneIn:
+        if (self.layout is None) == (self.template is None):
+            raise ValueError("give either a layout or a template")
+        return self
 
     @field_validator("mode")
     @classmethod
@@ -223,11 +248,16 @@ async def create_scene(
     async with session.begin():
         if await session.scalar(select(Scene.id).where(Scene.slug == body.slug)) is not None:
             raise HTTPException(status.HTTP_409_CONFLICT, f"slug {body.slug!r} already exists")
-        layout = await _layout_of(session, body.layout)
+        key = body.layout
+        if body.template is not None:
+            row = await overlay_layouts.from_template(session, body.template, body.name)
+            key = layout_key(row.id)
+        assert key is not None  # the model guarantees layout or template
+        layout = await _layout_of(session, key)
         scene = Scene(
             slug=body.slug,
             name=body.name,
-            layout=body.layout,
+            layout=key,
             mode=body.mode,
             flow=body.flow,
             settings=body.settings,
@@ -339,7 +369,11 @@ async def free_slug(session: AsyncSession, wanted: str) -> str:
 async def duplicate_scene(
     scene_id: int, body: DuplicateIn, request: Request, p: AdminDep, session: SessionDep
 ) -> dict[str, Any]:
-    """A copy with a new URL: layout, settings and station slots."""
+    """A copy with a new URL: layout, settings and station slots.
+
+    An own layout is copied too: every scene owns its layout, so editing the
+    copy never changes the original.
+    """
     async with session.begin():
         src = await session.get(Scene, scene_id)
         if src is None:
@@ -349,10 +383,19 @@ async def duplicate_scene(
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid slug")
         settings, _ = normalize(src.settings)
         settings.replay = None
+        name = (body.name or f"{src.name} (Kopie)")[:128]
+        copied_layout = src.layout
+        if (lid := overlay_layouts.custom_id(src.layout)) is not None:
+            own = await session.get(OverlayLayout, lid)
+            if own is not None:
+                row = await overlay_layouts.create(
+                    session, name, own.description, own.definition, template_id=own.template_id
+                )
+                copied_layout = layout_key(row.id)
         copy = Scene(
             slug=await free_slug(session, wanted),
-            name=(body.name or f"{src.name} (Kopie)")[:128],
-            layout=src.layout,
+            name=name,
+            layout=copied_layout,
             mode=src.mode,
             flow=src.flow,
             settings=settings.stored(),

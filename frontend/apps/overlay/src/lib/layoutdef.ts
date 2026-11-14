@@ -6,11 +6,11 @@ export const CANVAS_H = 1080;
 
 export type Align = "left" | "center" | "right";
 export type StatField =
-  | "score" | "lines" | "level" | "start_level" | "trt" | "drought" | "burn" | "pace" | "gap" | "pieces";
+  | "score" | "lines" | "level" | "start_level" | "trt" | "drought" | "burn" | "pace" | "gap" | "pieces" | "to_advance";
 
 export type ElementType =
   | "board" | "next" | "stat" | "name" | "hearts" | "nametag" | "camera"
-  | "versus" | "diff_graph" | "title" | "round" | "text" | "frame";
+  | "versus" | "diff_graph" | "title" | "round" | "text" | "frame" | "ranking";
 
 export interface LayoutElement {
   id: string;

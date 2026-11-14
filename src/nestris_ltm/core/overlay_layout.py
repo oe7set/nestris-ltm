@@ -32,7 +32,17 @@ ID_PATTERN = r"^[A-Za-z0-9_-]{1,32}$"
 
 Align = Literal["left", "center", "right"]
 StatField = Literal[
-    "score", "lines", "level", "start_level", "trt", "drought", "burn", "pace", "gap", "pieces"
+    "score",
+    "lines",
+    "level",
+    "start_level",
+    "trt",
+    "drought",
+    "burn",
+    "pace",
+    "gap",
+    "pieces",
+    "to_advance",
 ]
 
 
@@ -57,11 +67,15 @@ class StatProps(_Strict):
     show_label: bool = True
     align: Align = "left"
     color: str | None = Field(default=None, pattern=HEX_COLOR)
+    # False: no own panel (the value sits inside a frame element, like the
+    # stats panel of the built-in layouts).
+    boxed: bool | None = None  # None = True (keeps older definitions unchanged)
 
 
 class NameProps(_Strict):
     align: Align = "left"
     show_rank: bool = False
+    boxed: bool | None = None  # None = True (keeps older definitions unchanged)
 
 
 class HeartsProps(_Strict):
@@ -101,6 +115,13 @@ class FrameProps(_Strict):
     style: Literal["nes", "panel"] = "nes"
 
 
+class RankingProps(_Strict):
+    # Standings of all slots by score, marked by the round mode (advance/out).
+    direction: Literal["row", "column"] = "row"
+    align: Align = "center"
+    show_points: bool | None = None  # None = True
+
+
 PROPS: dict[str, type[_Strict]] = {
     "board": BoardProps,
     "next": NextProps,
@@ -115,6 +136,7 @@ PROPS: dict[str, type[_Strict]] = {
     "round": RoundProps,
     "text": TextProps,
     "frame": FrameProps,
+    "ranking": RankingProps,
 }
 SLOT_TYPES = frozenset({"board", "next", "stat", "name", "hearts", "nametag", "camera"})
 PAIR_TYPES = frozenset({"versus", "diff_graph"})
@@ -122,7 +144,7 @@ PAIR_TYPES = frozenset({"versus", "diff_graph"})
 OPTIONAL_PAIR_TYPES = frozenset({"round"})
 ElementType = Literal[
     "board", "next", "stat", "name", "hearts", "nametag", "camera",
-    "versus", "diff_graph", "title", "round", "text", "frame",
+    "versus", "diff_graph", "title", "round", "text", "frame", "ranking",
 ]  # fmt: skip
 
 

@@ -17,8 +17,10 @@ from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from nestris_ltm.core import layout_templates
 from nestris_ltm.core import overlay_layout as defs
 from nestris_ltm.core.layouts import LAYOUTS, Layout
+from nestris_ltm.core.scene_settings import normalize
 from nestris_ltm.db.models import OverlayLayout, Scene
 
 
@@ -107,6 +109,7 @@ def summary(row: OverlayLayout) -> dict[str, Any]:
         "slots": layout.slots if layout else None,
         "pairs": [list(p) for p in layout.pairs] if layout else [],
         "valid": layout is not None,
+        "template_id": row.template_id,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
     }
 
@@ -121,6 +124,7 @@ async def create(
     description: str,
     definition: Any,
     layout_id: str | None = None,
+    template_id: str | None = None,
 ) -> OverlayLayout:
     parsed = parse_definition(definition)
     row = OverlayLayout(
@@ -130,6 +134,7 @@ async def create(
         definition=parsed.dump(),
         schema_version=defs.SCHEMA_VERSION,
         version=1,
+        template_id=template_id if template_id in layout_templates.BY_ID else None,
     )
     session.add(row)
     await session.flush()
@@ -178,3 +183,66 @@ async def delete(session: AsyncSession, row: OverlayLayout) -> None:
     if users:
         raise LayoutInUseError(users)
     await session.delete(row)
+
+
+# ---------------------------------------------------------------- templates and forks
+
+
+class NoTemplateError(ValueError):
+    """The layout has no template to start from or go back to."""
+
+
+async def from_template(
+    session: AsyncSession, template_id: str, name: str, show: dict[str, bool] | None = None
+) -> OverlayLayout:
+    """A new own layout from a template (``core/layout_templates.py``)."""
+    template = layout_templates.BY_ID.get(template_id)
+    if template is None:
+        raise NoTemplateError(f"unknown template {template_id!r}")
+    definition = layout_templates.apply_show(template.definition(), show or {})
+    return await create(session, name, template.description_de, definition, template_id=template.id)
+
+
+async def own_layout_for(
+    session: AsyncSession, scene: Scene, *, copy: bool = False
+) -> OverlayLayout:
+    """Make a scene's layout editable and return it.
+
+    - built-in layout: a new own layout from the matching template; the
+      blocks the scene switched off (``settings.show``) start hidden, so the
+      scene looks the same afterwards;
+    - own layout: returned as it is, or with ``copy`` a copy just for this
+      scene (when other scenes share it).
+    """
+    lid = custom_id(scene.layout)
+    if lid is None:
+        template = layout_templates.BY_BUILTIN.get(scene.layout)
+        if template is None:
+            raise NoTemplateError(f"layout {scene.layout!r} cannot be adapted")
+        settings, _ = normalize(scene.settings)
+        row = await from_template(session, template.id, scene.name, settings.show.model_dump())
+    else:
+        found = await session.get(OverlayLayout, lid)
+        if found is None:
+            raise NoTemplateError("the scene's layout does not exist")
+        if not copy:
+            return found
+        row = await create(
+            session, scene.name, found.description, found.definition,
+            template_id=found.template_id,
+        )  # fmt: skip
+    scene.layout = defs.layout_key(row.id)
+    await session.flush()
+    return row
+
+
+async def reset_to_template(
+    session: AsyncSession, row: OverlayLayout, *, expected_version: int
+) -> OverlayLayout:
+    """Back to the template the layout was made from (a normal, versioned save)."""
+    template = layout_templates.BY_ID.get(row.template_id or "")
+    if template is None:
+        raise NoTemplateError("this layout was not made from a template")
+    return await update(
+        session, row, expected_version=expected_version, definition=template.definition()
+    )

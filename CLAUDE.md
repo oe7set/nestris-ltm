@@ -89,6 +89,17 @@ Operations guide: `docs/OPERATIONS.md`.
   `/overlay-assets/`). A new layout = entry in `core/layouts.py` + component in
   `frontend/apps/overlay/src/layouts/` + mapping in its `App.svelte`. All versus
   numbers come from `SceneEngine.compute_state`; overlays only display.
+- Own layouts (scene studio): element definitions validated in
+  `core/overlay_layout.py`, rendered by the overlay's `Custom.svelte` /
+  `components/Widget.svelte`. A new element type or property = `PROPS` there +
+  `overlay/src/lib/layoutdef.ts` + `Widget.svelte` + admin `lib/studio.ts` and
+  `lib/editor/elements.ts` (`CATALOGUE`). New optional props default to `None`
+  so stored definitions stay unchanged. Templates (`core/layout_templates.py`)
+  reproduce the built-in layouts (`builtin=`); "adapt" forks a scene's
+  built-in layout from its template (`services/overlay_layouts.own_layout_for`).
+- Admin studio: `lib/editor/layoutEditor.svelte.ts` holds definition,
+  selection and undo; `components/studio/*` (Stage, panels, TemplatePicker)
+  are shared by `routes/StudioScene.svelte` and `routes/StudioLayout.svelte`.
 - `frontend/packages/nes` (`@nestris-ltm/nes`) is shared by admin and overlay:
   NES palettes/blocks, `<Playfield>`, `<NextPiece>`, the NGF decoder (keep it in
   step with `core/ngf.py`) and the replay `Timeline`.
