@@ -3,7 +3,7 @@
 The section of a version is the text of its GitHub release and what the
 built-in updater shows before installing (`.github/scripts/release_notes.py`).
 
-## Unreleased
+## 0.5.0
 
 - **Scene studio rebuilt, like OBS**: one editor per scene with the
   1920 × 1080 stage in the middle, zoomed to fit; the status bar shows the
