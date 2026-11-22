@@ -3,6 +3,15 @@
 The section of a version is the text of its GitHub release and what the
 built-in updater shows before installing (`.github/scripts/release_notes.py`).
 
+## 0.5.1
+
+- **Terminal API** for the new card functions of the Retroverse Terminal
+  (0.3.0b3): `GET /api/terminal/v1/players?q=` finds players by nickname or
+  name (only nicknames are returned) to give a player a new card, and
+  `DELETE /api/terminal/v1/card/{uid}` forgets a card so it counts as new
+  again (the terminal's clear mode; the player keeps the games). Both are
+  recorded in the audit log.
+
 ## 0.5.0
 
 - **Scene studio rebuilt, like OBS**: one editor per scene with the

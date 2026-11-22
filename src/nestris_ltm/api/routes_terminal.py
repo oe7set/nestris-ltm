@@ -14,7 +14,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import AwareDatetime, BaseModel, Field, field_validator
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -172,6 +172,68 @@ async def link_card(uid: str, body: LinkIn, p: TerminalDep, session: SessionDep)
             after={"uid": uid},
         )  # fmt: skip
     return {"ok": True, "player": _player_summary(player)}
+
+
+@router.delete("/card/{uid}")
+async def unlink_card(uid: str, p: TerminalDep, session: SessionDep) -> dict[str, Any]:
+    """Forget a card (the terminal's "clear card" mode): the uid no longer
+    belongs to anyone, so the card counts as new again. The player keeps the
+    games played with it."""
+    uid = _uid(uid)
+    async with session.begin():
+        row = (
+            await session.execute(
+                select(PlayerCard.player_id, Player.nickname)
+                .join(Player, Player.id == PlayerCard.player_id)
+                .where(PlayerCard.uid == uid)
+            )
+        ).first()
+        if row is None:
+            return {"ok": True, "player": None}
+        await session.execute(delete(PlayerCard).where(PlayerCard.uid == uid))
+        await audit.record(
+            session,
+            actor=p.actor,
+            action="remove_card",
+            entity="player",
+            entity_id=row.player_id,
+            before={"uid": uid},
+        )
+    return {"ok": True, "player": {"id": row.player_id, "nickname": row.nickname}}
+
+
+@router.get("/players")
+async def search_players(
+    _: TerminalDep, session: SessionDep, q: str = "", limit: int = 20
+) -> dict[str, Any]:
+    """Players for the terminal's "new card for a player" (crew only, behind
+    the terminal PIN). Matches nickname, first and last name; only nicknames
+    and the number of cards are returned."""
+    term = " ".join(q.split())
+    if not term:
+        return {"players": []}
+    escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    pattern = f"%{escaped}%"
+    cards = (
+        select(func.count())
+        .select_from(PlayerCard)
+        .where(PlayerCard.player_id == Player.id)
+        .scalar_subquery()
+    )
+    rows = await session.execute(
+        select(Player.id, Player.nickname, cards)
+        .where(
+            Player.deleted_at.is_(None),
+            or_(
+                Player.nickname.ilike(pattern, escape="\\"),
+                Player.first_name.ilike(pattern, escape="\\"),
+                Player.last_name.ilike(pattern, escape="\\"),
+            ),
+        )
+        .order_by(func.lower(Player.nickname))
+        .limit(max(1, min(limit, 50)))
+    )
+    return {"players": [{"id": i, "nickname": n, "cards": c} for i, n, c in rows]}
 
 
 # ---------------------------------------------------------------- registration

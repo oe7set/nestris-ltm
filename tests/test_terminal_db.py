@@ -93,6 +93,22 @@ async def test_registration_and_cards(runtime: Runtime, terminal: httpx.AsyncCli
         )
     assert cards == {"04A1B2C3", "0BADCAFE"}
 
+    # Crew search for a new card: nickname or real name, nicknames out only.
+    await terminal.post(f"{API}/players", json={"nickname": "Max_1", "last_name": "Muster"})
+    r = await terminal.get(f"{API}/players", params={"q": "erv"})
+    assert r.json()["players"] == [{"id": player_id, "nickname": "Erv", "cards": 2}]
+    assert [p["nickname"] for p in (await terminal.get(f"{API}/players", params={"q": "muster"})).json()["players"]] == ["Max_1"]  # fmt: skip
+    assert [p["nickname"] for p in (await terminal.get(f"{API}/players", params={"q": "x_"})).json()["players"]] == ["Max_1"]  # fmt: skip
+    assert (await terminal.get(f"{API}/players", params={"q": "%"})).json()["players"] == []
+    assert (await terminal.get(f"{API}/players", params={"q": " "})).json()["players"] == []
+
+    # Clearing a card: the uid is forgotten, the card counts as new again.
+    r = await terminal.delete(f"{API}/card/0badcafe")
+    assert r.json() == {"ok": True, "player": {"id": player_id, "nickname": "Erv"}}
+    assert (await terminal.get(f"{API}/card/0BADCAFE")).json()["status"] == "unknown"
+    assert (await terminal.delete(f"{API}/card/0BADCAFE")).json() == {"ok": True, "player": None}
+    assert (await terminal.get(f"{API}/card/04A1B2C3")).json()["status"] == "known"
+
 
 async def test_profile_highscore_and_self_report(
     runtime: Runtime, terminal: httpx.AsyncClient

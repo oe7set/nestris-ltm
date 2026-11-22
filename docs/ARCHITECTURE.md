@@ -128,7 +128,9 @@ camera areas. The Stream Deck action *NestrisLTM Herzen*
    for the new project `../nestris-terminal` (replaces RetroverseAnmledung):
    card lookup, registration with e-mail consent, player profile with
    per-event history, self-reported scores (`source = self_reported`,
-   flagged), highscore with replay game ids. ✅
+   flagged), highscore with replay game ids; for the crew behind the
+   terminal PIN a player search (new card for a player) and forgetting a
+   card (`DELETE /card/{uid}`, the terminal's clear mode). ✅
 9. **Packaging**: PyInstaller folder (`NestrisLTM.exe` tray app +
    `nestris-ltm.exe` CLI with `configure`/`check`/`autostart`), Inno Setup
    installer that installs or reuses PostgreSQL and Mosquitto (pinned,
