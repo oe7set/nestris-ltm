@@ -238,6 +238,13 @@ class Game(TimestampMixin, Base):
     is_edited: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     notes: Mapped[str | None] = mapped_column(Text)
 
+    # An attract-mode demo (services/demo.py): counted nowhere, hidden from
+    # every list. demo_reason says why ("frames:<fingerprint>:<steps>",
+    # "end_values:...", "manual"), or "manual_not_demo" when the crew decided
+    # it is a real game (a later scan leaves it alone).
+    is_demo: Mapped[bool] = mapped_column(Boolean, server_default=text("false"), index=True)
+    demo_reason: Mapped[str | None] = mapped_column(String(64))
+
     player: Mapped[Player | None] = relationship(lazy="raise")
     station: Mapped[Station | None] = relationship(lazy="raise")
 

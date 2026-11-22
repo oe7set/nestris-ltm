@@ -79,6 +79,9 @@ export interface Game {
   valid: boolean | null;
   is_edited: boolean;
   notes: string | null;
+  /** An attract-mode demo (hidden everywhere); see services/demo.py. */
+  is_demo: boolean;
+  demo_reason: string | null;
   hidden: boolean;
   flagged: boolean;
   /** Current values of a running game (from the live feed). */

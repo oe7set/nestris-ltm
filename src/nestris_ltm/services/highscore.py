@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import ColumnElement, and_, exists, func, not_, or_, select, true
+from sqlalchemy import ColumnElement, and_, exists, func, not_, or_, select
 from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -65,10 +65,11 @@ class Standings:
 
 
 def visible_games(event: Event | None) -> ColumnElement[bool]:
-    """Games that count in ``event`` (window + per-event hiding)."""
+    """Games that count in ``event`` (window + per-event hiding, no demos)."""
     if event is None:
-        return true()
+        return Game.is_demo.is_(False)
     return and_(
+        Game.is_demo.is_(False),
         events.in_window(event),
         not_(
             exists().where(EventHiddenGame.event_id == event.id, EventHiddenGame.game_id == Game.id)
@@ -83,8 +84,8 @@ def visible_games(event: Event | None) -> ColumnElement[bool]:
 
 
 def not_hidden() -> ColumnElement[bool]:
-    """Games hidden in no event: the ones player bests may come from."""
-    return not_(exists().where(EventHiddenGame.game_id == Game.id))
+    """Games hidden in no event (and no demos): the ones player bests may come from."""
+    return and_(Game.is_demo.is_(False), not_(exists().where(EventHiddenGame.game_id == Game.id)))
 
 
 def visible_players(event: Event | None) -> ColumnElement[bool]:

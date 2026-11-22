@@ -23,12 +23,12 @@ from typing import Any
 
 import structlog
 from pydantic import ValidationError
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import DBAPIError, InterfaceError, OperationalError
 
 from nestris_ltm.db.manager import DatabaseManager, DatabaseUnavailableError
-from nestris_ltm.db.models import Station
+from nestris_ltm.db.models import Game, Station
 from nestris_ltm.ingest.frame_buffer import FrameBuffer
 from nestris_ltm.ingest.payloads import (
     CheatPayload,
@@ -261,6 +261,7 @@ class IngestService:
             elif event.kind == "event/game_end":
                 end = GameEndPayload.model_validate_json(event.payload)
                 game_id = await self._in_tx(games.record_game_end, end)
+                is_demo = await self._is_demo(game_id)
                 self.hub.game_event(
                     event.station,
                     "game_end",
@@ -272,6 +273,8 @@ class IngestService:
                         "start_level": end.start_level,
                         "valid": end.valid,
                         "ended_at": end.ended_at.isoformat(),
+                        # An attract-mode demo (older station): scenes drop it.
+                        "demo": is_demo,
                     },
                 )
             else:
@@ -279,6 +282,10 @@ class IngestService:
         except (ValidationError, ValueError) as exc:
             raise PermanentEventError(f"invalid payload: {exc}") from exc
         log.info("event stored", kind=event.kind, station=event.station, game=game_id)
+
+    async def _is_demo(self, game_id: int) -> bool:
+        async with self.db.session() as session:
+            return bool(await session.scalar(select(Game.is_demo).where(Game.id == game_id)))
 
     async def _in_tx(self, fn: Any, payload: Any) -> int:
         async with self.db.session() as session, session.begin():

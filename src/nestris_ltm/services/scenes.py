@@ -336,7 +336,8 @@ class SceneEngine:
             if runtime is None:
                 continue
             bound = False
-            if game_id and frame.get("game_state") in ACTIVE_STATES:
+            # A station running the attract-mode demo plays no game.
+            if game_id and not frame.get("demo") and frame.get("game_state") in ACTIVE_STATES:
                 bound = self._bind(runtime, slot, game_id, frame)
             entry = runtime.round_of(slot).entry(slot)
             if bound and not entry.finished:
@@ -395,6 +396,14 @@ class SceneEngine:
             if kind == "game_start":
                 if self._bind(runtime, slot, game_id, None):
                     runtime.round_of(slot).entry(slot).start_level = data.get("start_level")
+            elif kind == "game_end" and data.get("demo"):
+                # An attract-mode demo (older station) bound the slot: free it.
+                entry = rnd.entry(slot)
+                if entry.game_id == game_id and not entry.finished:
+                    rnd.unfreeze(slot)
+                    runtime.frames.pop(slot, None)
+                    runtime.needs_persist = True
+                    log.info("scene slot freed from a demo", scene=slug, slot=slot, game=game_id)
             elif kind == "game_end":
                 done = rnd.finish(
                     slot,

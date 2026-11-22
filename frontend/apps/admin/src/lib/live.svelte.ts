@@ -8,6 +8,9 @@ export interface LiveFrame {
   level: number | null;
   next_piece: string | null;
   tetris_rate: number | null;
+  /** Station 0.4.0+: "checking" while a game from the title screen is compared
+   * with the attract-mode demos, "demo" while the demo plays. */
+  demo?: "checking" | "demo" | null;
   ts: string;
 }
 

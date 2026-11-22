@@ -18,7 +18,7 @@
   import { errorText, toasts } from "../lib/toast.svelte";
   import type { Game, Page, StationRow } from "../lib/types";
 
-  type BulkAction = "delete" | "hide" | "unhide" | "assign" | "unassign";
+  type BulkAction = "delete" | "hide" | "unhide" | "assign" | "unassign" | "demo" | "not_demo";
 
   const LIMIT = 50;
   const SORTS = ["started_at", "player", "score", "lines", "level", "trt", "duration"] as const;
@@ -39,6 +39,8 @@
   let unassigned = $state(query.get("unassigned") === "true");
   let flagged = $state(query.get("flagged") === "true");
   let hidden = $state(query.get("hidden") ?? "");
+  // "": no demos (default), "only": just the attract-mode demos, "include": both.
+  let demo = $state(query.get("demo") ?? "");
   let sort = $state<SortState>(readSort(query, SORTS, "started_at", TEXT_SORTS));
   let q = $state(query.get("q") ?? "");
   let minText = $state(query.get("min_score") ?? "");
@@ -72,7 +74,7 @@
   const defaultSort = $derived(sort.key === "started_at" && sort.dir === "desc");
   const activeFilters = $derived(
     [
-      allTime, station !== "", status !== "", hidden !== "", !defaultSort, unassigned, flagged,
+      allTime, station !== "", status !== "", hidden !== "", demo !== "", !defaultSort, unassigned, flagged,
       minScore !== null, maxScore !== null,
     ].filter(Boolean).length,
   );
@@ -81,6 +83,7 @@
     all_time: allTime, station_id: station, status, unassigned, flagged,
     hidden: hidden === "" ? null : hidden === "hidden", q,
     min_score: minScore ?? null, max_score: maxScore ?? null,
+    demo: demo === "" ? "exclude" : demo,
   });
 
   $effect(() => {
@@ -118,7 +121,7 @@
     // A half-typed score waits until it is a number again.
     if (minScore === undefined || maxScore === undefined || scoreRangeBad) return;
     router.setQuery({
-      all: allTime, station, status, unassigned, flagged, hidden, q,
+      all: allTime, station, status, unassigned, flagged, hidden, q, demo,
       min_score: minScore, max_score: maxScore,
       ...sortParams(sort, "started_at", TEXT_SORTS), offset: offset || null,
     });
@@ -235,6 +238,13 @@
         await load();
       };
     }
+    if (action === "demo" || action === "not_demo") {
+      return async () => {
+        await post({ ids, action: action === "demo" ? "not_demo" : "demo" });
+        toasts.ok(t("common.undone"));
+        await load();
+      };
+    }
     if (action === "assign" || action === "unassign") {
       return async () => {
         // Back to each game's own previous player.
@@ -318,6 +328,11 @@
     <option value="">{t("games.visibility")}: {t("common.all")}</option>
     <option value="visible">{t("games.visible")}</option>
     <option value="hidden">{t("games.hidden")}</option>
+  </select>
+  <select bind:value={demo} onchange={reload} aria-label={t("games.demo_filter")} title={t("games.demo_hint")}>
+    <option value="">{t("games.demo_filter")}: {t("games.demo_exclude")}</option>
+    <option value="only">{t("games.demo_only")}</option>
+    <option value="include">{t("games.demo_include")}</option>
   </select>
   <span class="sort-pick">
     <select value={sort.key} onchange={(e) => sortKeyChanged(e.currentTarget.value)} aria-label={t("list.sort")}>
@@ -419,6 +434,7 @@
             {#if g.source === "manual"}<span class="badge">{t("games.manual")}</span>{/if}
             {#if g.source === "self_reported"}<span class="badge warn">{t("games.self_reported")}</span>{/if}
             {#if g.hidden}<span class="badge">{t("games.hidden")}</span>{/if}
+            {#if g.is_demo}<span class="badge warn" title={g.demo_reason ?? ""}>{t("games.demo")}</span>{/if}
           </div></td>
         </tr>
       {:else}
@@ -439,6 +455,8 @@
   <button disabled={bulkBusy} onclick={() => (assigning = true)}>{t("bulk.assign")}</button>
   <button disabled={bulkBusy} onclick={() => bulk("unassign")}>{t("bulk.unassign")}</button>
   {#if session.isAdmin}
+    <button disabled={bulkBusy} onclick={() => bulk("demo")} title={t("bulk.demo_hint")}>{t("bulk.demo")}</button>
+    <button disabled={bulkBusy} onclick={() => bulk("not_demo")} title={t("bulk.not_demo_hint")}>{t("bulk.not_demo")}</button>
     <button class="danger" disabled={bulkBusy} onclick={() => (confirmDelete = true)}>{t("bulk.delete")}</button>
   {/if}
 </BulkBar>

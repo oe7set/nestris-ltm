@@ -292,8 +292,37 @@ nestris-ltm.exe migrate                   # create/upgrade the database, then ex
 nestris-ltm.exe config-path
 nestris-ltm.exe --headless                # core without GUI (console)
 nestris-ltm.exe simulate game.ngf.gz --stations station-1 --names Max
+nestris-ltm.exe demo-scan [--apply]       # attract-mode demo games (dry run / flag them)
+nestris-ltm.exe demo-scan --suggest [--export DIR]   # identical results: demos of other ROMs
+nestris-ltm.exe demo-purge [--yes]        # delete the flagged demos (dry run / for real)
 NestrisLTM.exe [--minimized]              # tray app
 ```
+
+## Attract-mode demo games
+
+Left on the title screen, NES Tetris plays a demo game. Stations from 0.4.0
+on recognize it and never send it (`../nestris-core/docs/STATION.md`, "Demo
+detection"); the dashboard shows *Demo-Spiel* in the station's game state
+while it plays and counts the skipped demos. The host also checks every
+station game when it ends and when its recording arrives: a demo (same
+SCORE/LINES after every piece as the known demo, level 0, never a game over)
+gets `is_demo` and counts nowhere: rankings, bracket, kiosk, players,
+exports, attention list, station counts. *Spiele* hides demos unless the
+*Demo-Spiele* filter says otherwise; *Als Demo markieren* / *Keine Demo*
+correct a decision (a game marked real stays real for later scans).
+
+Demo games stored before this, e.g. from older stations:
+
+1. `nestris-ltm.exe demo-scan` lists them (nothing changes).
+2. `nestris-ltm.exe demo-scan --apply` flags them; check a few in *Spiele*
+   with the filter *nur Demo-Spiele*.
+3. `nestris-ltm.exe demo-purge`, then `demo-purge --yes` deletes them with
+   their frames and recordings (back up first, see below).
+
+Another ROM plays another demo. `demo-scan --suggest` lists results that
+occur five times or more (real games never repeat exactly); `--export DIR`
+saves their recordings, which `nestris demo learn` (nestris-core) turns into
+a fingerprint for the stations and for `src/nestris_ltm/core/demo_fingerprints.py`.
 
 ## Files
 

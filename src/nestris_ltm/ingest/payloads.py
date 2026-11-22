@@ -65,6 +65,12 @@ class StatusPayload(_Payload):
     reader_fw: str | None = None
     reader_serial: str | None = None
     game_id: str | None = None
+    # Attract-mode demo state of the running game (station 0.4.0+):
+    # "checking" while a game from the title screen is compared with the
+    # known demos, "demo" while the demo plays, else None.
+    demo: Literal["checking", "demo"] | None = None
+    demos_skipped: int | None = None
+    last_demo_at: AwareDatetime | None = None
     fps: float | None = None
     dropped_frames: int | None = None
     perf: StationPerf | None = None
@@ -128,6 +134,9 @@ class LivePayload(_Payload):
     score_suspect: bool = False
     confidence: float = 0.0
     playfield: list[str] | None = None
+    # Attract-mode demo state (station 0.4.0+), as in StatusPayload. While set,
+    # no game runs on the station (game_id is None).
+    demo: Literal["checking", "demo"] | None = None
     # Running message number (station 0.3.0+): gaps = lost messages.
     seq: int | None = None
     # Capture read -> publish on the station, ms.

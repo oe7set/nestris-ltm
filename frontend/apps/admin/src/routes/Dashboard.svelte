@@ -171,7 +171,20 @@
           <td data-label={t("games.player")}>
             {s.player_nickname ?? s.card?.name ?? (s.card_present ? t("dash.blank_card") : t("dash.no_card"))}
           </td>
-          <td data-label={t("dash.game_state")}>{s.live?.game_state ?? String(st.game_state ?? "–")}</td>
+          <td data-label={t("dash.game_state")}>
+            {#if (s.live?.demo ?? st.demo) === "demo"}
+              <span class="badge warn" title={t("dash.demo_hint")}>{t("dash.demo")}</span>
+            {:else if (s.live?.demo ?? st.demo) === "checking"}
+              <span class="badge" title={t("dash.demo_checking_hint")}>{t("dash.demo_checking")}</span>
+            {:else}
+              {s.live?.game_state ?? String(st.game_state ?? "–")}
+            {/if}
+            {#if typeof st.demos_skipped === "number" && st.demos_skipped > 0}
+              <span class="muted small" title={t("dash.demos_skipped_hint")}>
+                {t("dash.demos_skipped", { n: st.demos_skipped })}{#if typeof st.last_demo_at === "string"}, {dateTime(st.last_demo_at, i18n.locale)}{/if}
+              </span>
+            {/if}
+          </td>
           <td class="num" data-label={t("games.score")}>{num(s.live?.score, i18n.locale)}</td>
           <td class="num" data-label={t("games.lines")}>{num(s.live?.lines, i18n.locale)}</td>
           <td class="num" data-label={t("games.levels")}>{num(s.live?.level, i18n.locale)}</td>

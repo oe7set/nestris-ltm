@@ -9,7 +9,7 @@ from fastapi.responses import Response
 
 from nestris_ltm.api.auth import AdminDep, CrewDep
 from nestris_ltm.api.deps import SessionDep, get_runtime
-from nestris_ltm.api.routes_games import games_query
+from nestris_ltm.api.routes_games import DemoFilter, games_query
 from nestris_ltm.db.models import Game
 from nestris_ltm.services import audit, export
 from nestris_ltm.services.backup_schedule import ScheduleSettings
@@ -65,11 +65,12 @@ async def games_csv(
     q: str = Query("", max_length=64),
     min_score: int | None = Query(None, ge=0),
     max_score: int | None = Query(None, ge=0),
+    demo: DemoFilter = "exclude",
 ) -> Response:
     stmt, event = await games_query(
         session, event_id=event_id, all_time=all_time, station_id=station_id, status_=status_,
         unassigned=unassigned, flagged=flagged, hidden=hidden, q=q,
-        min_score=min_score, max_score=max_score,
+        min_score=min_score, max_score=max_score, demo=demo,
     )  # fmt: skip
     rows = (await session.execute(stmt.order_by(Game.started_at).limit(MAX_GAMES))).all()
     data = export.to_csv(export.GAME_HEADER, export.game_rows(rows))

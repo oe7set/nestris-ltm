@@ -74,3 +74,17 @@ def test_invalid_payloads_rejected(bad: str) -> None:
 )
 def test_split_topic(topic: str, expected: tuple[str, str] | None) -> None:
     assert split_topic(topic, "retroverse/nestris/") == expected
+
+
+def test_demo_state_station_0_4() -> None:
+    status = StatusPayload.model_validate_json(
+        dumps(STATUS, demo="demo", demos_skipped=3, last_demo_at="2026-09-24T09:02:11.104Z")
+    )
+    assert (status.demo, status.demos_skipped) == ("demo", 3)
+    assert status.last_demo_at is not None
+    live = LivePayload.model_validate_json(dumps(LIVE, game_id=None, demo="checking"))
+    assert live.demo == "checking" and live.game_id is None
+    # Older stations send no demo fields.
+    assert LivePayload.model_validate_json(dumps(LIVE)).demo is None
+    with pytest.raises(ValidationError):
+        LivePayload.model_validate_json(dumps(LIVE, demo="maybe"))

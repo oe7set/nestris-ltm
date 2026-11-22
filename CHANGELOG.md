@@ -3,6 +3,21 @@
 The section of a version is the text of its GitHub release and what the
 built-in updater shows before installing (`.github/scripts/release_notes.py`).
 
+## 0.6.0
+
+- **Attract-mode demo games** (the console's demo on the title screen) no
+  longer count: games from older stations that replay the known demo are
+  flagged when they end or their recording arrives and are hidden from
+  rankings, bracket, kiosk, player stats, exports and counts. The dashboard
+  shows *Demo-Spiel* in a station's game state while the demo plays (station
+  0.4.0+, which never sends demos at all) and how many demos it skipped.
+- *Spiele*: filter *Demo-Spiele* (hidden / only / included), badge *Demo*,
+  bulk actions *Als Demo markieren* and *Keine Demo*.
+- `nestris-ltm demo-scan [--apply | --suggest --export DIR]` and
+  `nestris-ltm demo-purge [--yes]` find, flag and delete the demo games
+  already stored.
+- Database migration 0015 (`games.is_demo`, `games.demo_reason`).
+
 ## 0.5.1
 
 - **Terminal API** for the new card functions of the Retroverse Terminal

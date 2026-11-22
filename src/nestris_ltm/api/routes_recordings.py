@@ -24,7 +24,7 @@ from sqlalchemy import select
 from nestris_ltm.api.auth import AdminDep, Principal, require_scope
 from nestris_ltm.api.deps import SessionDep, get_runtime
 from nestris_ltm.db.models import Game, Player, Station
-from nestris_ltm.services import audit, recordings
+from nestris_ltm.services import audit, demo, recordings
 
 router = APIRouter(tags=["recordings"])
 StationDep = Annotated[Principal, Depends(require_scope("stations"))]
@@ -75,6 +75,8 @@ async def upload_from_station(
                 after={"size_bytes": stored.size_bytes, "frames": stored.frame_count,
                        "live_frames_pruned": stored.frames_pruned},
             )  # fmt: skip
+            # The complete recording settles what the live frames left open.
+            await demo.check_game(session, game.id)
     # Live frames still in flight for this game are no longer needed.
     get_runtime(request).frames.discard(external_id)
     response.status_code = status.HTTP_201_CREATED if stored.created else status.HTTP_200_OK

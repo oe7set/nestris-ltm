@@ -22,6 +22,7 @@ from nestris_ltm.db.models import (
     Player,
 )
 from nestris_ltm.services import audit, events, game_admin
+from nestris_ltm.services import demo as demo_service
 
 router = APIRouter(prefix="/api/games", tags=["games"])
 
@@ -141,6 +142,10 @@ def _live_values(request: Request) -> dict[str, dict[str, Any]]:
     return out
 
 
+# Attract-mode demos (services/demo.py) are left out unless asked for.
+DemoFilter = Literal["exclude", "only", "include"]
+
+
 async def games_query(
     session: AsyncSession,
     *,
@@ -155,6 +160,7 @@ async def games_query(
     q: str = "",
     min_score: int | None = None,
     max_score: int | None = None,
+    demo: DemoFilter = "exclude",
 ) -> tuple[Select[Game, str], Event | None]:
     """The games list filter (also used by the CSV export).
 
@@ -195,6 +201,10 @@ async def games_query(
         stmt = stmt.where(Game.score >= min_score)
     if max_score is not None:
         stmt = stmt.where(Game.score <= max_score)
+    if demo == "exclude":
+        stmt = stmt.where(Game.is_demo.is_(False))
+    elif demo == "only":
+        stmt = stmt.where(Game.is_demo.is_(True))
     return stmt, event
 
 
@@ -214,6 +224,7 @@ async def list_games(
     q: str = Query("", max_length=64, description="player nickname or card name"),
     min_score: int | None = Query(None, ge=0, description="score at least (inclusive)"),
     max_score: int | None = Query(None, ge=0, description="score at most (inclusive)"),
+    demo: DemoFilter = "exclude",
     sort: GameSort = "started_at",
     dir_: Literal["asc", "desc"] | None = Query(None, alias="dir", description="default: per key"),
     limit: int = Query(50, ge=1, le=500),
@@ -232,6 +243,7 @@ async def list_games(
         q=q,
         min_score=min_score,
         max_score=max_score,
+        demo=demo,
     )
 
     total = await session.scalar(select(func.count()).select_from(stmt.subquery()))
@@ -435,7 +447,8 @@ BULK_MAX = 500
 
 class BulkIn(BaseModel):
     ids: list[int] = Field(min_length=1, max_length=BULK_MAX)
-    action: Literal["delete", "hide", "unhide", "assign", "unassign"]
+    # "demo"/"not_demo": mark as attract-mode demo / as a real game (sticky).
+    action: Literal["delete", "hide", "unhide", "assign", "unassign", "demo", "not_demo"]
     # For "assign".
     player_id: int | None = None
     # For "hide"/"unhide"; default: the active event.
@@ -481,6 +494,8 @@ async def bulk_games(
                 await game_admin.hide_games(session, body.ids, event.id, body.reason, actor)
             else:
                 await game_admin.unhide_games(session, body.ids, event.id, actor)
+        elif body.action in ("demo", "not_demo"):
+            await demo_service.set_demo(session, body.ids, body.action == "demo", actor)
         elif body.action == "assign":
             assert body.player_id is not None  # checked by the model
             await _player_exists(session, body.player_id)

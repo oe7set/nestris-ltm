@@ -7,6 +7,8 @@ nestris-ltm config-path     print the config file location
 nestris-ltm configure ...   change settings in config.toml (used by the installer)
 nestris-ltm check           check database, MQTT broker and HTTP port
 nestris-ltm autostart on|off|status
+nestris-ltm demo-scan [--apply | --suggest]   attract-mode demos in the database
+nestris-ltm demo-purge [--yes]                delete the flagged demos
 """
 
 from __future__ import annotations
@@ -19,7 +21,7 @@ from typing import Any
 
 import structlog
 
-from nestris_ltm import __version__, setup_cli
+from nestris_ltm import __version__, demo_cli, setup_cli
 from nestris_ltm.config import Settings, default_config_path, load_settings
 from nestris_ltm.logging_setup import configure_logging
 from nestris_ltm.runtime import run_async
@@ -48,6 +50,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     admin.add_argument("username")
     setup_cli.add_parsers(sub)
+    demo_cli.add_parsers(sub)
     sim = sub.add_parser("simulate", help="replay NGF recordings as MQTT stations")
     sim.add_argument("files", nargs="+", type=Path, help=".ngf / .ngf.gz recordings")
     sim.add_argument(
@@ -195,6 +198,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "simulate":
         run_async(_simulate(settings, args))
         return 0
+
+    if args.command in ("demo-scan", "demo-purge"):
+        fn = demo_cli.scan if args.command == "demo-scan" else demo_cli.purge
+        result = _run_db_command(settings, fn(settings, args))
+        return 2 if result is None else result
 
     if args.command == "migrate":
         if _run_db_command(settings, _migrate(settings)) is None:

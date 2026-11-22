@@ -124,7 +124,7 @@ async def profile(session: AsyncSession, player: Player, live: dict[str, Any]) -
                     select(GameFrame.game_id).where(GameFrame.game_id == Game.id).exists(),
                 ).label("has_replay"),
             )
-            .where(Game.player_id == pid, Game.status != "abandoned")
+            .where(Game.player_id == pid, Game.status != "abandoned", Game.is_demo.is_(False))
             .order_by(Game.started_at.desc())
             .limit(RECENT_GAMES)
         )

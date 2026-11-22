@@ -223,7 +223,9 @@ async def list_stations(request: Request, _: CrewDep, session: SessionDep) -> li
     counts = dict(
         (
             await session.execute(
-                select(Game.station_id, func.count(Game.id)).group_by(Game.station_id)
+                select(Game.station_id, func.count(Game.id))
+                .where(Game.is_demo.is_(False))
+                .group_by(Game.station_id)
             )
         ).all()
     )

@@ -96,6 +96,7 @@ async def collect(rt: Runtime, session: AsyncSession) -> list[Item]:
         visible = and_(
             events.in_window(event),
             Game.status == "finished",
+            Game.is_demo.is_(False),
             ~exists().where(
                 EventHiddenGame.event_id == event.id, EventHiddenGame.game_id == Game.id
             ),

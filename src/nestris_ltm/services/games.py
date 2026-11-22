@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from nestris_ltm.db.models import EventHiddenGame, Game, GameCheat, Station
 from nestris_ltm.ingest.payloads import CheatPayload, GameEndPayload, GameStartPayload
-from nestris_ltm.services import audit, events
+from nestris_ltm.services import audit, demo, events
 from nestris_ltm.services.players import resolve_card
 
 
@@ -129,6 +129,10 @@ async def record_game_end(session: AsyncSession, payload: GameEndPayload) -> int
         )
     )
     game_id = await _game_id(session, payload.game_id)
+    # An attract-mode demo from a station before 0.4.0: flagged, never held
+    # for review (it counts nowhere anyway).
+    if await demo.check_game(session, game_id):
+        return game_id
     # A re-delivered result must not hide a game the crew already released.
     if earlier_status != "finished":
         await _hold_for_review(session, game_id, payload)
