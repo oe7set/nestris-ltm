@@ -190,6 +190,28 @@ export class LayoutEditor {
     this.patch(e.id, { props }, `prop:${e.id}:${prop}`);
   }
 
+  /**
+   * Change several props of elements at once (one undo step): the given
+   * ids, else every unlocked selected element. undefined/null/"" removes a prop.
+   */
+  setProps(change: Record<string, unknown> | ((e: LayoutElement) => Record<string, unknown>), ids?: string[]): void {
+    const pick = new Set(ids ?? this.sel.filter((e) => !e.locked).map((e) => e.id));
+    if (!pick.size) return;
+    let keys: string[] = [];
+    const elements = this.def.elements.map((e) => {
+      if (!pick.has(e.id)) return e;
+      const props: Record<string, unknown> = { ...(e.props ?? {}) };
+      const own = typeof change === "function" ? change(e) : change;
+      keys = Object.keys(own);
+      for (const [k, v] of Object.entries(own)) {
+        if (v === undefined || v === null || v === "") delete props[k];
+        else props[k] = v;
+      }
+      return { ...e, props };
+    });
+    this.apply({ ...this.def, elements }, `props:${[...pick].join(",")}:${keys.join(",")}`);
+  }
+
   restack(id: string, to: "up" | "down" | "top" | "bottom"): void {
     this.apply(restack(this.def, id, to));
   }

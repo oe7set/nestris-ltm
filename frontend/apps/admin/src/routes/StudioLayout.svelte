@@ -378,7 +378,7 @@
         <Tabs tabs={[{ id: "props", label: t("builder.properties") }, { id: "layout", label: t("builder.layout") }]} active={rightTab} onchange={(v) => (rightTab = v)} />
         <div class="scroll">
           {#if rightTab === "props"}
-            <PropertiesPanel {editor} />
+            <PropertiesPanel {editor} nes={style === "nes"} />
           {:else}
             <section class="panel block">
               <label class="field">{t("builder.name")}<input bind:value={name} maxlength="64" /></label>

@@ -6,9 +6,13 @@
   import type { AlignMode } from "../../lib/editor/geometry";
   import type { LayoutEditor } from "../../lib/editor/layoutEditor.svelte";
   import { t, tDynamic } from "../../lib/i18n.svelte";
+  import { TEXT_SIZE_TYPES } from "../../lib/editor/textsize";
   import type { LayoutElement } from "../../lib/studio";
+  import TextSizeFields from "./TextSizeFields.svelte";
 
-  let { editor }: { editor: LayoutEditor } = $props();
+  /** ``nes``: the scene style (text sizes on the 8 px grid). */
+  let { editor, nes = true }: { editor: LayoutEditor; nes?: boolean } = $props();
+  const textSized = $derived(editor.sel.length > 0 && editor.sel.every((e) => TEXT_SIZE_TYPES.has(e.type)));
 
   const ALIGN_MODES: { mode: AlignMode; icon: string }[] = [
     { mode: "left", icon: "⇤" },
@@ -133,6 +137,9 @@
       </label>
       <label class="check"><input type="checkbox" checked={p.show_points !== false} onchange={(e) => editor.setProp(el, "show_points", e.currentTarget.checked ? null : false)} /> {t("studio.show_points")}</label>
     {/if}
+    {#if textSized}
+      <TextSizeFields {editor} elements={editor.sel} {nes} />
+    {/if}
     {#if TEXT_ALIGN_TYPES.includes(el.type)}
       <label class="field">{t("builder.align_text")}
         <select
@@ -187,6 +194,9 @@
     </div>
   {:else if editor.sel.length > 1}
     <p>{t("builder.selected_n", { n: editor.sel.length })}</p>
+    {#if textSized}
+      <TextSizeFields {editor} elements={editor.sel} {nes} />
+    {/if}
     <span class="label">{t("builder.align")}</span>
     <div class="row wrap">
       {#each ALIGN_MODES as a (a.mode)}

@@ -607,7 +607,7 @@
         />
         <div class="scroll">
           {#if rightTab === "props"}
-            <PropertiesPanel {editor} />
+            <PropertiesPanel {editor} nes={settings.style !== "modern"} />
           {:else if rightTab === "scene"}
             <ScenePanel bind:name bind:settings slug={scene.slug} {layoutTitle} {builtin} onchangelayout={() => (picking = true)} />
           {:else}

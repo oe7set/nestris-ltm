@@ -2,10 +2,17 @@
 // a global rule that paints a frame (border / box-shadow) on a class the
 // widget also uses gave double frames in OBS (next, versus, ranking).
 
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import widgetSource from "../components/Widget.svelte?raw";
+import nesCss from "../nes.css?raw";
+import overlayCss from "../overlay.css?raw";
 
-const read = (rel: string): string => readFileSync(new URL(rel, import.meta.url), "utf8");
+const FILES: Record<string, string> = {
+  "../components/Widget.svelte": widgetSource,
+  "../nes.css": nesCss,
+  "../overlay.css": overlayCss,
+};
+const read = (rel: string): string => FILES[rel]!;
 
 /** Static class names in Widget.svelte's markup (dynamic parts dropped). */
 function widgetClasses(): Set<string> {

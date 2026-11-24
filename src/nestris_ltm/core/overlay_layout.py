@@ -54,6 +54,20 @@ class _Strict(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class _Text(_Strict):
+    """How the text of an element is sized (overlay ``lib/fit.ts``).
+
+    ``text_mode`` None = "stable": the size comes from ``chars`` reserved
+    characters (a default per element), so it does not jump while a score
+    grows or names change. "fixed" uses ``text_size`` px, "fit" the text
+    shown right now (the behaviour before 0.7).
+    """
+
+    text_mode: Literal["stable", "fixed", "fit"] | None = None
+    text_size: int | None = Field(default=None, ge=8, le=200)
+    chars: int | None = Field(default=None, ge=1, le=32)
+
+
 # ---------------------------------------------------------------- element properties
 
 
@@ -66,7 +80,7 @@ class NextProps(_Strict):
     frame: FrameKind | None = None
 
 
-class StatProps(_Strict):
+class StatProps(_Text):
     field: StatField = "score"
     label: str | None = Field(default=None, max_length=24)  # None = the standard label
     show_label: bool = True
@@ -78,7 +92,7 @@ class StatProps(_Strict):
     frame: FrameKind | None = None  # wins over ``boxed``
 
 
-class NameProps(_Strict):
+class NameProps(_Text):
     align: Align = "left"
     show_rank: bool = False
     boxed: bool | None = None  # None = True (keeps older definitions unchanged)
@@ -89,10 +103,13 @@ class HeartsProps(_Strict):
     align: Align = "left"
 
 
-class NametagProps(_Strict):
+class NametagProps(_Text):
     align: Align = "center"
     show_round: bool = False
     frame: FrameKind | None = None
+    # "reserve" (None): rows for hearts/round keep their room while hidden
+    # (stable/fixed text); "collapse": the name grows into the free room.
+    rows: Literal["reserve", "collapse"] | None = None
 
 
 class CameraProps(_Strict):
@@ -107,13 +124,13 @@ class DiffGraphProps(_Strict):
     frame: FrameKind | None = None
 
 
-class TitleProps(_Strict):
+class TitleProps(_Text):
     text: str | None = Field(default=None, max_length=64)  # None = scene title / round name
     align: Align = "center"
     frame: FrameKind | None = None
 
 
-class RoundProps(_Strict):
+class RoundProps(_Text):
     align: Align = "center"
     frame: FrameKind | None = None
 
@@ -129,7 +146,7 @@ class FrameProps(_Strict):
     style: Literal["nes", "panel"] = "nes"
 
 
-class RankingProps(_Strict):
+class RankingProps(_Text):
     # Standings of all slots by score, marked by the round mode (advance/out).
     direction: Literal["row", "column"] = "row"
     align: Align = "center"

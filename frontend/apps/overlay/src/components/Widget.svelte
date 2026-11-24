@@ -1,7 +1,7 @@
 <script lang="ts">
   // One element of an own layout (layout builder), filling its box w x h.
   import { NextPiece } from "@nestris-ltm/nes";
-  import { boardCell, fitFont, heartPixel } from "../lib/fit";
+  import { boardCell, fitFont, heartPixel, NAME_CHARS, STAT_CHARS, textMode, textPx } from "../lib/fit";
   import { fmt, hud, pct, roundLabel, text, type Lang, type TextKey } from "../lib/format";
   import type { LayoutElement, StatField } from "../lib/layoutdef";
   import { look } from "../lib/look.svelte";
@@ -74,8 +74,20 @@
     }
   });
   const showLabel = $derived(p.show_label !== false);
-  const labelPx = $derived(fitFont(statLabel.length, el.w - 16, el.h, showLabel ? 0.26 : 0, nes));
-  const valuePx = $derived(fitFont(Math.max(statValue.length, 3), el.w - 16, el.h, showLabel ? 0.5 : 0.7, nes));
+  // Text sizes (props text_mode / text_size / chars, see lib/fit.ts).
+  const mode = $derived(textMode(p.text_mode));
+  const chars = $derived(typeof p.chars === "number" ? p.chars : undefined);
+  const sized = (reserved: number, actual: number, w: number, h: number, share: number): number =>
+    textPx({ mode, size: p.text_size, reserved: chars ?? reserved, actual, w, h, share, nes });
+  const valuePx = $derived(
+    sized(STAT_CHARS[field] ?? 4, Math.max(statValue.length, 3), el.w - 16, el.h, showLabel ? 0.5 : 0.7),
+  );
+  // The label follows a fixed value size; otherwise it fits its own (constant) text.
+  const labelPx = $derived(
+    mode === "fixed" && typeof p.text_size === "number"
+      ? Math.min(fitFont(statLabel.length, el.w - 16, el.h, 0.4, nes), nes ? Math.max(8, Math.floor((valuePx * 0.52) / 8) * 8) : Math.round(valuePx * 0.52))
+      : fitFont(statLabel.length, el.w - 16, el.h, showLabel ? 0.26 : 0, nes),
+  );
 
   // ---- names, title, round, text
   const name = $derived(view?.name ?? `Slot ${(el.slot ?? 0) + 1}`);
@@ -90,6 +102,16 @@
     (p.text as string | undefined) ?? state.scene.settings.title ?? state.matches?.[0]?.round_name ?? state.scene.name,
   );
   const hearts = $derived(view?.lives);
+  // Name tag: a stable size keeps the rows for hearts and round even while
+  // they are not shown, so the name neither grows nor moves (prop "rows").
+  const reserveRows = $derived(mode !== "fit" && p.rows !== "collapse");
+  const tagShare = $derived(hearts || reserveRows ? 0.34 : 0.55);
+  const showRound = $derived(!!p.show_round && !state.scene.qualifying);
+  const nickPx = $derived(
+    el.type === "name"
+      ? sized(NAME_CHARS + (p.show_rank ? 2 : 0), name.length + (p.show_rank ? 2 : 0), el.w - 24, el.h, 0.55)
+      : sized(NAME_CHARS, name.length, el.w - 24, el.h, tagShare),
+  );
 
   // ---- next piece: label on top, the piece in the rest of the box
   const nextLabelPx = $derived(p.show_label !== false ? fitFont(4, el.w - 24, el.h, 0.22, nes) : 0);
@@ -102,7 +124,9 @@
   const showPoints = $derived(p.show_points !== false);
   const rankChars = $derived(showPoints ? 15 : 8);
   const rankPx = $derived(
-    p.direction === "column"
+    mode === "fixed" && typeof p.text_size === "number"
+      ? textPx({ mode, size: p.text_size, reserved: 1, actual: 1, w: el.w, h: el.h, share: 1, nes })
+      : p.direction === "column"
       ? fitFont(rankChars, el.w - 48, el.h / Math.max(1, views.length), 0.5, nes)
       : fitFont(rankChars, el.w / Math.max(1, views.length) - 48, el.h, 0.42, nes),
   );
@@ -134,7 +158,7 @@
   {:else if el.type === "name"}
     <div class="{box} row name">
       {#if p.show_rank && view?.rank}<span class="rank" class:leader={view.rank === 1}>{view.rank}</span>{/if}
-      <span class="nick" style:font-size="{fitFont(name.length + (p.show_rank ? 2 : 0), el.w - 24, el.h, 0.55, nes)}px">{name}</span>
+      <span class="nick" style:font-size="{nickPx}px">{name}</span>
     </div>
   {:else if el.type === "hearts"}
     {#if hearts}
@@ -142,14 +166,16 @@
     {/if}
   {:else if el.type === "nametag"}
     <div class="{box} col nametag" class:won={view?.match_result === "won"} class:lost={view?.match_result === "lost"}>
-      <span class="nick" style:font-size="{fitFont(name.length, el.w - 24, el.h, hearts ? 0.34 : 0.55, nes)}px">{name}</span>
+      <span class="nick" style:font-size="{nickPx}px">{name}</span>
       {#if hearts}
         <span class="row">
           <Hearts current={hearts.current} max={hearts.max} size={heartPixel(hearts.max, el.w * 0.6, el.h * 0.32)} />
           {#if view?.match_result}<span class="result {view.match_result}">{text(lang, view.match_result === "won" ? "winner" : "eliminated")}</span>{/if}
         </span>
+      {:else if reserveRows}
+        <span class="row keep" style:height="{heartPixel(3, el.w * 0.6, el.h * 0.32) * 10}px"></span>
       {/if}
-      {#if p.show_round && !state.scene.qualifying}<span class="small">{roundText}</span>{/if}
+      {#if showRound}<span class="small">{roundText}</span>{:else if p.show_round && reserveRows}<span class="small keep">{roundText}</span>{/if}
     </div>
   {:else if el.type === "camera"}
     <Camera width={el.w} height={el.h} framed={p.framed !== false} />
@@ -162,9 +188,9 @@
       <DiffGraph a={scene.history[String(pair[0])]} b={scene.history[String(pair[1])]} width={Math.max(10, el.w - 12)} height={Math.max(10, el.h - 12)} />
     </div>
   {:else if el.type === "title"}
-    <div class="{box} row title"><span style:font-size="{fitFont(titleText.length, el.w - 24, el.h, 0.5, nes)}px">{titleText}</span></div>
+    <div class="{box} row title"><span style:font-size="{sized(titleText.length, titleText.length, el.w - 24, el.h, 0.5)}px">{titleText}</span></div>
   {:else if el.type === "round"}
-    <div class="{box} row round"><span style:font-size="{fitFont(roundText.length, el.w - 24, el.h, 0.45, nes)}px">{roundText}</span></div>
+    <div class="{box} row round"><span style:font-size="{sized(Math.max(10, roundText.length), roundText.length, el.w - 24, el.h, 0.45)}px">{roundText}</span></div>
   {:else if el.type === "text"}
     <div class="row free" style:font-size="{nes ? Math.max(8, Math.floor(Number(p.size ?? 24) / 8) * 8) : Number(p.size ?? 24)}px" style:color={(p.color as string | undefined) ?? null}>
       {String(p.text ?? "")}
@@ -297,6 +323,11 @@
   .small {
     font-size: 14px;
     color: var(--muted);
+  }
+  /* A reserved row (stable size): takes its room, shows nothing. */
+  .keep {
+    visibility: hidden;
+    flex: none;
   }
   .title span {
     color: var(--accent);

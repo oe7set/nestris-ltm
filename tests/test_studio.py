@@ -103,6 +103,22 @@ def test_frame_prop_is_optional_and_checked() -> None:
         ol.parse(data)
 
 
+def test_text_size_props_are_optional_and_checked() -> None:
+    data = copy.deepcopy(VALID)
+    data["elements"][2]["props"].update(text_mode="fixed", text_size=32, chars=9)
+    score = next(e for e in ol.parse(data).dump()["elements"] if e["id"] == "score0")
+    assert {"text_mode": "fixed", "text_size": 32, "chars": 9}.items() <= score["props"].items()
+    assert all(
+        not {"text_mode", "text_size", "chars", "rows"} & e["props"].keys()
+        for e in ol.parse(VALID).dump()["elements"]
+    )
+    for bad in ({"text_mode": "huge"}, {"text_size": 4}, {"chars": 0}):
+        broken = copy.deepcopy(VALID)
+        broken["elements"][2]["props"].update(bad)
+        with pytest.raises(ValueError):
+            ol.parse(broken)
+
+
 def _broken(change: Any) -> dict[str, Any]:
     data = copy.deepcopy(VALID)
     change(data)
