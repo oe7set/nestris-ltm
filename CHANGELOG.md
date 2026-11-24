@@ -3,6 +3,30 @@
 The section of a version is the text of its GitHub release and what the
 built-in updater shows before installing (`.github/scripts/release_notes.py`).
 
+## 0.7.0
+
+- **Scene studio: no more double frames.** Next piece, versus, ranking and
+  diff graph of own layouts were framed twice in OBS (and in the studio,
+  where it was barely visible when zoomed out). Every element with a box
+  now has *Rahmen*: standard, thin line or none.
+- **Text sizes no longer jump.** Scores, names, title and round are sized
+  for a reserved number of characters (*Stabil*, the new default for all
+  layouts), so they stay the same while scores grow or names change; only
+  longer text shrinks. *Fest* takes a size in px, *An Text anpassen* is the
+  old behaviour. Name tags keep the room of the hearts and no longer cut
+  the name off. Several elements can be set at once.
+- **Resizing**: *Verhältnis Auto / Halten / Frei* under the stage (Shift
+  inverts, Ctrl from the centre), snapping can be switched off. A playfield
+  can stretch to fill its box; *An Spielfeld anpassen* shrinks the box to it.
+- **Linked slots**: build one player, the others follow live, mirrored or
+  moved — presets *1 vs 1 gespiegelt*, *4 Viertel gespiegelt/gleich*,
+  *Darunter gleich/gespiegelt* or an own link; pairs follow too.
+- **Arranging**: a bar above the stage aligns to the selection, the stage,
+  the key element or the frame around; distributes with equal or fixed
+  gaps; lines up as row, column or grid; same width/height; select alike;
+  copy/paste a style. Distances to the neighbours while dragging, snapping
+  to equal gaps, Alt over an element measures, right-click menu.
+
 ## 0.6.0
 
 - **Attract-mode demo games** (the console's demo on the title screen) no
