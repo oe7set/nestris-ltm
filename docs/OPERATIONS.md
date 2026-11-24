@@ -258,12 +258,43 @@ it scales to any size).
   Tetris rate, drought, burn, pace, gap to the opponent, pieces, *zum
   Weiterkommen*), name, name tag, hearts, camera (transparent: put the OBS
   camera source behind it), difference, diff graph, title, round, text,
-  frame, ranking (standings with the round mode's advance/out marks). Stat
-  and name can sit without a frame of their own inside a frame element.
-  Elements snap to the 8 px grid (*Raster*), to other elements, the stage
-  edges and guide lines (Alt: free); Shift-click or drag a frame to select
-  several, then align/distribute. Ctrl+C/V/D, Del, arrows (Shift = 8 px),
-  Ctrl+Z/Y (200 steps).
+  frame, ranking (standings with the round mode's advance/out marks).
+  *Rahmen* per element: standard (the scene's style), thin line or none
+  (e.g. values inside a frame element).
+- **Text size** (*Schrift*): *Stabil* (default) sizes the text for a
+  reserved number of characters (*Platz für Zeichen*, e.g. 7 for a score
+  up to 999,999), so it does not jump while scores grow or names change;
+  only longer text gets smaller. *Fest* takes a size in px (switching to it
+  keeps the size shown), *An Text anpassen* is the old behaviour. Name tags
+  keep the room of the hearts while there are none. Several selected
+  elements of these types are set together.
+- **Size**: under the stage *Verhältnis* decides whether resizing keeps the
+  aspect ratio: *Auto* (playfield, next piece, camera and hearts keep it,
+  text does not), *Halten*, *Frei*; Shift inverts it, Ctrl resizes from the
+  centre. A playfield can *Strecken* (stretch to fill its box) and *An
+  Spielfeld anpassen* shrinks its box to the playfield. The chain button
+  links width and height when typing them.
+- **Arrange bar** above the stage: align left/centre/right/top/middle/bottom
+  relative to the selection, the stage, the *Schlüsselobjekt* (the element
+  selected first, thick outline) or the *Rahmen rundherum*; distribute
+  with equal gaps or a fixed *Abstand*; line up in a row, a column or a
+  grid; give the others the key element's width/height; *Gleiche
+  auswählen* / *Ganzer Slot*; *Stil kopieren/einfügen* (settings without
+  content, onto elements of the same type). Right click on an element
+  opens a menu with these and order, lock, hide, duplicate, delete.
+- **Linked slots** (*Slots & Paare* → *Verknüpfte Slots*): build one player
+  and let the others follow live. Presets: *1 vs 1 gespiegelt*, *4 Viertel
+  gespiegelt* (slot 1 top left, slot 2 mirrored right, slots 3/4 the same
+  below, pair 2 follows pair 1), *4 Viertel gleich*, *Darunter
+  gleich/gespiegelt*; or an own link (mirror ↔/↕ at the stage centre,
+  offset x/y; pairs too). Copies show ⛓ and select their original;
+  *Lösen* keeps them as ordinary elements.
+- Elements snap to the 8 px grid (*Raster*), to other elements, the stage
+  edges, guide lines and equal gaps (*Einrasten*; Alt while dragging:
+  free). Dragging shows the distances to the neighbours; Alt over another
+  element measures the gap to it. Shift-click or drag a frame to select
+  several. Ctrl+C/V/D, Del, arrows (Shift = 8 px), Shift+Alt+H/V centre,
+  Ctrl+Alt+C/V style, Ctrl+Z/Y (200 steps).
 - **Flow and round mode** are set on *Regie* (see "The event day" above),
   not in the studio.
 - **Export / import** (`*.nltm-scenes.json`, format `nestrisltm/scenes` v1)

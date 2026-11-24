@@ -97,9 +97,16 @@ Operations guide: `docs/OPERATIONS.md`.
   so stored definitions stay unchanged. Templates (`core/layout_templates.py`)
   reproduce the built-in layouts (`builtin=`); "adapt" forks a scene's
   built-in layout from its template (`services/overlay_layouts.own_layout_for`).
+  Widgets only use their own box classes (`wbox f-<frame>`, root `w t-<type>`):
+  never a class of the built-in layouts, or `nes.css` frames them twice
+  (`overlay/src/lib/widgetcss.test.ts` guards it). Text and box sizes come
+  from `@nestris-ltm/nes` `fit.ts`, which the studio uses too.
 - Admin studio: `lib/editor/layoutEditor.svelte.ts` holds definition,
-  selection and undo; `components/studio/*` (Stage, panels, TemplatePicker)
-  are shared by `routes/StudioScene.svelte` and `routes/StudioLayout.svelte`.
+  selection and undo; every edit goes through `apply()` (gestures through
+  `live()`), which also rebuilds linked slots (`lib/editor/links.ts`: the
+  definition stores the expanded copies plus `links`, editor-only).
+  `components/studio/*` (Stage, ArrangeBar, panels, TemplatePicker) are
+  shared by `routes/StudioScene.svelte` and `routes/StudioLayout.svelte`.
 - `frontend/packages/nes` (`@nestris-ltm/nes`) is shared by admin and overlay:
   NES palettes/blocks, `<Playfield>`, `<NextPiece>`, the NGF decoder (keep it in
   step with `core/ngf.py`) and the replay `Timeline`.
