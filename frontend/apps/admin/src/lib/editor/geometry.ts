@@ -82,16 +82,22 @@ export function snapMove(box: Rect, dx: number, dy: number, opts: SnapOptions): 
   let y = box.y + dy;
   if (opts.free) return { dx: Math.round(dx), dy: Math.round(dy), guides: [] };
   const guides: Guide[] = [];
+  const moved = { ...box, x, y };
   const sx = nearest([x, x + box.w / 2, x + box.w], lines("x", opts.targets), opts.threshold);
+  // Equal spacing: only where no edge or centre line is near.
+  const gx = sx ? null : nearest([x], gapCandidates(moved, opts.targets, "x"), opts.threshold);
   if (sx) {
     x += sx.offset;
     guides.push({ axis: "x", at: sx.at });
-  } else x = snapToGrid(x, opts.grid ?? GRID);
+  } else if (gx) x += gx.offset;
+  else x = snapToGrid(x, opts.grid ?? GRID);
   const sy = nearest([y, y + box.h / 2, y + box.h], lines("y", opts.targets), opts.threshold);
+  const gy = sy ? null : nearest([y], gapCandidates({ ...moved, x }, opts.targets, "y"), opts.threshold);
   if (sy) {
     y += sy.offset;
     guides.push({ axis: "y", at: sy.at });
-  } else y = snapToGrid(y, opts.grid ?? GRID);
+  } else if (gy) y += gy.offset;
+  else y = snapToGrid(y, opts.grid ?? GRID);
   return { dx: Math.round(x - box.x), dy: Math.round(y - box.y), guides };
 }
 
@@ -184,9 +190,14 @@ export function clampMove(box: Rect, dx: number, dy: number): { dx: number; dy: 
 
 export type AlignMode = "left" | "hcenter" | "right" | "top" | "vcenter" | "bottom";
 
-/** Align rectangles to their common bounding box (one rect: to the stage). */
-export function align(rects: Rect[], mode: AlignMode): Rect[] {
-  const box = rects.length === 1 ? { x: 0, y: 0, w: CANVAS_W, h: CANVAS_H } : bounds(rects);
+export const STAGE: Rect = { x: 0, y: 0, w: CANVAS_W, h: CANVAS_H };
+
+/**
+ * Align rectangles to a reference box: ``ref``, else their common bounding
+ * box (one rect alone: the stage).
+ */
+export function align(rects: Rect[], mode: AlignMode, ref?: Rect): Rect[] {
+  const box = ref ?? (rects.length === 1 ? STAGE : bounds(rects));
   if (!box) return rects;
   return rects.map((r) => {
     switch (mode) {
@@ -200,8 +211,12 @@ export function align(rects: Rect[], mode: AlignMode): Rect[] {
   });
 }
 
-/** Spread three or more rectangles evenly (equal gaps) along an axis; order kept. */
-export function distribute(rects: Rect[], axis: "x" | "y"): Rect[] {
+/**
+ * Spread rectangles along an axis, order kept: equal gaps between the first
+ * and the last (three or more), or a fixed ``gap`` from the first one on.
+ */
+export function distribute(rects: Rect[], axis: "x" | "y", gap?: number): Rect[] {
+  if (gap !== undefined && rects.length >= 2) return spaced(rects, axis, gap);
   if (rects.length < 3) return rects;
   const pos = (r: Rect): number => (axis === "x" ? r.x : r.y);
   const len = (r: Rect): number => (axis === "x" ? r.w : r.h);
@@ -210,12 +225,150 @@ export function distribute(rects: Rect[], axis: "x" | "y"): Rect[] {
   const last = order[order.length - 1]!.r;
   const total = pos(last) + len(last) - pos(first);
   const used = order.reduce((sum, { r }) => sum + len(r), 0);
-  const gap = (total - used) / (order.length - 1);
+  const even = (total - used) / (order.length - 1);
   const out = [...rects];
   let at = pos(first);
   for (const { r, i } of order) {
     out[i] = axis === "x" ? { ...r, x: Math.round(at) } : { ...r, y: Math.round(at) };
+    at += len(r) + even;
+  }
+  return out;
+}
+
+function spaced(rects: Rect[], axis: "x" | "y", gap: number): Rect[] {
+  const pos = (r: Rect): number => (axis === "x" ? r.x : r.y);
+  const len = (r: Rect): number => (axis === "x" ? r.w : r.h);
+  const order = rects.map((r, i) => ({ r, i })).sort((a, b) => pos(a.r) - pos(b.r));
+  const out = [...rects];
+  let at = pos(order[0]!.r);
+  for (const { r, i } of order) {
+    out[i] = axis === "x" ? { ...r, x: Math.round(at) } : { ...r, y: Math.round(at) };
     at += len(r) + gap;
+  }
+  return out;
+}
+
+export type Arrangement = "row" | "column" | "grid";
+
+/**
+ * Line rectangles up in a row, a column or a grid (``columns`` wide) with
+ * ``gap`` between them, in reading order, starting at their bounding box's
+ * top left. In a row they share a centre line, in a column a centre axis;
+ * grid cells are as large as the largest element of their row/column.
+ */
+export function arrange(rects: Rect[], kind: Arrangement, gap: number, columns = 2): Rect[] {
+  const box = bounds(rects);
+  if (!box || rects.length < 2) return rects;
+  const order = rects
+    .map((r, i) => ({ r, i }))
+    .sort((a, b) => (kind === "column" ? a.r.y - b.r.y || a.r.x - b.r.x : kind === "row" ? a.r.x - b.r.x || a.r.y - b.r.y : rowOrder(a.r, b.r)));
+  const cols = kind === "row" ? order.length : kind === "column" ? 1 : Math.max(1, Math.min(columns, order.length));
+  const rowsN = Math.ceil(order.length / cols);
+  const colW = Array.from({ length: cols }, (_, c) => Math.max(0, ...order.filter((_, k) => k % cols === c).map(({ r }) => r.w)));
+  const rowH = Array.from({ length: rowsN }, (_, row) => Math.max(0, ...order.slice(row * cols, row * cols + cols).map(({ r }) => r.h)));
+  const out = [...rects];
+  order.forEach(({ r, i }, k) => {
+    const c = k % cols;
+    const row = Math.floor(k / cols);
+    const cellX = box.x + colW.slice(0, c).reduce((s, w) => s + w + gap, 0);
+    const cellY = box.y + rowH.slice(0, row).reduce((s, h) => s + h + gap, 0);
+    out[i] = { ...r, x: Math.round(cellX + (colW[c]! - r.w) / 2), y: Math.round(cellY + (rowH[row]! - r.h) / 2) };
+  });
+  return out;
+}
+
+/** Reading order: rows first (rectangles whose centres are close in y), then x. */
+function rowOrder(a: Rect, b: Rect): number {
+  const dy = a.y + a.h / 2 - (b.y + b.h / 2);
+  return Math.abs(dy) > Math.min(a.h, b.h) / 2 ? dy : a.x - b.x;
+}
+
+/** Give rectangles the width and/or height of ``ref``, each keeping its centre. */
+export function matchSize(rects: Rect[], ref: Rect, dim: "w" | "h" | "both"): Rect[] {
+  return rects.map((r) => {
+    const w = dim === "h" ? r.w : ref.w;
+    const h = dim === "w" ? r.h : ref.h;
+    return clamp({ x: r.x + (r.w - w) / 2, y: r.y + (r.h - h) / 2, w, h });
+  });
+}
+
+/** Does ``outer`` contain ``inner`` completely? */
+export function contains(outer: Rect, inner: Rect): boolean {
+  return inner.x >= outer.x && inner.y >= outer.y && inner.x + inner.w <= outer.x + outer.w && inner.y + inner.h <= outer.y + outer.h;
+}
+
+/** A distance shown while dragging: from..to on ``axis`` at the other axis' ``at``. */
+export interface Measure {
+  axis: "x" | "y";
+  from: number;
+  to: number;
+  at: number;
+}
+
+/**
+ * Distances from ``box`` to its nearest neighbour in each direction (only
+ * neighbours beside it, overlapping on the other axis), else to the stage edge.
+ */
+export function measure(box: Rect, others: Rect[]): Measure[] {
+  const out: Measure[] = [];
+  const overlapY = (o: Rect): boolean => o.y < box.y + box.h && box.y < o.y + o.h;
+  const overlapX = (o: Rect): boolean => o.x < box.x + box.w && box.x < o.x + o.w;
+  const midY = box.y + box.h / 2;
+  const midX = box.x + box.w / 2;
+  const left = Math.max(0, ...others.filter((o) => overlapY(o) && o.x + o.w <= box.x).map((o) => o.x + o.w));
+  const right = Math.min(CANVAS_W, ...others.filter((o) => overlapY(o) && o.x >= box.x + box.w).map((o) => o.x));
+  const top = Math.max(0, ...others.filter((o) => overlapX(o) && o.y + o.h <= box.y).map((o) => o.y + o.h));
+  const bottom = Math.min(CANVAS_H, ...others.filter((o) => overlapX(o) && o.y >= box.y + box.h).map((o) => o.y));
+  if (box.x > left) out.push({ axis: "x", from: left, to: box.x, at: midY });
+  if (right > box.x + box.w) out.push({ axis: "x", from: box.x + box.w, to: right, at: midY });
+  if (box.y > top) out.push({ axis: "y", from: top, to: box.y, at: midX });
+  if (bottom > box.y + box.h) out.push({ axis: "y", from: box.y + box.h, to: bottom, at: midX });
+  return out;
+}
+
+/** Distances between two rectangles (Alt + hover): the gaps on both axes. */
+export function measureBetween(a: Rect, b: Rect): Measure[] {
+  const out: Measure[] = [];
+  const at = (lo1: number, hi1: number, lo2: number, hi2: number): number => {
+    const lo = Math.max(lo1, lo2);
+    const hi = Math.min(hi1, hi2);
+    return lo <= hi ? (lo + hi) / 2 : (Math.min(hi1, hi2) + Math.max(lo1, lo2)) / 2;
+  };
+  if (a.x + a.w <= b.x) out.push({ axis: "x", from: a.x + a.w, to: b.x, at: at(a.y, a.y + a.h, b.y, b.y + b.h) });
+  else if (b.x + b.w <= a.x) out.push({ axis: "x", from: b.x + b.w, to: a.x, at: at(a.y, a.y + a.h, b.y, b.y + b.h) });
+  if (a.y + a.h <= b.y) out.push({ axis: "y", from: a.y + a.h, to: b.y, at: at(a.x, a.x + a.w, b.x, b.x + b.w) });
+  else if (b.y + b.h <= a.y) out.push({ axis: "y", from: b.y + b.h, to: a.y, at: at(a.x, a.x + a.w, b.x, b.x + b.w) });
+  return out;
+}
+
+/**
+ * Positions on one axis where ``box`` would have the same gap to a
+ * neighbour as two other neighbours in its row/column have to each other,
+ * or sit exactly in the middle between two neighbours (smart spacing).
+ */
+export function gapCandidates(box: Rect, others: Rect[], axis: "x" | "y"): number[] {
+  const pos = (r: Rect): number => (axis === "x" ? r.x : r.y);
+  const len = (r: Rect): number => (axis === "x" ? r.w : r.h);
+  const across = (o: Rect): boolean =>
+    axis === "x" ? o.y < box.y + box.h && box.y < o.y + o.h : o.x < box.x + box.w && box.x < o.x + o.w;
+  const row = others.filter(across).sort((a, b) => pos(a) - pos(b));
+  const gaps: number[] = [];
+  for (let i = 1; i < row.length; i++) {
+    const g = pos(row[i]!) - (pos(row[i - 1]!) + len(row[i - 1]!));
+    if (g > 0) gaps.push(g);
+  }
+  const out: number[] = [];
+  for (const o of row) {
+    for (const g of gaps) {
+      out.push(pos(o) + len(o) + g); // right of / below o
+      out.push(pos(o) - g - len(box)); // left of / above o
+    }
+  }
+  for (let i = 1; i < row.length; i++) {
+    const a = row[i - 1]!;
+    const b = row[i]!;
+    const free = pos(b) - (pos(a) + len(a));
+    if (free > len(box)) out.push(pos(a) + len(a) + (free - len(box)) / 2);
   }
   return out;
 }

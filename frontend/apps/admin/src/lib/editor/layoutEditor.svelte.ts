@@ -24,13 +24,33 @@ import {
   unpairedSlots,
   updateElement,
 } from "./elements";
-import { align as alignRects, bounds, clamp, clampMove, distribute, type AlignMode, type Rect } from "./geometry";
+import {
+  align as alignRects,
+  arrange,
+  bounds,
+  clamp,
+  clampMove,
+  contains,
+  distribute,
+  matchSize,
+  STAGE,
+  type AlignMode,
+  type Arrangement,
+  type Rect,
+} from "./geometry";
 import { History } from "./history";
 import { applyLinks, applyPreset, linkOrigins, presetReplaces, removeLink, replacedBy, setLink, type LinkPreset } from "./links";
 import { mirrorSlot } from "./mirror";
 
 // Copy/paste works across layouts while the admin page stays open.
 let clipboard: LayoutElement[] = [];
+// "Copy style": the props of one element, pasted onto elements of its type.
+let styleClipboard: { type: string; props: Record<string, unknown> } | null = null;
+/** Props that say what an element shows, not how: never part of a style. */
+const CONTENT_PROPS = new Set(["field", "text", "label"]);
+
+/** What alignment refers to: the selection's box, the stage, the key element or the frame around. */
+export type AlignRef = "selection" | "stage" | "key" | "frame";
 
 /** dataTransfer type of an element dragged from the palette onto the stage. */
 export const DRAG_TYPE = "application/x-nltm-element";
@@ -267,14 +287,88 @@ export class LayoutEditor {
     this.apply({ ...this.def, elements: this.def.elements.map((e) => (byId.has(e.id) ? { ...e, ...byId.get(e.id)! } : e)) });
   }
 
-  alignSelected(mode: AlignMode): void {
-    const movable = this.sel.filter((e) => !e.locked);
-    this.#moveAll(alignRects(movable.map(rectOf), mode), movable);
+  /** The key element: the first one selected (others align to it). */
+  get key(): LayoutElement | null {
+    const id = this.selected[0];
+    return id ? (this.def.elements.find((e) => e.id === id) ?? null) : null;
   }
 
-  distributeSelected(axis: "x" | "y"): void {
+  /** The smallest frame element that contains the whole selection (not selected itself). */
+  frameAround(): LayoutElement | null {
+    const box = bounds(this.sel.map(rectOf));
+    if (!box) return null;
+    const frames = this.def.elements.filter((e) => e.type === "frame" && !this.selected.includes(e.id) && contains(rectOf(e), box));
+    return frames.sort((a, b) => a.w * a.h - b.w * b.h)[0] ?? null;
+  }
+
+  #reference(ref: AlignRef): Rect | undefined | null {
+    if (ref === "stage") return STAGE;
+    if (ref === "key") return this.key ? rectOf(this.key) : null;
+    if (ref === "frame") {
+      const f = this.frameAround();
+      return f ? rectOf(f) : null;
+    }
+    return undefined; // the selection's own box (one element: the stage)
+  }
+
+  alignSelected(mode: AlignMode, ref: AlignRef = "selection"): void {
+    const target = this.#reference(ref);
+    if (target === null) return;
+    // The key element is the reference: it stays where it is.
+    const movable = this.sel.filter((e) => !e.locked && !(ref === "key" && e.id === this.key?.id));
+    this.#moveAll(alignRects(movable.map(rectOf), mode, target), movable);
+  }
+
+  /** Equal gaps (no ``gap``) or a fixed gap in px. */
+  distributeSelected(axis: "x" | "y", gap?: number): void {
     const movable = this.sel.filter((e) => !e.locked);
-    this.#moveAll(distribute(movable.map(rectOf), axis), movable);
+    this.#moveAll(distribute(movable.map(rectOf), axis, gap), movable);
+  }
+
+  /** Line the selection up in a row, a column or a grid. */
+  arrangeSelected(kind: Arrangement, gap: number, columns = 2): void {
+    const movable = this.sel.filter((e) => !e.locked);
+    this.#moveAll(arrange(movable.map(rectOf), kind, gap, columns), movable);
+  }
+
+  /** Width and/or height of the key element for the rest of the selection. */
+  matchSizeSelected(dim: "w" | "h" | "both"): void {
+    const key = this.key;
+    if (!key) return;
+    const movable = this.sel.filter((e) => !e.locked && e.id !== key.id);
+    this.#moveAll(matchSize(movable.map(rectOf), rectOf(key), dim), movable);
+  }
+
+  /** Select every element like the key element: same type, or same slot. */
+  selectSimilar(by: "type" | "slot"): void {
+    const key = this.key;
+    if (!key) return;
+    const like = (e: LayoutElement): boolean =>
+      by === "type" ? e.type === key.type && (e.type !== "stat" || e.props?.field === key.props?.field) : e.slot === key.slot && e.pair === key.pair;
+    this.selected = [key.id, ...this.def.elements.filter((e) => e.id !== key.id && like(e) && !e.locked && !this.origins.has(e.id)).map((e) => e.id)];
+  }
+
+  copyStyle(): void {
+    const key = this.key;
+    if (!key) return;
+    const props = Object.fromEntries(Object.entries(key.props ?? {}).filter(([k]) => !CONTENT_PROPS.has(k)));
+    styleClipboard = { type: key.type, props: structuredClone(props) };
+  }
+
+  get canPasteStyle(): boolean {
+    return !!styleClipboard && this.sel.some((e) => e.type === styleClipboard!.type);
+  }
+
+  /** Paste a copied style onto the selected elements of the same type (content stays). */
+  pasteStyle(): void {
+    const style = styleClipboard;
+    if (!style) return;
+    const ids = this.sel.filter((e) => !e.locked && e.type === style.type).map((e) => e.id);
+    this.setProps((e) => {
+      const change: Record<string, unknown> = {};
+      for (const k of Object.keys(e.props ?? {})) if (!CONTENT_PROPS.has(k)) change[k] = null;
+      return { ...change, ...structuredClone(style.props) };
+    }, ids);
   }
 
   /** Centre the selection on the stage (one axis or both). */
@@ -371,6 +465,10 @@ export class LayoutEditor {
     if (ctrl && key === "z" && !event.shiftKey) this.undo();
     else if (ctrl && (key === "y" || (key === "z" && event.shiftKey))) this.redo();
     else if (!this.editable) return false;
+    else if (ctrl && event.altKey && key === "c") this.copyStyle();
+    else if (ctrl && event.altKey && key === "v") this.pasteStyle();
+    else if (event.altKey && event.shiftKey && key === "h") this.centreSelected("x");
+    else if (event.altKey && event.shiftKey && key === "v") this.centreSelected("y");
     else if (ctrl && key === "c") this.copy();
     else if (ctrl && key === "x") this.cut();
     else if (ctrl && key === "v") this.paste();

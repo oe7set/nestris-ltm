@@ -13,13 +13,17 @@
     clampMove,
     fromPoints,
     HANDLES,
+    measure,
+    measureBetween,
     resize,
     snapMove,
     bounds,
     type Guide,
     type Handle,
+    type Measure,
     type Rect,
   } from "../../lib/editor/geometry";
+  import ArrangeBar from "./ArrangeBar.svelte";
   import { DRAG_TYPE, rectOf, slotColor, type LayoutEditor } from "../../lib/editor/layoutEditor.svelte";
   import { updateElement } from "../../lib/editor/elements";
   import { guides as guideLines } from "../../lib/guides.svelte";
@@ -65,6 +69,12 @@
   let panning: { sx: number; sy: number; px: number; py: number } | null = null;
   let snapGuides = $state<Guide[]>([]);
   let marquee = $state<Rect | null>(null);
+  // Distances to the neighbours while dragging, and with Alt over another element.
+  let measures = $state<Measure[]>([]);
+  let altDown = $state(false);
+  let hoverId = $state<string | null>(null);
+  // Right-click menu (viewport px).
+  let menu = $state<{ x: number; y: number } | null>(null);
 
   const fitScale = $derived(Math.max(0.05, Math.min((viewW - 2 * PAD) / CANVAS_W, (viewH - 2 * PAD) / CANVAS_H)));
   const scale = $derived(zoom === "fit" ? fitScale : zoom);
@@ -73,6 +83,12 @@
     zoom === "fit" ? { x: (viewW - CANVAS_W * scale) / 2, y: (viewH - CANVAS_H * scale) / 2 } : pan,
   );
   const selBox = $derived(bounds(editor.sel.map(rectOf)));
+  const hoverMeasures = $derived.by((): Measure[] => {
+    if (!altDown || !hoverId || !selBox || editor.selected.includes(editor.master(hoverId))) return [];
+    const other = editor.def.elements.find((e) => e.id === hoverId);
+    return other ? measureBetween(selBox, rectOf(other)) : [];
+  });
+  const shownMeasures = $derived(measures.length ? measures : hoverMeasures);
 
   // ---- zoom and pan
 
@@ -153,6 +169,8 @@
   }
 
   function onKeyDown(event: KeyboardEvent): void {
+    if (event.key === "Alt") altDown = true;
+    if (event.key === "Escape") menu = null;
     const target = event.target as HTMLElement | null;
     if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
     if (event.key === " " && !spaceDown) {
@@ -168,6 +186,7 @@
 
   function onKeyUp(event: KeyboardEvent): void {
     if (event.key === " ") spaceDown = false;
+    if (event.key === "Alt") altDown = false;
   }
 
   // ---- element gestures
@@ -181,6 +200,11 @@
   function point(e: { clientX: number; clientY: number }): { x: number; y: number } {
     const r = layer!.getBoundingClientRect();
     return { x: (e.clientX - r.left) / scale, y: (e.clientY - r.top) / scale };
+  }
+
+  /** Other visible elements, for the distances shown while dragging. */
+  function neighbours(ids: Set<string>): Rect[] {
+    return editor.def.elements.filter((e) => !ids.has(e.id) && !e.hidden).map(rectOf);
   }
 
   function others(ids: Set<string>): Rect[] {
@@ -265,6 +289,9 @@
       const snapped = snapMove(g.box, raw.dx, raw.dy, { ...opts, targets: others(new Set(g.origin.keys())) });
       const d = clampMove(g.box, snapped.dx, snapped.dy);
       snapGuides = snapped.guides;
+      const moving = new Set(g.origin.keys());
+      for (const [copy, master] of editor.origins) if (moving.has(master)) moving.add(copy);
+      measures = measure({ ...g.box, x: g.box.x + d.dx, y: g.box.y + d.dy }, neighbours(moving));
       editor.live({
         ...g.start,
         elements: g.start.elements.map((e) => {
@@ -280,6 +307,7 @@
         fromCenter: event.ctrlKey || event.metaKey,
       });
       snapGuides = r.guides;
+      measures = measure(r.rect, neighbours(new Set([g.id])));
       editor.live(updateElement(g.start, g.id, r.rect));
     } else {
       marquee = fromPoints(g.px, g.py, p.x, p.y);
@@ -292,10 +320,25 @@
     const g = gesture;
     gesture = null;
     snapGuides = [];
+    measures = [];
     marquee = null;
     if (!g) return;
     if ((g.kind === "move" || g.kind === "resize") && g.moved) editor.commitGesture(g.start);
     else if (g.kind === "move" && !g.moved && g.collapseTo) editor.selected = [g.collapseTo];
+  }
+
+  function onBoxMenu(event: MouseEvent, clicked: LayoutElement): void {
+    event.preventDefault();
+    const id = editor.master(clicked.id);
+    if (!editor.selected.includes(id)) editor.selected = [id];
+    const r = viewport!.getBoundingClientRect();
+    menu = { x: event.clientX - r.left, y: event.clientY - r.top };
+  }
+
+  /** Run a menu action and close the menu. */
+  function act(run: () => void): void {
+    menu = null;
+    run();
   }
 
   function onDragOver(event: DragEvent): void {
@@ -324,16 +367,20 @@
   }
 </script>
 
-<svelte:window onkeydown={onKeyDown} onkeyup={onKeyUp} />
+<svelte:window onkeydown={onKeyDown} onkeyup={onKeyUp} onblur={() => (altDown = spaceDown = false)} />
 
 <div class="stage-wrap">
+  <ArrangeBar {editor} />
   <div
     class="viewport {background}"
     class:pan={spaceDown}
     bind:this={viewport}
     bind:clientWidth={viewW}
     bind:clientHeight={viewH}
-    onpointerdown={onViewportDown}
+    onpointerdown={(e) => {
+      if (menu && !(e.target as HTMLElement).closest(".ctx")) menu = null;
+      onViewportDown(e);
+    }}
     onpointermove={onViewportMove}
     onpointerup={onViewportUp}
     onpointercancel={onViewportUp}
@@ -374,6 +421,7 @@
                 class:locked={el.locked}
                 class:ghost={el.hidden}
                 class:linked={editor.origins.has(el.id)}
+                class:key={editor.selected.length > 1 && editor.selected[0] === el.id}
                 class:err={editor.errorIds.includes(el.id) || editor.problems.has(el.id)}
                 style:left="{el.x}px"
                 style:top="{el.y}px"
@@ -381,6 +429,9 @@
                 style:height="{el.h}px"
                 style:--c={slotColor(el)}
                 onpointerdown={(e) => onBoxDown(e, el)}
+                onpointerenter={() => (hoverId = el.id)}
+                onpointerleave={() => hoverId === el.id && (hoverId = null)}
+                oncontextmenu={(e) => onBoxMenu(e, el)}
                 role="presentation"
               >
                 <span class="tag">{boxLabel(el)}</span>
@@ -394,6 +445,18 @@
             {#each snapGuides as g, i (i)}
               <div class="guide {g.axis}" style:left={g.axis === "x" ? `${g.at}px` : "0"} style:top={g.axis === "y" ? `${g.at}px` : "0"}></div>
             {/each}
+            {#each shownMeasures as m, i (i)}
+              {@const len = Math.round(m.to - m.from)}
+              <div
+                class="measure {m.axis}"
+                style:left="{m.axis === 'x' ? m.from : m.at}px"
+                style:top="{m.axis === 'y' ? m.from : m.at}px"
+                style:width={m.axis === "x" ? `${len}px` : null}
+                style:height={m.axis === "y" ? `${len}px` : null}
+              >
+                <span>{len}</span>
+              </div>
+            {/each}
             {#if marquee}
               <div class="marquee" style:left="{marquee.x}px" style:top="{marquee.y}px" style:width="{marquee.w}px" style:height="{marquee.h}px"></div>
             {/if}
@@ -403,6 +466,30 @@
       <GuideOverlay />
     </div>
     {#if notice}<div class="notice">{@render notice()}</div>{/if}
+    {#if menu && editor.sel.length}
+      {@const one = editor.one}
+      <div class="ctx" role="menu" style:left="{menu.x}px" style:top="{menu.y}px">
+        <button role="menuitem" onclick={() => act(() => editor.centreSelected("x"))}>{t("studio.centre_h")}</button>
+        <button role="menuitem" onclick={() => act(() => editor.centreSelected("y"))}>{t("studio.centre_v")}</button>
+        {#if editor.frameAround()}
+          <button role="menuitem" onclick={() => act(() => { editor.alignSelected("hcenter", "frame"); editor.alignSelected("vcenter", "frame"); })}>{t("studio.centre_in_frame")}</button>
+        {/if}
+        <hr />
+        {#if one}
+          <button role="menuitem" onclick={() => act(() => editor.restack(one.id, "top"))}>{t("builder.to_front")}</button>
+          <button role="menuitem" onclick={() => act(() => editor.restack(one.id, "bottom"))}>{t("builder.to_back")}</button>
+          <button role="menuitem" onclick={() => act(() => editor.patch(one.id, { locked: !one.locked }))}>{one.locked ? t("studio.unlock") : t("studio.lock")}</button>
+          <button role="menuitem" onclick={() => act(() => editor.patch(one.id, { hidden: !one.hidden }))}>{one.hidden ? t("studio.show") : t("studio.hide")}</button>
+          <hr />
+        {/if}
+        <button role="menuitem" onclick={() => act(() => editor.selectSimilar("type"))}>{t("studio.select_type")}</button>
+        <button role="menuitem" onclick={() => act(() => editor.copyStyle())}>{t("studio.copy_style")}</button>
+        <button role="menuitem" disabled={!editor.canPasteStyle} onclick={() => act(() => editor.pasteStyle())}>{t("studio.paste_style")}</button>
+        <hr />
+        <button role="menuitem" onclick={() => act(() => editor.duplicateSelected())}>{t("builder.duplicate")}</button>
+        <button role="menuitem" class="danger-text" onclick={() => act(() => editor.removeSelected())}>{t("builder.delete")}</button>
+      </div>
+    {/if}
   </div>
 
   <div class="status">
@@ -434,7 +521,7 @@
 <style>
   .stage-wrap {
     display: grid;
-    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr) auto;
     min-height: 0;
     min-width: 0;
     height: 100%;
@@ -552,6 +639,10 @@
     outline-style: dotted;
     cursor: pointer;
   }
+  /* The key element: the others align to it. */
+  .box.key {
+    outline-width: calc(4px / var(--s));
+  }
   .box.ghost {
     opacity: 0.6;
   }
@@ -604,6 +695,58 @@
   .guide.y {
     height: calc(1px / var(--s));
     width: 1920px;
+  }
+  .measure {
+    position: absolute;
+    pointer-events: none;
+    --mc: #ff3df0;
+  }
+  .measure.x {
+    height: 0;
+    border-top: calc(1px / var(--s)) dashed var(--mc);
+  }
+  .measure.y {
+    width: 0;
+    border-left: calc(1px / var(--s)) dashed var(--mc);
+  }
+  .measure span {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%) scale(calc(1 / var(--s)));
+    font: 600 11px/1.2 system-ui, sans-serif;
+    padding: 1px 4px;
+    color: #fff;
+    background: var(--mc);
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+  .ctx {
+    position: absolute;
+    z-index: 5;
+    display: grid;
+    min-width: 200px;
+    padding: 4px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.5);
+  }
+  .ctx button {
+    text-align: left;
+    padding: 5px 10px;
+    border: 0;
+    background: none;
+    font-size: 13px;
+  }
+  .ctx button:hover:not(:disabled) {
+    background: var(--panel-2);
+  }
+  .ctx hr {
+    width: 100%;
+    margin: 3px 0;
+    border: 0;
+    border-top: 1px solid var(--line);
   }
   .marquee {
     position: absolute;
