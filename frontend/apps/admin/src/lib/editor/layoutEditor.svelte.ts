@@ -4,6 +4,7 @@
 // The definition is immutable (every edit is a new object), which keeps
 // undo/redo simple and the preview iframe messages plain data.
 
+import { boardCell, boardSize } from "@nestris-ltm/nes";
 import { confirmAsync } from "../confirm.svelte";
 import { t } from "../i18n.svelte";
 import type { ElementType, LayoutDefinition, LayoutElement } from "../studio";
@@ -177,10 +178,28 @@ export class LayoutEditor {
     this.apply(updateElement(this.def, id, change), key);
   }
 
-  setGeom(e: LayoutElement, field: "x" | "y" | "w" | "h", raw: string): void {
+  /** A typed position/size; ``keepRatio``: the other side follows a new w/h. */
+  setGeom(e: LayoutElement, field: "x" | "y" | "w" | "h", raw: string, keepRatio = false): void {
     const v = Number(raw);
     if (!Number.isFinite(v)) return;
-    this.patch(e.id, clamp({ ...rectOf(e), [field]: Math.round(v) }), `geom:${e.id}:${field}`);
+    const r: Rect = { ...rectOf(e), [field]: Math.round(v) };
+    if (keepRatio && e.w > 0 && e.h > 0) {
+      if (field === "w") r.h = Math.round((r.w * e.h) / e.w);
+      if (field === "h") r.w = Math.round((r.h * e.w) / e.h);
+    }
+    this.patch(e.id, clamp(r), `geom:${e.id}:${field}`);
+  }
+
+  /** Shrink selected playfields to the size their playfield really takes (centred). */
+  fitToContent(): void {
+    const boards = new Set(this.sel.filter((e) => !e.locked && e.type === "board").map((e) => e.id));
+    if (!boards.size) return;
+    const elements = this.def.elements.map((e) => {
+      if (!boards.has(e.id)) return e;
+      const s = boardSize(boardCell(e.w, e.h));
+      return { ...e, ...clamp({ x: e.x + Math.round((e.w - s.w) / 2), y: e.y + Math.round((e.h - s.h) / 2), w: s.w, h: s.h }) };
+    });
+    this.apply({ ...this.def, elements });
   }
 
   setProp(e: LayoutElement, prop: string, value: unknown): void {

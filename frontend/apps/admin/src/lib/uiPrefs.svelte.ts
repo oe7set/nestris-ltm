@@ -3,11 +3,17 @@
 
 const KEY = "nltm.ui";
 
+/** Scene studio, resizing: keep the aspect ratio by element type, always or never. */
+export type RatioMode = "auto" | "keep" | "free";
+const RATIO_MODES: readonly RatioMode[] = ["auto", "keep", "free"];
+
 interface Stored {
   tournamentHelp: boolean;
   tournamentFocus: boolean;
   studioFocus: boolean;
   alertSound: boolean;
+  studioRatio: RatioMode;
+  studioSnap: boolean;
 }
 
 export class UiPrefs {
@@ -19,6 +25,10 @@ export class UiPrefs {
   studioFocus = $state(false);
   /** A short beep when a new problem appears (bell). */
   alertSound = $state(false);
+  /** Scene studio: aspect ratio while resizing (Shift inverts it). */
+  studioRatio = $state<RatioMode>("auto");
+  /** Scene studio: snap to elements, stage and guide lines (Alt: never). */
+  studioSnap = $state(true);
 
   constructor() {
     try {
@@ -29,6 +39,8 @@ export class UiPrefs {
       this.tournamentFocus = s.tournamentFocus === true;
       this.studioFocus = s.studioFocus === true;
       this.alertSound = s.alertSound === true;
+      this.studioRatio = RATIO_MODES.includes(s.studioRatio as RatioMode) ? (s.studioRatio as RatioMode) : "auto";
+      this.studioSnap = s.studioSnap !== false;
     } catch {
       // nothing stored or unreadable: defaults
     }
@@ -41,6 +53,8 @@ export class UiPrefs {
         tournamentFocus: this.tournamentFocus,
         studioFocus: this.studioFocus,
         alertSound: this.alertSound,
+        studioRatio: this.studioRatio,
+        studioSnap: this.studioSnap,
       };
       globalThis.localStorage?.setItem(KEY, JSON.stringify(data));
     } catch {
@@ -48,8 +62,13 @@ export class UiPrefs {
     }
   }
 
-  toggle(key: keyof Stored): void {
+  toggle(key: "tournamentHelp" | "tournamentFocus" | "studioFocus" | "alertSound" | "studioSnap"): void {
     this[key] = !this[key];
+    this.save();
+  }
+
+  setRatio(mode: RatioMode): void {
+    this.studioRatio = mode;
     this.save();
   }
 }

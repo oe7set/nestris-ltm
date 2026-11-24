@@ -21,12 +21,13 @@
     views: SlotView[];
     lang: Lang;
   }
-  let { el, state, views, lang }: Props = $props();
+  // "state" is renamed: the name would clash with the $state rune.
+  let { el, state: sceneState, views, lang }: Props = $props();
 
   const p = $derived((el.props ?? {}) as Record<string, unknown>);
   const view = $derived(el.slot !== null && el.slot !== undefined ? views[el.slot] : undefined);
   const pair = $derived(
-    el.pair !== null && el.pair !== undefined ? state.scene.pairs[el.pair] : undefined,
+    el.pair !== null && el.pair !== undefined ? sceneState.scene.pairs[el.pair] : undefined,
   );
   // Same defaults as core/overlay_layout.py (stored definitions carry them).
   const align = $derived(
@@ -93,20 +94,20 @@
   const name = $derived(view?.name ?? `Slot ${(el.slot ?? 0) + 1}`);
   const roundOf = $derived.by((): number => {
     if (el.pair !== null && el.pair !== undefined) {
-      return state.groups?.find((g) => g.group === el.pair)?.round ?? state.round;
+      return sceneState.groups?.find((g) => g.group === el.pair)?.round ?? sceneState.round;
     }
-    return state.round;
+    return sceneState.round;
   });
-  const roundText = $derived(roundLabel(lang, state.scene.qualifying, roundOf));
+  const roundText = $derived(roundLabel(lang, sceneState.scene.qualifying, roundOf));
   const titleText = $derived(
-    (p.text as string | undefined) ?? state.scene.settings.title ?? state.matches?.[0]?.round_name ?? state.scene.name,
+    (p.text as string | undefined) ?? sceneState.scene.settings.title ?? sceneState.matches?.[0]?.round_name ?? sceneState.scene.name,
   );
   const hearts = $derived(view?.lives);
   // Name tag: a stable size keeps the rows for hearts and round even while
   // they are not shown, so the name neither grows nor moves (prop "rows").
   const reserveRows = $derived(mode !== "fit" && p.rows !== "collapse");
   const tagShare = $derived(hearts || reserveRows ? 0.34 : 0.55);
-  const showRound = $derived(!!p.show_round && !state.scene.qualifying);
+  const showRound = $derived(!!p.show_round && !sceneState.scene.qualifying);
   const nickPx = $derived(
     el.type === "name"
       ? sized(NAME_CHARS + (p.show_rank ? 2 : 0), name.length + (p.show_rank ? 2 : 0), el.w - 24, el.h, 0.55)
@@ -131,6 +132,14 @@
       : fitFont(rankChars, el.w / Math.max(1, views.length) - 48, el.h, 0.42, nes),
   );
 
+  // ---- board: "stretch" scales the playfield to fill the box (measured size).
+  const stretch = $derived(p.fit === "stretch");
+  let boardW = $state(0);
+  let boardH = $state(0);
+  const boardScale = $derived(
+    stretch && boardW > 0 && boardH > 0 ? `scale(${el.w / boardW}, ${el.h / boardH})` : null,
+  );
+
   const nextCell = $derived(
     Math.max(4, Math.floor(Math.min((el.w - 28) / 4, (el.h - 24 - nextLabelPx - (nextLabelPx ? 6 : 0)) / 2))),
   );
@@ -139,7 +148,9 @@
 <div class="w t-{el.type} a-{align}" class:nes data-type={el.type}>
   {#if el.type === "board" && view}
     <div class="center">
-      <Board {view} cell={boardCell(el.w, el.h)} {lang} showNext={false} />
+      <div class="fitbox" bind:clientWidth={boardW} bind:clientHeight={boardH} style:transform={boardScale}>
+        <Board {view} cell={boardCell(el.w, el.h)} {lang} showNext={false} />
+      </div>
     </div>
   {:else if el.type === "next" && view}
     <div class="{box} col next-box">
@@ -245,6 +256,10 @@
     display: flex;
     align-items: center;
     justify-content: center;
+  }
+  .fitbox {
+    flex: none;
+    transform-origin: center;
   }
   .a-center .col,
   .a-center .row {

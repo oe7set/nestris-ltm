@@ -72,7 +72,9 @@ class _Text(_Strict):
 
 
 class BoardProps(_Strict):
-    pass
+    # "contain" (None): the playfield keeps its proportions inside the box;
+    # "stretch": it fills the box (cells no longer square).
+    fit: Literal["contain", "stretch"] | None = None
 
 
 class NextProps(_Strict):

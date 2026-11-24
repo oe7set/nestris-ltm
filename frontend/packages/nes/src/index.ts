@@ -5,6 +5,7 @@ export { decodeNgf, gunzipIfNeeded, loadRecording, rowsFromCells, splitGames, ty
 export { Timeline } from "./replay";
 export {
   boardCell,
+  boardSize,
   fitFont,
   heartPixel,
   NAME_CHARS,

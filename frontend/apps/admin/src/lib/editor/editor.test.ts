@@ -57,6 +57,23 @@ describe("geometry", () => {
     expect(r.w / r.h).toBe(2);
   });
 
+  it("keeps the aspect ratio on edge handles, the other axis around its centre", () => {
+    const r = { x: 100, y: 100, w: 200, h: 100 };
+    expect(resize(r, "e", 100, 0, free, { keepRatio: true }).rect).toEqual({ x: 100, y: 75, w: 300, h: 150 });
+    expect(resize(r, "n", 0, -50, free, { keepRatio: true }).rect).toEqual({ x: 50, y: 50, w: 300, h: 150 });
+  });
+
+  it("lets the axis that changed more lead at a corner", () => {
+    const r = resize({ x: 0, y: 0, w: 200, h: 100 }, "se", 10, 100, free, { keepRatio: true }).rect;
+    expect(r).toEqual({ x: 0, y: 0, w: 400, h: 200 });
+  });
+
+  it("scales from the centre with Ctrl", () => {
+    const r = { x: 100, y: 100, w: 200, h: 100 };
+    expect(resize(r, "e", 20, 0, free, { fromCenter: true }).rect).toEqual({ x: 80, y: 100, w: 240, h: 100 });
+    expect(resize(r, "se", 20, 10, free, { fromCenter: true, keepRatio: true }).rect).toEqual({ x: 80, y: 90, w: 240, h: 120 });
+  });
+
   it("clamps to what the server accepts", () => {
     expect(clamp({ x: -5000, y: 0, w: 2, h: 50 })).toEqual({ x: -MARGIN_W, y: 0, w: MIN_SIZE, h: 50 });
     expect(snapToGrid(13)).toBe(16);

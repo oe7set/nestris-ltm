@@ -20,6 +20,11 @@ export function boardCell(w: number, h: number): number {
   return Math.max(4, Math.floor(Math.min((w - 8) / 10.5, (h - 8) / 20.5)));
 }
 
+/** Outer size of a playfield (well, padding, frame) drawn with ``cell`` px cells. */
+export function boardSize(cell: number): { w: number; h: number } {
+  return { w: Math.ceil(cell * 10.5 + 8), h: Math.ceil(cell * 20.5 + 8) };
+}
+
 /** Pixel size of the heart artwork (11x10 pixels per heart, 6 px gaps). */
 export function heartPixel(max: number, w: number, h: number): number {
   const n = Math.max(1, max);
@@ -81,4 +86,4 @@ export const STAT_CHARS: Record<string, number> = {
 };
 
 /** Reserved characters of a player name (mode "stable"). */
-export const NAME_CHARS = 12;
+export const NAME_CHARS = 10;

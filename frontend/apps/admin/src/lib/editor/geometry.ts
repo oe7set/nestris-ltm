@@ -106,10 +106,19 @@ function snapEdge(v: number, axis: "x" | "y", opts: SnapOptions, guides: Guide[]
   return snapToGrid(v, opts.grid ?? GRID);
 }
 
+export interface ResizeMode {
+  /** Keep the aspect ratio (corners and edges). */
+  keepRatio?: boolean;
+  /** Grow and shrink around the centre (the opposite edge moves too). */
+  fromCenter?: boolean;
+}
+
 /**
  * Resize a rectangle by dragging a handle by dx/dy. The dragged edges snap;
- * the opposite edges stay put; the size never drops below MIN_SIZE. With
- * ``keepRatio`` (Shift) corner handles keep the aspect ratio.
+ * the opposite edges stay put (or mirror the move ``fromCenter``); the size
+ * never drops below MIN_SIZE. ``keepRatio`` keeps the aspect ratio: at a
+ * corner the axis that changed more leads, at an edge the other axis
+ * follows around its centre. ``true`` alone means keepRatio (Shift).
  */
 export function resize(
   r: Rect,
@@ -117,26 +126,42 @@ export function resize(
   dx: number,
   dy: number,
   opts: SnapOptions,
-  keepRatio = false,
+  mode: boolean | ResizeMode = false,
 ): { rect: Rect; guides: Guide[] } {
+  const { keepRatio = false, fromCenter = false } = typeof mode === "boolean" ? { keepRatio: mode } : mode;
   const guides: Guide[] = [];
+  const cx = r.x + r.w / 2;
+  const cy = r.y + r.h / 2;
   let left = r.x;
   let top = r.y;
   let right = r.x + r.w;
   let bottom = r.y + r.h;
-  if (handle.includes("w")) left = Math.min(snapEdge(left + dx, "x", opts, guides), right - MIN_SIZE);
-  if (handle.includes("e")) right = Math.max(snapEdge(right + dx, "x", opts, guides), left + MIN_SIZE);
-  if (handle.includes("n")) top = Math.min(snapEdge(top + dy, "y", opts, guides), bottom - MIN_SIZE);
-  if (handle.includes("s")) bottom = Math.max(snapEdge(bottom + dy, "y", opts, guides), top + MIN_SIZE);
-  if (keepRatio && handle.length === 2 && r.w > 0 && r.h > 0) {
-    const ratio = r.w / r.h;
-    const w = right - left;
-    const h = Math.max(MIN_SIZE, Math.round(w / ratio));
-    if (handle.includes("n")) top = bottom - h;
-    else bottom = top + h;
-    guides.length = 0;
+  if (handle.includes("w")) left = snapEdge(left + dx, "x", opts, guides);
+  if (handle.includes("e")) right = snapEdge(right + dx, "x", opts, guides);
+  if (handle.includes("n")) top = snapEdge(top + dy, "y", opts, guides);
+  if (handle.includes("s")) bottom = snapEdge(bottom + dy, "y", opts, guides);
+  if (fromCenter) {
+    if (handle.includes("w")) right = 2 * cx - left;
+    if (handle.includes("e")) left = 2 * cx - right;
+    if (handle.includes("n")) bottom = 2 * cy - top;
+    if (handle.includes("s")) top = 2 * cy - bottom;
   }
-  return { rect: clamp({ x: left, y: top, w: right - left, h: bottom - top }), guides };
+  let w = Math.max(MIN_SIZE, right - left);
+  let h = Math.max(MIN_SIZE, bottom - top);
+  const horizontal = handle.includes("e") || handle.includes("w");
+  const vertical = handle.includes("n") || handle.includes("s");
+  if (keepRatio && r.w > 0 && r.h > 0) {
+    const ratio = r.w / r.h;
+    const widthLeads = horizontal && (!vertical || Math.abs(w / r.w - 1) >= Math.abs(h / r.h - 1));
+    if (widthLeads) h = Math.max(MIN_SIZE, w / ratio);
+    else w = Math.max(MIN_SIZE, h * ratio);
+    // Only the leading axis' snap is still true.
+    for (let i = guides.length - 1; i >= 0; i--) if (guides[i]!.axis === (widthLeads ? "y" : "x")) guides.splice(i, 1);
+  }
+  // Where the rectangle is anchored: the edge opposite the handle, else its centre.
+  const x = fromCenter || !horizontal ? cx - w / 2 : handle.includes("w") ? r.x + r.w - w : r.x;
+  const y = fromCenter || !vertical ? cy - h / 2 : handle.includes("n") ? r.y + r.h - h : r.y;
+  return { rect: clamp({ x, y, w, h }), guides };
 }
 
 /** Keep a rectangle within what the server accepts (stage plus margin). */

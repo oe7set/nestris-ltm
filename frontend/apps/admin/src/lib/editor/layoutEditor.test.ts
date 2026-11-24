@@ -34,6 +34,31 @@ describe("LayoutEditor", () => {
     expect(ed.canUndo || ed.canRedo).toBe(false);
   });
 
+  it("fits a playfield box to its content, centred, in one undo step", () => {
+    const ed = new LayoutEditor();
+    ed.load({ ...def(), elements: [{ id: "board-a", type: "board", slot: 0, x: 100, y: 100, w: 500, h: 696 }] });
+    ed.selected = ["board-a"];
+    ed.fitToContent();
+    const b = ed.def.elements[0]!;
+    expect(b.w).toBeLessThan(500);
+    expect(b.h).toBeLessThanOrEqual(696);
+    expect(Math.abs(b.x + b.w / 2 - 350)).toBeLessThanOrEqual(1); // still centred
+    ed.undo();
+    expect(ed.def.elements[0]!.w).toBe(500);
+  });
+
+  it("sets props of several elements in one undo step, per element if asked", () => {
+    const ed = new LayoutEditor();
+    ed.load(def());
+    ed.setProps((e) => ({ text_size: e.id === "board-a" ? 16 : 24 }), ["board-a", "board-b"]);
+    expect(ed.def.elements.map((e) => e.props?.text_size)).toEqual([16, 24]);
+    ed.setProps({ text_size: null }, ["board-a"]);
+    expect(ed.def.elements[0]!.props).toEqual({});
+    ed.undo();
+    ed.undo();
+    expect(ed.def.elements.every((e) => !e.props)).toBe(true);
+  });
+
   it("changes nothing while a fixed layout is shown", () => {
     const ed = new LayoutEditor();
     ed.load(def());

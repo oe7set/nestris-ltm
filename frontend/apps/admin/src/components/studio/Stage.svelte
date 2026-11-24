@@ -23,6 +23,7 @@
   import { DRAG_TYPE, rectOf, slotColor, type LayoutEditor } from "../../lib/editor/layoutEditor.svelte";
   import { updateElement } from "../../lib/editor/elements";
   import { guides as guideLines } from "../../lib/guides.svelte";
+  import { uiPrefs, type RatioMode } from "../../lib/uiPrefs.svelte";
   import { t, tDynamic } from "../../lib/i18n.svelte";
   import type { ElementType, LayoutDefinition, LayoutElement, PreviewConfig } from "../../lib/studio";
   import GuideOverlay from "../GuideOverlay.svelte";
@@ -42,6 +43,16 @@
   let { editor, preview, background = "checker", showGrid = $bindable(false), zoom = $bindable("fit"), live = false, notice }: Props = $props();
 
   const PAD = 24; // screen px around the stage in "fit"
+  /** Content with its own proportions: keeps the aspect ratio in "auto". */
+  const RATIO_TYPES: ReadonlySet<string> = new Set(["board", "next", "camera", "hearts"]);
+  const RATIO_MODES: RatioMode[] = ["auto", "keep", "free"];
+
+  /** Does a resize of ``el`` keep the aspect ratio (Shift inverts the setting)? */
+  function keepsRatio(el: LayoutElement | undefined, shift: boolean): boolean {
+    const mode = uiPrefs.studioRatio;
+    const base = mode === "keep" || (mode === "auto" && !!el && RATIO_TYPES.has(el.type));
+    return shift ? !base : base;
+  }
   const ZOOMS = [0.1, 0.25, 0.33, 0.5, 0.67, 0.75, 1, 1.25, 1.5, 2, 3];
 
   let viewW = $state(1200);
@@ -244,7 +255,7 @@
     const g = gesture;
     if (!g) return;
     const p = point(event);
-    const opts = { threshold: 6 / scale, grid: showGrid ? 8 : 1, free: event.altKey };
+    const opts = { threshold: 6 / scale, grid: showGrid ? 8 : 1, free: event.altKey || !uiPrefs.studioSnap };
     if (g.kind === "move") {
       const raw = { dx: p.x - g.px, dy: p.y - g.py };
       if (!g.moved && Math.hypot(raw.dx, raw.dy) * scale < 3) return; // a click, not a drag
@@ -261,7 +272,11 @@
       };
     } else if (g.kind === "resize") {
       g.moved = true;
-      const r = resize(g.rect, g.handle, p.x - g.px, p.y - g.py, { ...opts, targets: others(new Set([g.id])) }, event.shiftKey);
+      const el = g.start.elements.find((e) => e.id === g.id);
+      const r = resize(g.rect, g.handle, p.x - g.px, p.y - g.py, { ...opts, targets: others(new Set([g.id])) }, {
+        keepRatio: keepsRatio(el, event.shiftKey),
+        fromCenter: event.ctrlKey || event.metaKey,
+      });
       snapGuides = r.guides;
       editor.def = updateElement(g.start, g.id, r.rect);
     } else {
@@ -390,6 +405,14 @@
       <span class="mono">{t("studio.selection")} {selBox.x}, {selBox.y} · {selBox.w} × {selBox.h}</span>
     {/if}
     <span class="spacer"></span>
+    <div class="seg zoom" title={t("studio.ratio_hint")}>
+      {#each RATIO_MODES as m (m)}
+        <button class:on={uiPrefs.studioRatio === m} aria-pressed={uiPrefs.studioRatio === m} onclick={() => uiPrefs.setRatio(m)}>{tDynamic(`studio.ratio_${m}`, m)}</button>
+      {/each}
+    </div>
+    <label class="check snap" title={t("studio.snap_hint")}>
+      <input type="checkbox" checked={uiPrefs.studioSnap} onchange={() => uiPrefs.toggle("studioSnap")} /> {t("studio.snap")}
+    </label>
     <div class="seg zoom">
       <button class:on={zoom === "fit"} aria-pressed={zoom === "fit"} title={t("studio.zoom_fit_hint")} onclick={() => (zoom = "fit")}>{t("builder.zoom_fit")}</button>
       <button class:on={zoom === 0.5} aria-pressed={zoom === 0.5} onclick={() => setZoom(0.5)}>50 %</button>
@@ -462,6 +485,11 @@
   }
   .mono {
     font-variant-numeric: tabular-nums;
+  }
+  .snap {
+    display: flex;
+    gap: 4px;
+    align-items: center;
   }
   .zoom button {
     padding: 2px 10px;

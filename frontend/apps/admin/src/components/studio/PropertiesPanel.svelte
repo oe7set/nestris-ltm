@@ -12,6 +12,8 @@
 
   /** ``nes``: the scene style (text sizes on the 8 px grid). */
   let { editor, nes = true }: { editor: LayoutEditor; nes?: boolean } = $props();
+  /** W and H typed together keep the aspect ratio (chain button). */
+  let linkWH = $state(false);
   const textSized = $derived(editor.sel.length > 0 && editor.sel.every((e) => TEXT_SIZE_TYPES.has(e.type)));
 
   const ALIGN_MODES: { mode: AlignMode; icon: string }[] = [
@@ -63,11 +65,28 @@
       {#each GEOM as g (g.f)}
         <label>
           <span>{g.label === "X" || g.label === "Y" ? g.label : t(`studio.${g.label}`)}</span>
-          <input type="number" step="1" value={el[g.f]} disabled={el.locked} onchange={(e) => editor.setGeom(el, g.f, e.currentTarget.value)} />
+          <input type="number" step="1" value={el[g.f]} disabled={el.locked} onchange={(e) => editor.setGeom(el, g.f, e.currentTarget.value, linkWH)} />
           <span class="unit">px</span>
         </label>
       {/each}
+      <button
+        class="chain"
+        class:on={linkWH}
+        aria-pressed={linkWH}
+        title={t("studio.link_wh")}
+        aria-label={t("studio.link_wh")}
+        onclick={() => (linkWH = !linkWH)}>{linkWH ? "🔗" : "⛓"}</button
+      >
     </div>
+    {#if el.type === "board"}
+      <label class="field">{t("studio.board_fit")}
+        <select value={p.fit ?? "contain"} onchange={(e) => editor.setProp(el, "fit", e.currentTarget.value === "stretch" ? "stretch" : null)}>
+          <option value="contain">{t("studio.board_contain")}</option>
+          <option value="stretch">{t("studio.board_stretch")}</option>
+        </select>
+      </label>
+      <button class="small" disabled={el.locked} title={t("studio.fit_content_hint")} onclick={() => editor.fitToContent()}>{t("studio.fit_content")}</button>
+    {/if}
     <div class="row wrap">
       <button class="small" disabled={el.locked} onclick={() => editor.centreSelected("x")}>{t("studio.centre_h")}</button>
       <button class="small" disabled={el.locked} onclick={() => editor.centreSelected("y")}>{t("studio.centre_v")}</button>
@@ -252,6 +271,12 @@
     align-items: center;
     gap: 6px;
     font-size: 13px;
+  }
+  .chain {
+    grid-column: 1 / -1;
+    justify-self: end;
+    padding: 0 8px;
+    font-size: 12px;
   }
   .geom input {
     min-width: 0;
