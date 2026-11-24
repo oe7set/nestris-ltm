@@ -2,7 +2,7 @@
 // formulas in @nestris-ltm/nes), for the "keep this size" button of the
 // properties panel: it turns the stable size into a fixed one.
 
-import { fitFont, NAME_CHARS, STAT_CHARS, textPx } from "@nestris-ltm/nes";
+import { fitFont, heartPixel, NAME_CHARS, STAT_CHARS, textPx } from "@nestris-ltm/nes";
 import type { LayoutElement } from "../studio";
 
 /** Element types whose text size can be set (props text_mode / text_size / chars). */
@@ -38,8 +38,14 @@ export function stableTextPx(e: LayoutElement, nes: boolean): number {
       return at(e.w - 16, p.show_label !== false ? 0.5 : 0.7);
     case "name":
       return at(e.w - 24, 0.55);
-    case "nametag":
-      return at(e.w - 24, p.rows === "collapse" ? 0.55 : 0.34);
+    case "nametag": {
+      // As the overlay: the name gets the room the hearts (and round) row leave.
+      const hearts = p.rows === "collapse" ? 0 : heartPixel(3, e.w * 0.6, e.h * 0.32) * 10;
+      const round = p.show_round ? 18 : 0;
+      const rows = 1 + (hearts ? 1 : 0) + (round ? 1 : 0);
+      const room = e.h - 20 - hearts - round - 4 * (rows - 1);
+      return at(e.w - 24, Math.max(0.1, Math.min(0.55, room / 1.15 / e.h)));
+    }
     case "title":
       return at(e.w - 24, 0.5);
     case "round":

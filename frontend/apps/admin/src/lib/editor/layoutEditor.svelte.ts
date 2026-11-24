@@ -7,7 +7,7 @@
 import { boardCell, boardSize } from "@nestris-ltm/nes";
 import { confirmAsync } from "../confirm.svelte";
 import { t } from "../i18n.svelte";
-import type { ElementType, LayoutDefinition, LayoutElement } from "../studio";
+import type { ElementType, LayoutDefinition, LayoutElement, SlotLink } from "../studio";
 import { toasts } from "../toast.svelte";
 import {
   addElements,
@@ -26,6 +26,7 @@ import {
 } from "./elements";
 import { align as alignRects, bounds, clamp, clampMove, distribute, type AlignMode, type Rect } from "./geometry";
 import { History } from "./history";
+import { applyLinks, applyPreset, linkOrigins, presetReplaces, removeLink, replacedBy, setLink, type LinkPreset } from "./links";
 import { mirrorSlot } from "./mirror";
 
 // Copy/paste works across layouts while the admin page stays open.
@@ -64,6 +65,8 @@ export class LayoutEditor {
       .map(({ e }) => e),
   );
   readonly sel = $derived(this.def.elements.filter((e) => this.selected.includes(e.id)));
+  /** Copies of linked slots -> their master element (copies are not edited directly). */
+  readonly origins = $derived(linkOrigins(this.def));
   readonly one = $derived(this.sel.length === 1 ? this.sel[0]! : null);
   readonly problems = $derived(localProblems(this.def));
   readonly slotNumbers = $derived(Array.from({ length: this.def.slots }, (_, i) => i));
@@ -84,9 +87,15 @@ export class LayoutEditor {
   /** Every edit goes through here: one undo step each (``key`` merges steps). */
   apply(next: LayoutDefinition, key: string | null = null): void {
     if (next === this.def || !this.editable) return;
+    next = applyLinks(next);
     this.#history.record(this.def, key);
     this.def = next;
     this.#rev++;
+  }
+
+  /** A pointer gesture shows a change live (linked slots follow); see commitGesture. */
+  live(next: LayoutDefinition): void {
+    this.def = applyLinks(next);
   }
 
   /** A pointer gesture changed ``def`` live; record where it started. */
@@ -120,13 +129,19 @@ export class LayoutEditor {
 
   // ---- selection
 
+  /** The element a click on ``id`` edits: a linked copy stands for its master. */
+  master(id: string): string {
+    return this.origins.get(id) ?? id;
+  }
+
   select(id: string, additive = false): void {
+    id = this.master(id);
     if (!additive) this.selected = [id];
     else this.selected = this.selected.includes(id) ? this.selected.filter((s) => s !== id) : [...this.selected, id];
   }
 
   selectAll(): void {
-    this.selected = this.def.elements.filter((e) => !e.locked).map((e) => e.id);
+    this.selected = this.def.elements.filter((e) => !e.locked && !this.origins.has(e.id)).map((e) => e.id);
   }
 
   // ---- elements
@@ -320,6 +335,28 @@ export class LayoutEditor {
     if (target > 0 && !(await confirmAsync({ title: t("builder.mirror_confirm", { n: target, to: to + 1 }), danger: true }))) return;
     this.apply(mirrorSlot(this.def, from, to).def);
     this.prune();
+  }
+
+  // ---- linked slots
+
+  /** Link a slot (or pair) to a master; asks before replacing its elements. */
+  async link(l: SlotLink): Promise<void> {
+    const n = replacedBy(this.def, l);
+    if (n > 0 && !(await confirmAsync({ title: t("studio.link_confirm", { n, to: l.to + 1 }), danger: true }))) return;
+    this.apply(setLink(this.def, l));
+    this.prune();
+  }
+
+  async linkPreset(preset: LinkPreset): Promise<void> {
+    const n = presetReplaces(this.def, preset);
+    if (n > 0 && !(await confirmAsync({ title: t("studio.preset_confirm", { n }), danger: true }))) return;
+    this.apply(applyPreset(this.def, preset));
+    this.prune();
+  }
+
+  /** Remove a link; the copies stay as ordinary elements. */
+  unlink(index: number): void {
+    this.apply(removeLink(this.def, index));
   }
 
   // ---- keyboard (shared shortcuts; the page adds save)

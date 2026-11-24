@@ -201,8 +201,10 @@
     }
   }
 
-  function onBoxDown(event: PointerEvent, el: LayoutElement): void {
+  function onBoxDown(event: PointerEvent, clicked: LayoutElement): void {
     if (startPan(event)) return;
+    // A copy of a linked slot is edited through its master.
+    const el = editor.def.elements.find((e) => e.id === editor.master(clicked.id)) ?? clicked;
     if (event.button !== 0 || el.locked) return; // locked: the click goes through (marquee)
     event.stopPropagation();
     capture(event);
@@ -263,13 +265,13 @@
       const snapped = snapMove(g.box, raw.dx, raw.dy, { ...opts, targets: others(new Set(g.origin.keys())) });
       const d = clampMove(g.box, snapped.dx, snapped.dy);
       snapGuides = snapped.guides;
-      editor.def = {
+      editor.live({
         ...g.start,
         elements: g.start.elements.map((e) => {
           const o = g.origin.get(e.id);
           return o ? { ...e, x: o.x + d.dx, y: o.y + d.dy } : e;
         }),
-      };
+      });
     } else if (g.kind === "resize") {
       g.moved = true;
       const el = g.start.elements.find((e) => e.id === g.id);
@@ -278,10 +280,10 @@
         fromCenter: event.ctrlKey || event.metaKey,
       });
       snapGuides = r.guides;
-      editor.def = updateElement(g.start, g.id, r.rect);
+      editor.live(updateElement(g.start, g.id, r.rect));
     } else {
       marquee = fromPoints(g.px, g.py, p.x, p.y);
-      const hit = marquee.w > 2 || marquee.h > 2 ? inMarquee(editor.def, marquee) : [];
+      const hit = marquee.w > 2 || marquee.h > 2 ? inMarquee(editor.def, marquee).map((id) => editor.master(id)) : [];
       editor.selected = [...new Set([...g.base, ...hit])];
     }
   }
@@ -309,6 +311,11 @@
   }
 
   function boxLabel(e: LayoutElement): string {
+    if (editor.origins.has(e.id)) return `⛓ ${boxLabelOf(e)}`;
+    return boxLabelOf(e);
+  }
+
+  function boxLabelOf(e: LayoutElement): string {
     let label = tDynamic(`builder.type_${e.type}`, e.type);
     if (e.type === "stat") label = tDynamic(`builder.field_${String(e.props?.field ?? "score")}`, label);
     if (e.slot !== undefined && e.slot !== null) label += ` · S${e.slot + 1}`;
@@ -366,6 +373,7 @@
                 class:sel={isSel}
                 class:locked={el.locked}
                 class:ghost={el.hidden}
+                class:linked={editor.origins.has(el.id)}
                 class:err={editor.errorIds.includes(el.id) || editor.problems.has(el.id)}
                 style:left="{el.x}px"
                 style:top="{el.y}px"
@@ -538,6 +546,11 @@
   .box.locked {
     cursor: default;
     outline-style: dotted;
+  }
+  /* Copy of a linked slot: follows its master, clicking selects the master. */
+  .box.linked {
+    outline-style: dotted;
+    cursor: pointer;
   }
   .box.ghost {
     opacity: 0.6;

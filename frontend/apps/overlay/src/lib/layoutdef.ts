@@ -33,6 +33,8 @@ export interface LayoutDefinition {
   slots: number;
   pairs: [number, number][];
   elements: LayoutElement[];
+  /** Linked slots: editor information only, the elements are already expanded. */
+  links?: unknown[];
 }
 
 export const CUSTOM_PREFIX = "custom:";

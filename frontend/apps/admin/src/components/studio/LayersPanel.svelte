@@ -70,9 +70,9 @@
     {#each layers as el (el.id)}
       <li class:on={editor.selected.includes(el.id)} class:err={editor.errorIds.includes(el.id) || editor.problems.has(el.id)}>
         <button class="layer-name" style:--c={slotColor(el)} class:dim={el.hidden} onclick={(e) => editor.select(el.id, e.shiftKey || e.ctrlKey)}>
-          <span class="dot"></span>{label(el)}
+          <span class="dot"></span>{#if editor.origins.has(el.id)}<span class="chain" title={t("studio.linked_copy")}>⛓</span>{/if}{label(el)}
         </button>
-        {#if editor.editable}
+        {#if editor.editable && !editor.origins.has(el.id)}
           <button class="icon" class:off={!el.hidden} title={t("builder.hidden")} aria-label={t("builder.hidden")} aria-pressed={!!el.hidden} onclick={() => editor.patch(el.id, { hidden: !el.hidden })}>
             <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5Z" fill="none" stroke="currentColor" stroke-width="1.4" /><circle cx="8" cy="8" r="2.2" fill="currentColor" />{#if el.hidden}<path d="M2 14 14 2" stroke="currentColor" stroke-width="1.6" />{/if}</svg>
           </button>
@@ -115,6 +115,10 @@
   .inline select {
     flex: 1;
     min-width: 0;
+  }
+  .chain {
+    margin-right: 4px;
+    opacity: 0.8;
   }
   .group {
     margin-top: 4px;

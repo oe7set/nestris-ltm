@@ -109,7 +109,7 @@ class NametagProps(_Text):
     align: Align = "center"
     show_round: bool = False
     frame: FrameKind | None = None
-    # "reserve" (None): rows for hearts/round keep their room while hidden
+    # "reserve" (None): the hearts row keeps its room while there are none
     # (stable/fixed text); "collapse": the name grows into the free room.
     rows: Literal["reserve", "collapse"] | None = None
 
@@ -221,6 +221,27 @@ class Element(_Strict):
         return self
 
 
+MAX_LINKS = 16
+
+
+class SlotLink(_Strict):
+    """A linked slot (or pair): its elements are copies of ``from``'s.
+
+    Editor information only (admin ``lib/editor/links.ts``): the copies are
+    stored as ordinary elements, the overlay never reads this.
+    """
+
+    from_: int = Field(alias="from", ge=0, lt=MAX_SLOTS)
+    to: int = Field(ge=0, lt=MAX_SLOTS)
+    pair: bool = False
+    flip_x: bool = False
+    flip_y: bool = False
+    dx: int = Field(default=0, ge=-CANVAS_W, le=CANVAS_W)
+    dy: int = Field(default=0, ge=-CANVAS_H, le=CANVAS_H)
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+
 class Canvas(_Strict):
     w: Literal[1920] = 1920
     h: Literal[1080] = 1080
@@ -232,6 +253,7 @@ class LayoutDefinition(_Strict):
     slots: int = Field(ge=1, le=MAX_SLOTS)
     pairs: list[tuple[int, int]] = Field(default_factory=list, max_length=MAX_PAIRS)
     elements: list[Element] = Field(default_factory=list, max_length=MAX_ELEMENTS)
+    links: list[SlotLink] | None = Field(default=None, max_length=MAX_LINKS)
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
@@ -260,11 +282,32 @@ class LayoutDefinition(_Strict):
                 raise ValueError(f"elements[{i}]: slot {e.slot + 1} does not exist")
             if e.pair is not None and e.pair >= len(self.pairs):
                 raise ValueError(f"elements[{i}]: pair {e.pair + 1} does not exist")
+        targets: set[tuple[bool, int]] = set()
+        for link in self.links or []:
+            size = len(self.pairs) if link.pair else self.slots
+            if link.from_ == link.to or link.from_ >= size or link.to >= size:
+                raise ValueError(f"link {link.from_ + 1} -> {link.to + 1} is not possible here")
+            if (link.pair, link.to) in targets:
+                raise ValueError(f"link target {link.to + 1} has two masters")
+            targets.add((link.pair, link.to))
+        for link in self.links or []:
+            if (link.pair, link.from_) in targets:
+                raise ValueError(f"link master {link.from_ + 1} is itself linked (no chains)")
         return self
 
     def dump(self) -> dict[str, Any]:
         """JSON-shaped (pairs as lists), exactly what the database stores."""
-        return self.model_dump(by_alias=True, mode="json")
+        out = self.model_dump(by_alias=True, mode="json")
+        if self.links is None:
+            del out["links"]  # older definitions stay byte for byte the same
+        else:
+            # Only what differs from a plain copy, like the editor writes it.
+            defaults = {"pair": False, "flip_x": False, "flip_y": False, "dx": 0, "dy": 0}
+            out["links"] = [
+                {k: v for k, v in link.items() if defaults.get(k) != v}
+                for link in out["links"]
+            ]
+        return out
 
 
 def migrate(raw: Any) -> dict[str, Any]:

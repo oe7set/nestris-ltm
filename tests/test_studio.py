@@ -635,3 +635,20 @@ async def test_adapt_reset_and_scene_from_template(
     both = await client.post("/api/scenes", json={"slug": "z", "name": "Z", "layout": "1v1",
                                                   "template": "1v1"})  # fmt: skip
     assert both.status_code == 422
+
+
+def test_links_are_optional_checked_and_dumped_lean() -> None:
+    data = copy.deepcopy(VALID)
+    assert "links" not in ol.parse(data).dump()
+    data["links"] = [{"from": 0, "to": 1, "flip_x": True}]
+    assert ol.parse(data).dump()["links"] == [{"from": 0, "to": 1, "flip_x": True}]
+    for bad, message in (
+        ([{"from": 0, "to": 0}], "not possible"),
+        ([{"from": 0, "to": 5}], "not possible"),
+        ([{"from": 0, "to": 1}, {"from": 0, "to": 1, "dy": 8}], "two masters"),
+        ([{"from": 0, "to": 1, "pair": True}], "not possible"),  # only one pair
+        ([{"from": 0, "to": 1, "glow": True}], "glow"),
+    ):
+        data["links"] = bad
+        with pytest.raises(ValueError, match=message):
+            ol.parse(data)

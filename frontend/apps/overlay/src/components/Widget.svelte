@@ -103,11 +103,21 @@
     (p.text as string | undefined) ?? sceneState.scene.settings.title ?? sceneState.matches?.[0]?.round_name ?? sceneState.scene.name,
   );
   const hearts = $derived(view?.lives);
-  // Name tag: a stable size keeps the rows for hearts and round even while
-  // they are not shown, so the name neither grows nor moves (prop "rows").
+  // Name tag: a stable size keeps the row of the hearts even while there are
+  // none, so the name neither grows nor moves (prop "rows").
   const reserveRows = $derived(mode !== "fit" && p.rows !== "collapse");
-  const tagShare = $derived(hearts || reserveRows ? 0.34 : 0.55);
   const showRound = $derived(!!p.show_round && !sceneState.scene.qualifying);
+  const heartPx = $derived(heartPixel(hearts?.max ?? 3, el.w * 0.6, el.h * 0.32));
+  // The name gets what the box leaves after frame, padding and the other
+  // rows, so nothing is cut off at the top or bottom.
+  const tagShare = $derived.by((): number => {
+    const heartsRow = hearts || reserveRows ? heartPx * 10 : 0;
+    // The round row depends on the scene (not on the game): no reserve.
+    const roundRow = showRound ? 18 : 0;
+    const rows = 1 + (heartsRow ? 1 : 0) + (roundRow ? 1 : 0);
+    const room = el.h - 20 - heartsRow - roundRow - 4 * (rows - 1);
+    return Math.max(0.1, Math.min(0.55, room / 1.15 / el.h));
+  });
   const nickPx = $derived(
     el.type === "name"
       ? sized(NAME_CHARS + (p.show_rank ? 2 : 0), name.length + (p.show_rank ? 2 : 0), el.w - 24, el.h, 0.55)
@@ -180,13 +190,13 @@
       <span class="nick" style:font-size="{nickPx}px">{name}</span>
       {#if hearts}
         <span class="row">
-          <Hearts current={hearts.current} max={hearts.max} size={heartPixel(hearts.max, el.w * 0.6, el.h * 0.32)} />
+          <Hearts current={hearts.current} max={hearts.max} size={heartPx} />
           {#if view?.match_result}<span class="result {view.match_result}">{text(lang, view.match_result === "won" ? "winner" : "eliminated")}</span>{/if}
         </span>
       {:else if reserveRows}
-        <span class="row keep" style:height="{heartPixel(3, el.w * 0.6, el.h * 0.32) * 10}px"></span>
+        <span class="row keep" style:height="{heartPx * 10}px"></span>
       {/if}
-      {#if showRound}<span class="small">{roundText}</span>{:else if p.show_round && reserveRows}<span class="small keep">{roundText}</span>{/if}
+      {#if showRound}<span class="small">{roundText}</span>{/if}
     </div>
   {:else if el.type === "camera"}
     <Camera width={el.w} height={el.h} framed={p.framed !== false} />
@@ -306,6 +316,10 @@
     overflow: hidden;
     text-overflow: ellipsis;
     line-height: 1.1;
+  }
+  /* Name tag rows take their own height; the name gets the rest. */
+  .nametag > .row {
+    flex: none;
   }
   .lost .nick {
     opacity: 0.55;

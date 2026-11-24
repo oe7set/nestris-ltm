@@ -123,12 +123,28 @@ export interface LayoutElement {
   props?: Record<string, unknown>;
 }
 
+/**
+ * A linked slot (or pair, ``pair: true``): its elements are copies of slot
+ * ``from``'s, mirrored at the stage's centre lines, then moved by dx/dy
+ * (editor only: lib/editor/links.ts; core/overlay_layout.py checks it).
+ */
+export interface SlotLink {
+  from: number;
+  to: number;
+  pair?: boolean;
+  flip_x?: boolean;
+  flip_y?: boolean;
+  dx?: number;
+  dy?: number;
+}
+
 export interface LayoutDefinition {
   schema: 1;
   canvas?: { w: number; h: number };
   slots: number;
   pairs: [number, number][];
   elements: LayoutElement[];
+  links?: SlotLink[];
 }
 
 /** What the overlay preview iframe needs (overlay lib/host.svelte.ts). */
