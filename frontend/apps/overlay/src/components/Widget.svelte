@@ -43,8 +43,14 @@
         ? (view?.to_advance ? text(lang, "to_advance") : text(lang, "behind")).toUpperCase()
         : hud(lang, field as TextKey)),
   );
-  // Without a panel of its own (inside a frame element, like the built-in stats panels).
-  const bare = $derived(p.boxed === false);
+  // The box behind the content: "none" sits inside a frame element (like the
+  // built-in stats panels); an older ``boxed: false`` means the same.
+  const frame = $derived(
+    (p.frame as string | undefined) ?? (el.type === "frame" ? (p.style === "panel" ? "panel" : "nes") : p.boxed === false ? "none" : "nes"),
+  );
+  // Classes of the box: never the element type, so no style meant for the
+  // built-in layouts (".next", ".versus", ".ranking" ...) reaches it.
+  const box = $derived(`wbox f-${frame}`);
   const gap = $derived(view?.vs_partner);
   const statValue = $derived.by((): string => {
     const v = view;
@@ -106,27 +112,27 @@
   );
 </script>
 
-<div class="w {el.type} a-{align}" class:nes class:bare data-type={el.type}>
+<div class="w t-{el.type} a-{align}" class:nes data-type={el.type}>
   {#if el.type === "board" && view}
     <div class="center">
       <Board {view} cell={boardCell(el.w, el.h)} {lang} showNext={false} />
     </div>
   {:else if el.type === "next" && view}
-    <div class="wbox col next">
+    <div class="{box} col next-box">
       {#if nextLabelPx}
         <span class="label" style:font-size="{nextLabelPx}px">{hud(lang, "next")}</span>
       {/if}
       <NextPiece piece={view.next_piece} level={view.level} cell={nextCell} />
     </div>
   {:else if el.type === "stat"}
-    <div class="wbox col stat" class:ahead={field === "gap" && (gap?.points ?? 0) < 0} class:behind={field === "gap" && (gap?.points ?? 0) > 0}>
+    <div class="{box} col stat" class:ahead={field === "gap" && (gap?.points ?? 0) < 0} class:behind={field === "gap" && (gap?.points ?? 0) > 0}>
       {#if showLabel}<span class="label" style:font-size="{labelPx}px">{statLabel}</span>{/if}
       <b class="value" style:font-size="{valuePx}px" style:color={(p.color as string | undefined) ?? null}>
         {#if field === "score" && view}<Num value={view.score} />{:else}{statValue}{/if}
       </b>
     </div>
   {:else if el.type === "name"}
-    <div class="wbox row name">
+    <div class="{box} row name">
       {#if p.show_rank && view?.rank}<span class="rank" class:leader={view.rank === 1}>{view.rank}</span>{/if}
       <span class="nick" style:font-size="{fitFont(name.length + (p.show_rank ? 2 : 0), el.w - 24, el.h, 0.55, nes)}px">{name}</span>
     </div>
@@ -135,7 +141,7 @@
       <div class="row hearts-row"><Hearts current={hearts.current} max={hearts.max} size={heartPixel(hearts.max, el.w, el.h)} align={align === "right" ? "right" : "left"} /></div>
     {/if}
   {:else if el.type === "nametag"}
-    <div class="wbox col nametag" class:won={view?.match_result === "won"} class:lost={view?.match_result === "lost"}>
+    <div class="{box} col nametag" class:won={view?.match_result === "won"} class:lost={view?.match_result === "lost"}>
       <span class="nick" style:font-size="{fitFont(name.length, el.w - 24, el.h, hearts ? 0.34 : 0.55, nes)}px">{name}</span>
       {#if hearts}
         <span class="row">
@@ -152,23 +158,23 @@
       <Versus a={views[pair[0]]!} b={views[pair[1]]!} {lang} />
     </div>
   {:else if el.type === "diff_graph" && pair}
-    <div class="wbox graph">
+    <div class="{box} graph">
       <DiffGraph a={scene.history[String(pair[0])]} b={scene.history[String(pair[1])]} width={Math.max(10, el.w - 12)} height={Math.max(10, el.h - 12)} />
     </div>
   {:else if el.type === "title"}
-    <div class="wbox row title"><span style:font-size="{fitFont(titleText.length, el.w - 24, el.h, 0.5, nes)}px">{titleText}</span></div>
+    <div class="{box} row title"><span style:font-size="{fitFont(titleText.length, el.w - 24, el.h, 0.5, nes)}px">{titleText}</span></div>
   {:else if el.type === "round"}
-    <div class="wbox row round"><span style:font-size="{fitFont(roundText.length, el.w - 24, el.h, 0.45, nes)}px">{roundText}</span></div>
+    <div class="{box} row round"><span style:font-size="{fitFont(roundText.length, el.w - 24, el.h, 0.45, nes)}px">{roundText}</span></div>
   {:else if el.type === "text"}
     <div class="row free" style:font-size="{nes ? Math.max(8, Math.floor(Number(p.size ?? 24) / 8) * 8) : Number(p.size ?? 24)}px" style:color={(p.color as string | undefined) ?? null}>
       {String(p.text ?? "")}
     </div>
   {:else if el.type === "frame"}
-    <div class="wbox" class:panel={p.style === "panel"}></div>
+    <div class={box}></div>
   {:else if el.type === "ranking"}
-    <div class="ranking" class:column={p.direction === "column"} style:font-size="{rankPx}px">
+    <div class="rank-list" class:column={p.direction === "column"} style:font-size="{rankPx}px">
       {#each ranked as v, i (v.slot)}
-        <span class="entry {v.outcome ?? ''}"><b>{i + 1}.</b> {v.name ?? `Slot ${v.slot + 1}`} {#if showPoints}<span class="pts">{fmt(v.score)}</span>{/if}</span>
+        <span class="entry f-{frame === "nes" ? "entry" : frame} {v.outcome ?? ''}"><b>{i + 1}.</b> {v.name ?? `Slot ${v.slot + 1}`} {#if showPoints}<span class="pts">{fmt(v.score)}</span>{/if}</span>
       {/each}
     </div>
   {/if}
@@ -215,8 +221,7 @@
     justify-content: center;
   }
   .a-center .col,
-  .a-center .row,
-  .a-center.nametag .col {
+  .a-center .row {
     align-items: center;
     justify-content: center;
     text-align: center;
@@ -229,7 +234,7 @@
     justify-content: flex-end;
   }
   .nametag,
-  .next {
+  .next-box {
     align-items: center;
     text-align: center;
   }
@@ -317,14 +322,27 @@
     justify-content: flex-end;
     text-align: right;
   }
-  .panel {
-    background: var(--panel);
+  .wbox.f-panel {
+    border-width: 1px;
+  }
+  /* No box at all: the value sits inside a frame element. */
+  .wbox.f-none {
+    background: none;
+    border: 0;
+    box-shadow: none;
+    padding: 0 2px;
   }
   .graph {
     padding: 4px;
     display: flex;
     align-items: center;
     justify-content: center;
+  }
+  /* The box is the frame; the graph's own frame (built-in layouts) would double it. */
+  .graph :global(svg) {
+    border: 0;
+    border-radius: 0;
+    background: none;
   }
   .fit-versus {
     width: var(--w);
@@ -336,13 +354,7 @@
   .hearts-row {
     justify-content: flex-start;
   }
-  .bare .wbox {
-    background: none;
-    border: 0;
-    box-shadow: none;
-    padding: 0 2px;
-  }
-  .ranking {
+  .rank-list {
     flex: 1;
     display: flex;
     justify-content: center;
@@ -351,13 +363,13 @@
     min-width: 0;
     padding: 4px 10px;
   }
-  .a-left .ranking {
+  .a-left .rank-list {
     justify-content: flex-start;
   }
-  .a-right .ranking {
+  .a-right .rank-list {
     justify-content: flex-end;
   }
-  .ranking.column {
+  .rank-list.column {
     flex-direction: column;
     align-items: stretch;
     gap: 8px;
@@ -370,6 +382,13 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  .entry.f-panel {
+    border-width: 1px;
+  }
+  .entry.f-none {
+    background: none;
+    border-color: transparent;
   }
   .entry.advanced,
   .entry.winner {

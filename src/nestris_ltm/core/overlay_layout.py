@@ -28,6 +28,10 @@ MAX_ELEMENTS = 300
 MARGIN_W, MARGIN_H = CANVAS_W // 10, CANVAS_H // 10
 MIN_SIZE = 8
 HEX_COLOR = r"^#[0-9a-fA-F]{6}$"
+# The box behind an element's content: "none" (bare, e.g. inside a frame
+# element), "nes" (the standard frame of the style) or "panel" (thin line).
+# None = the standard frame, or none when an older ``boxed`` says False.
+FrameKind = Literal["none", "nes", "panel"]
 ID_PATTERN = r"^[A-Za-z0-9_-]{1,32}$"
 
 Align = Literal["left", "center", "right"]
@@ -59,6 +63,7 @@ class BoardProps(_Strict):
 
 class NextProps(_Strict):
     show_label: bool = True
+    frame: FrameKind | None = None
 
 
 class StatProps(_Strict):
@@ -70,12 +75,14 @@ class StatProps(_Strict):
     # False: no own panel (the value sits inside a frame element, like the
     # stats panel of the built-in layouts).
     boxed: bool | None = None  # None = True (keeps older definitions unchanged)
+    frame: FrameKind | None = None  # wins over ``boxed``
 
 
 class NameProps(_Strict):
     align: Align = "left"
     show_rank: bool = False
     boxed: bool | None = None  # None = True (keeps older definitions unchanged)
+    frame: FrameKind | None = None  # wins over ``boxed``
 
 
 class HeartsProps(_Strict):
@@ -85,23 +92,30 @@ class HeartsProps(_Strict):
 class NametagProps(_Strict):
     align: Align = "center"
     show_round: bool = False
+    frame: FrameKind | None = None
 
 
 class CameraProps(_Strict):
     framed: bool = True
 
 
-class PairProps(_Strict):
+class VersusProps(_Strict):
     pass
+
+
+class DiffGraphProps(_Strict):
+    frame: FrameKind | None = None
 
 
 class TitleProps(_Strict):
     text: str | None = Field(default=None, max_length=64)  # None = scene title / round name
     align: Align = "center"
+    frame: FrameKind | None = None
 
 
 class RoundProps(_Strict):
     align: Align = "center"
+    frame: FrameKind | None = None
 
 
 class TextProps(_Strict):
@@ -120,6 +134,7 @@ class RankingProps(_Strict):
     direction: Literal["row", "column"] = "row"
     align: Align = "center"
     show_points: bool | None = None  # None = True
+    frame: FrameKind | None = None  # of every entry
 
 
 PROPS: dict[str, type[_Strict]] = {
@@ -130,8 +145,8 @@ PROPS: dict[str, type[_Strict]] = {
     "hearts": HeartsProps,
     "nametag": NametagProps,
     "camera": CameraProps,
-    "versus": PairProps,
-    "diff_graph": PairProps,
+    "versus": VersusProps,
+    "diff_graph": DiffGraphProps,
     "title": TitleProps,
     "round": RoundProps,
     "text": TextProps,

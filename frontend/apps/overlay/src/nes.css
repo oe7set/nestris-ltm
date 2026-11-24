@@ -201,8 +201,9 @@
   stroke: #fcfcfc;
 }
 
-/* ---- own layouts (layout builder widgets) */
-.stage.nes .wbox {
+/* ---- own layouts (layout builder widgets): only the box classes of
+   Widget.svelte, so a widget never picks up a built-in layout's style */
+.stage.nes .w > .wbox.f-nes {
   background: #000;
   border: 4px solid var(--frame);
   border-radius: 0;
@@ -211,7 +212,12 @@
     inset 0 0 0 4px var(--nes-inner),
     0 0 0 2px #000;
 }
-.stage.nes .wbox.panel {
+.stage.nes .w > .wbox.f-panel {
+  background: #000;
+  border: 2px solid var(--frame);
+  border-radius: 0;
   box-shadow: none;
-  border-width: 2px;
+}
+.stage.nes .w .entry {
+  border-radius: 0;
 }

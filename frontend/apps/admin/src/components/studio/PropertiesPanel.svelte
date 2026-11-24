@@ -6,6 +6,7 @@
   import type { AlignMode } from "../../lib/editor/geometry";
   import type { LayoutEditor } from "../../lib/editor/layoutEditor.svelte";
   import { t, tDynamic } from "../../lib/i18n.svelte";
+  import type { LayoutElement } from "../../lib/studio";
 
   let { editor }: { editor: LayoutEditor } = $props();
 
@@ -24,6 +25,22 @@
     { f: "h", label: "builder_h" },
   ] as const;
   const TEXT_ALIGN_TYPES = ["stat", "name", "hearts", "nametag", "title", "round", "text", "ranking"];
+  /** Types with a box behind their content (prop "frame"). */
+  const FRAME_TYPES = ["stat", "name", "nametag", "next", "title", "round", "diff_graph", "ranking"];
+
+  function frameOf(el: LayoutElement): string {
+    const p = el.props ?? {};
+    return typeof p.frame === "string" ? p.frame : p.boxed === false ? "none" : "nes";
+  }
+
+  /** One undo step; the older "boxed" goes away once "frame" says it. */
+  function setFrame(el: LayoutElement, value: string): void {
+    const props: Record<string, unknown> = { ...(el.props ?? {}) };
+    delete props.boxed;
+    if (value === "nes") delete props.frame;
+    else props.frame = value;
+    editor.patch(el.id, { props });
+  }
 </script>
 
 <section class="panel block">
@@ -82,8 +99,12 @@
       </label>
       <label class="check"><input type="checkbox" checked={p.show_label !== false} onchange={(e) => editor.setProp(el, "show_label", e.currentTarget.checked)} /> {t("builder.show_label")}</label>
     {/if}
-    {#if el.type === "stat" || el.type === "name"}
-      <label class="check"><input type="checkbox" checked={p.boxed !== false} onchange={(e) => editor.setProp(el, "boxed", e.currentTarget.checked ? null : false)} /> {t("builder.boxed")}</label>
+    {#if FRAME_TYPES.includes(el.type)}
+      <label class="field">{el.type === "ranking" ? t("studio.frame_entries") : t("studio.frame")}
+        <select value={frameOf(el)} onchange={(e) => setFrame(el, e.currentTarget.value)}>
+          {#each ["nes", "panel", "none"] as f (f)}<option value={f}>{tDynamic(`studio.frame_${f}`, f)}</option>{/each}
+        </select>
+      </label>
     {/if}
     {#if el.type === "next"}
       <label class="check"><input type="checkbox" checked={p.show_label !== false} onchange={(e) => editor.setProp(el, "show_label", e.currentTarget.checked)} /> {t("builder.show_label")}</label>

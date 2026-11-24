@@ -91,6 +91,18 @@ def test_valid_definition_is_normalized() -> None:
     assert layout.id == "custom:abc" and layout.slots == 2 and layout.pairs == ((0, 1),)
 
 
+def test_frame_prop_is_optional_and_checked() -> None:
+    data = copy.deepcopy(VALID)
+    data["elements"][2]["props"]["frame"] = "none"
+    score = next(e for e in ol.parse(data).dump()["elements"] if e["id"] == "score0")
+    assert score["props"]["frame"] == "none"
+    # Absent stays absent: stored definitions are unchanged.
+    assert all("frame" not in e["props"] for e in ol.parse(VALID).dump()["elements"])
+    data["elements"][2]["props"]["frame"] = "glow"
+    with pytest.raises(ValueError, match="frame"):
+        ol.parse(data)
+
+
 def _broken(change: Any) -> dict[str, Any]:
     data = copy.deepcopy(VALID)
     change(data)
